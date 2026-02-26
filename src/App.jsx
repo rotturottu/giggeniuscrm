@@ -1,14 +1,14 @@
+import './App.css'
 import { Toaster } from "@/components/ui/toaster"
-import UserNotRegisteredError from '@/components/UserNotRegisteredError'
-import { AuthProvider, useAuth } from '@/lib/AuthContext'
-import NavigationTracker from '@/lib/NavigationTracker'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import VisualEditAgent from '@/lib/VisualEditAgent'
-import { QueryClientProvider } from '@tanstack/react-query'
-import { Route, BrowserRouter as Router, Routes } from 'react-router-dom'
-import './App.css'
-import PageNotFound from './lib/PageNotFound'
+import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import PageNotFound from './lib/PageNotFound';
+import { AuthProvider, useAuth } from '@/lib/AuthContext';
+import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];

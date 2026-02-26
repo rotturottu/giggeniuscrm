@@ -1,32 +1,33 @@
-import { base44 } from '@/api/base44Client';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
-import {
-    BarChart3,
-    FolderKanban,
-    Globe,
-    HeadphonesIcon,
-    LogOut,
-    Mail,
-    Menu,
-    MessageSquare,
-    Settings,
-    Share2,
-    Target,
-    UserCog,
-    Users
-} from 'lucide-react';
-import { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { createPageUrl } from './utils';
+import { base44 } from '@/api/base44Client';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Target,
+  BarChart3,
+  Mail,
+  Share2,
+  Settings,
+  LogOut,
+  MessageSquare,
+  DollarSign,
+  FolderKanban,
+  Menu,
+  Users,
+  Globe,
+  UserCog,
+  HeadphonesIcon,
+} from 'lucide-react';
 
 export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
