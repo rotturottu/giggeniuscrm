@@ -1,0 +1,136 @@
+{
+  "name": "Ticket",
+  "type": "object",
+  "properties": {
+    "ticket_number": {
+      "type": "string",
+      "description": "Auto-generated ticket number (e.g. GG-00123)"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Brief summary of the issue"
+    },
+    "description": {
+      "type": "string",
+      "description": "Full description of the issue"
+    },
+    "submitter_name": {
+      "type": "string",
+      "description": "Name of the person submitting"
+    },
+    "submitter_email": {
+      "type": "string",
+      "format": "email",
+      "description": "Email of the submitter"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "GigGenius CRM",
+        "GigGenius Freelance Marketplace",
+        "Both"
+      ],
+      "description": "Which platform is this about"
+    },
+    "user_type": {
+      "type": "string",
+      "enum": [
+        "Client",
+        "Freelancer",
+        "Business Owner",
+        "Other"
+      ],
+      "description": "Type of user submitting"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "Billing & Payments",
+        "Technical Issue",
+        "Account Access",
+        "Feature Request",
+        "Flagged User / Fraud",
+        "CRM Issue",
+        "Marketplace Issue",
+        "Compliance / Legal",
+        "Other"
+      ],
+      "description": "Issue category"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "urgent"
+      ],
+      "default": "medium",
+      "description": "Ticket priority"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "in_progress",
+        "waiting_on_client",
+        "resolved",
+        "closed"
+      ],
+      "default": "open",
+      "description": "Current ticket status"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Agent email assigned to this ticket"
+    },
+    "assigned_to_name": {
+      "type": "string",
+      "description": "Agent name"
+    },
+    "internal_notes": {
+      "type": "string",
+      "description": "Internal notes visible only to agents"
+    },
+    "resolution_notes": {
+      "type": "string",
+      "description": "Resolution summary"
+    },
+    "resolved_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the ticket was resolved"
+    },
+    "first_response_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When agent first responded"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags for filtering"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Attachment URLs"
+    },
+    "satisfaction_rating": {
+      "type": "number",
+      "description": "Customer satisfaction rating 1-5"
+    }
+  },
+  "required": [
+    "subject",
+    "description",
+    "submitter_name",
+    "submitter_email",
+    "platform",
+    "category"
+  ]
+}

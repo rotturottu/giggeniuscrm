@@ -1,0 +1,48 @@
+{
+  "name": "SocialMediaAccount",
+  "type": "object",
+  "properties": {
+    "platform": {
+      "type": "string",
+      "enum": [
+        "facebook",
+        "linkedin",
+        "google_business",
+        "instagram",
+        "threads"
+      ],
+      "description": "Social media platform"
+    },
+    "account_name": {
+      "type": "string",
+      "description": "Display name of the account"
+    },
+    "account_id": {
+      "type": "string",
+      "description": "Platform-specific account identifier"
+    },
+    "access_token": {
+      "type": "string",
+      "description": "OAuth access token"
+    },
+    "refresh_token": {
+      "type": "string",
+      "description": "OAuth refresh token"
+    },
+    "token_expiry": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Token expiration date"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether the account is currently active"
+    }
+  },
+  "required": [
+    "platform",
+    "account_name",
+    "account_id"
+  ]
+}

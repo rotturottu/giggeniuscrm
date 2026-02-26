@@ -1,0 +1,56 @@
+{
+  "name": "ContactForm",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Form name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Form description"
+    },
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Array of form field definitions"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    },
+    "submissions_count": {
+      "type": "number",
+      "default": 0
+    },
+    "views_count": {
+      "type": "number",
+      "default": 0
+    },
+    "conversion_rate": {
+      "type": "number",
+      "default": 0
+    },
+    "thank_you_message": {
+      "type": "string",
+      "description": "Message shown after submission"
+    },
+    "redirect_url": {
+      "type": "string",
+      "description": "Redirect URL after submission"
+    },
+    "tag_on_submit": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags to auto-apply on submit"
+    }
+  },
+  "required": [
+    "name",
+    "fields"
+  ]
+}

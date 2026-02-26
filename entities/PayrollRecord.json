@@ -1,0 +1,65 @@
+{
+  "name": "PayrollRecord",
+  "type": "object",
+  "properties": {
+    "employee_id": {
+      "type": "string"
+    },
+    "employee_name": {
+      "type": "string"
+    },
+    "pay_period_start": {
+      "type": "string",
+      "format": "date"
+    },
+    "pay_period_end": {
+      "type": "string",
+      "format": "date"
+    },
+    "base_salary": {
+      "type": "number"
+    },
+    "hours_worked": {
+      "type": "number"
+    },
+    "overtime_hours": {
+      "type": "number",
+      "default": 0
+    },
+    "bonuses": {
+      "type": "number",
+      "default": 0
+    },
+    "deductions": {
+      "type": "number",
+      "default": 0
+    },
+    "tax": {
+      "type": "number",
+      "default": 0
+    },
+    "net_pay": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "approved",
+        "paid"
+      ],
+      "default": "draft"
+    },
+    "paid_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "employee_id",
+    "employee_name",
+    "pay_period_start",
+    "pay_period_end",
+    "net_pay"
+  ]
+}

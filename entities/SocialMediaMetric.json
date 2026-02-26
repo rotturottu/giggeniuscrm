@@ -1,0 +1,68 @@
+{
+  "name": "SocialMediaMetric",
+  "type": "object",
+  "properties": {
+    "post_id": {
+      "type": "string",
+      "description": "Reference to scheduled post"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "facebook",
+        "linkedin",
+        "google_business",
+        "instagram",
+        "threads"
+      ],
+      "description": "Social media platform"
+    },
+    "impressions": {
+      "type": "number",
+      "description": "Number of impressions"
+    },
+    "clicks": {
+      "type": "number",
+      "description": "Number of clicks"
+    },
+    "click_through_rate": {
+      "type": "number",
+      "description": "CTR percentage"
+    },
+    "likes": {
+      "type": "number",
+      "description": "Number of likes"
+    },
+    "shares": {
+      "type": "number",
+      "description": "Number of shares"
+    },
+    "comments": {
+      "type": "number",
+      "description": "Number of comments"
+    },
+    "sentiment_score": {
+      "type": "number",
+      "description": "Sentiment analysis score (-1 to 1)"
+    },
+    "sentiment_label": {
+      "type": "string",
+      "enum": [
+        "positive",
+        "neutral",
+        "negative"
+      ],
+      "description": "Sentiment category"
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp of metric recording"
+    }
+  },
+  "required": [
+    "post_id",
+    "platform",
+    "recorded_at"
+  ]
+}

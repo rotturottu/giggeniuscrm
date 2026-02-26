@@ -1,0 +1,65 @@
+{
+  "name": "WorkflowExecution",
+  "type": "object",
+  "properties": {
+    "workflow_id": {
+      "type": "string",
+      "description": "Reference to the workflow"
+    },
+    "workflow_name": {
+      "type": "string",
+      "description": "Snapshot of workflow name at execution time"
+    },
+    "triggered_by": {
+      "type": "string",
+      "description": "What triggered the workflow (e.g., lead_id, deal_id)"
+    },
+    "trigger_data": {
+      "type": "object",
+      "description": "Data that triggered the workflow"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "in_progress",
+        "completed",
+        "failed",
+        "partially_completed"
+      ],
+      "default": "pending",
+      "description": "Execution status"
+    },
+    "actions_completed": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of actions successfully completed"
+    },
+    "actions_total": {
+      "type": "number",
+      "description": "Total number of actions to execute"
+    },
+    "execution_log": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Log of action executions"
+    },
+    "error_message": {
+      "type": "string",
+      "description": "Error details if execution failed"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the execution completed"
+    }
+  },
+  "required": [
+    "workflow_id",
+    "workflow_name",
+    "triggered_by",
+    "actions_total"
+  ]
+}

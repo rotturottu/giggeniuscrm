@@ -1,0 +1,49 @@
+{
+  "name": "LeadScoring",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Scoring rule name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Rule description"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether rule is active"
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "attribute": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "points": {
+            "type": "number"
+          }
+        }
+      },
+      "description": "Array of scoring rules with conditions and points"
+    },
+    "total_possible_points": {
+      "type": "number",
+      "default": 0,
+      "description": "Maximum possible score"
+    }
+  },
+  "required": [
+    "name",
+    "rules"
+  ]
+}

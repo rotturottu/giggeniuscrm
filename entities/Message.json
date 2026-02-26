@@ -1,0 +1,56 @@
+{
+  "name": "Message",
+  "type": "object",
+  "properties": {
+    "conversation_id": {
+      "type": "string",
+      "description": "Reference to conversation"
+    },
+    "sender_email": {
+      "type": "string",
+      "description": "Sender email address"
+    },
+    "sender_name": {
+      "type": "string",
+      "description": "Sender name"
+    },
+    "content": {
+      "type": "string",
+      "description": "Message content"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "gmail",
+        "outlook",
+        "facebook",
+        "linkedin",
+        "instagram"
+      ],
+      "description": "Platform the message was sent from"
+    },
+    "is_outbound": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this is an outgoing message"
+    },
+    "read": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the message has been read"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Array of attachment URLs"
+    }
+  },
+  "required": [
+    "conversation_id",
+    "sender_email",
+    "content",
+    "platform"
+  ]
+}

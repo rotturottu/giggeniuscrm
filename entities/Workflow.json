@@ -1,0 +1,81 @@
+{
+  "name": "Workflow",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Workflow name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Workflow description"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether the workflow is currently active"
+    },
+    "trigger_type": {
+      "type": "string",
+      "enum": [
+        "lead_score",
+        "lead_status",
+        "deal_value",
+        "lead_source",
+        "no_activity",
+        "user_signup",
+        "user_purchase",
+        "user_inactivity"
+      ],
+      "description": "Type of trigger that activates the workflow"
+    },
+    "trigger_condition": {
+      "type": "object",
+      "description": "Trigger condition details (e.g., {operator: 'greater_than', value: 80})"
+    },
+    "actions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "assign_lead",
+              "send_email",
+              "create_task",
+              "update_status",
+              "add_tag",
+              "create_notification",
+              "wait",
+              "condition"
+            ]
+          },
+          "config": {
+            "type": "object"
+          },
+          "order": {
+            "type": "number"
+          }
+        }
+      },
+      "description": "Array of actions to execute when triggered"
+    },
+    "has_conditions": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this workflow contains conditional logic"
+    },
+    "execution_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of times this workflow has been executed"
+    }
+  },
+  "required": [
+    "name",
+    "trigger_type",
+    "trigger_condition",
+    "actions"
+  ]
+}

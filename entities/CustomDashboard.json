@@ -1,0 +1,44 @@
+{
+  "name": "CustomDashboard",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Dashboard name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Dashboard description"
+    },
+    "layout": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "metric": {
+            "type": "string"
+          },
+          "chartType": {
+            "type": "string"
+          },
+          "position": {
+            "type": "number"
+          }
+        }
+      },
+      "description": "Dashboard layout configuration"
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this is the default dashboard"
+    }
+  },
+  "required": [
+    "name",
+    "layout"
+  ]
+}

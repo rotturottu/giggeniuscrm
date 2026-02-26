@@ -1,0 +1,56 @@
+{
+  "name": "EmailTemplate",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Template name"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Email subject line"
+    },
+    "body": {
+      "type": "string",
+      "description": "Email body content (supports HTML and variables)"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "welcome",
+        "follow_up",
+        "nurture",
+        "promotional",
+        "newsletter",
+        "transactional",
+        "custom"
+      ],
+      "default": "custom",
+      "description": "Template category"
+    },
+    "variables": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Available variables (e.g., {{first_name}}, {{company}})"
+    },
+    "visual_blocks": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Visual builder blocks for drag-and-drop editing"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether the template is active"
+    }
+  },
+  "required": [
+    "name",
+    "subject",
+    "body"
+  ]
+} 

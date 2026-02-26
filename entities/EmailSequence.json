@@ -1,0 +1,78 @@
+{
+  "name": "EmailSequence",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Sequence name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Sequence description"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether the sequence is active"
+    },
+    "trigger_type": {
+      "type": "string",
+      "enum": [
+        "lead_score",
+        "lead_status",
+        "deal_value",
+        "lead_source",
+        "no_activity",
+        "user_signup",
+        "user_purchase",
+        "user_inactivity",
+        "contact_created",
+        "tag_added"
+      ],
+      "description": "What triggers this sequence"
+    },
+    "trigger_condition": {
+      "type": "object",
+      "description": "Trigger condition details"
+    },
+    "segment_criteria": {
+      "type": "object",
+      "description": "Audience segmentation criteria"
+    },
+    "emails": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Array of emails in the sequence with delays"
+    },
+    "has_ab_test": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether A/B testing is enabled"
+    },
+    "ab_test_config": {
+      "type": "object",
+      "description": "A/B test configuration"
+    },
+    "total_duration_days": {
+      "type": "number",
+      "description": "Total duration of sequence in days"
+    },
+    "active_subscribers": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of active subscribers"
+    },
+    "completed_subscribers": {
+      "type": "number",
+      "default": 0,
+      "description": "Number who completed the sequence"
+    }
+  },
+  "required": [
+    "name",
+    "trigger_type",
+    "emails"
+  ]
+}

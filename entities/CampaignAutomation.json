@@ -1,0 +1,72 @@
+{
+  "name": "CampaignAutomation",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Automation name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Automation description"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "paused",
+        "archived"
+      ],
+      "default": "draft",
+      "description": "Automation status"
+    },
+    "trigger": {
+      "type": "object",
+      "description": "Trigger configuration {type, conditions}"
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Array of automation nodes"
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Connections between nodes"
+    },
+    "campaign_id": {
+      "type": "string",
+      "description": "Associated campaign"
+    },
+    "enrolled_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Contacts enrolled"
+    },
+    "completed_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Contacts completed"
+    },
+    "conversion_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Contacts converted"
+    },
+    "last_triggered_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last trigger time"
+    }
+  },
+  "required": [
+    "name",
+    "trigger",
+    "nodes"
+  ]
+}

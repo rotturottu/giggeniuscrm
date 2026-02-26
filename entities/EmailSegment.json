@@ -1,0 +1,41 @@
+{
+  "name": "EmailSegment",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Segment name"
+    },
+    "description": {
+      "type": "string",
+      "description": "Segment description"
+    },
+    "filters": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "operator": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Segment filter criteria"
+    },
+    "lead_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Estimated number of leads in segment"
+    }
+  },
+  "required": [
+    "name",
+    "filters"
+  ]
+}

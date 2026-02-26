@@ -1,0 +1,61 @@
+{
+  "name": "EmailCampaignMetric",
+  "type": "object",
+  "properties": {
+    "campaign_id": {
+      "type": "string",
+      "description": "Reference to email campaign"
+    },
+    "recipient_email": {
+      "type": "string",
+      "description": "Recipient email address"
+    },
+    "lead_id": {
+      "type": "string",
+      "description": "Reference to lead/contact"
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the email was sent"
+    },
+    "opened_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the email was opened"
+    },
+    "clicked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When a link was clicked"
+    },
+    "bounced": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the email bounced"
+    },
+    "bounce_reason": {
+      "type": "string",
+      "description": "Bounce error message"
+    },
+    "unsubscribed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether recipient unsubscribed"
+    },
+    "clicks_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of clicks"
+    },
+    "opens_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of opens"
+    }
+  },
+  "required": [
+    "campaign_id",
+    "recipient_email"
+  ]
+}

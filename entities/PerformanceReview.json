@@ -1,0 +1,59 @@
+{
+  "name": "PerformanceReview",
+  "type": "object",
+  "properties": {
+    "employee_id": {
+      "type": "string"
+    },
+    "employee_name": {
+      "type": "string"
+    },
+    "reviewer_email": {
+      "type": "string"
+    },
+    "review_period": {
+      "type": "string",
+      "description": "e.g. Q1 2026"
+    },
+    "overall_rating": {
+      "type": "number",
+      "description": "1-5 rating"
+    },
+    "goals_met": {
+      "type": "string",
+      "enum": [
+        "exceeded",
+        "met",
+        "partially_met",
+        "not_met"
+      ]
+    },
+    "strengths": {
+      "type": "string"
+    },
+    "areas_for_improvement": {
+      "type": "string"
+    },
+    "goals_next_period": {
+      "type": "string"
+    },
+    "comments": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "submitted",
+        "acknowledged"
+      ],
+      "default": "draft"
+    }
+  },
+  "required": [
+    "employee_id",
+    "employee_name",
+    "review_period",
+    "overall_rating"
+  ]
+}

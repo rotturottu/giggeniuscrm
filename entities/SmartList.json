@@ -1,0 +1,58 @@
+{
+  "name": "SmartList",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Smart list / folder name"
+    },
+    "description": {
+      "type": "string"
+    },
+    "color": {
+      "type": "string",
+      "default": "#3b82f6",
+      "description": "Hex color for folder icon"
+    },
+    "icon": {
+      "type": "string",
+      "default": "folder",
+      "description": "Icon name"
+    },
+    "filter_type": {
+      "type": "string",
+      "enum": [
+        "manual",
+        "automatic"
+      ],
+      "default": "manual",
+      "description": "Manual = hand-picked contacts, Automatic = rule-based"
+    },
+    "rules": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Array of filter rules for automatic lists [{field, operator, value}]"
+    },
+    "contact_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Manually added contact IDs (for manual lists)"
+    },
+    "contact_count": {
+      "type": "number",
+      "default": 0
+    },
+    "is_pinned": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "required": [
+    "name",
+    "filter_type"
+  ]
+}

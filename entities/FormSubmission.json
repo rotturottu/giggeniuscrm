@@ -1,0 +1,47 @@
+{
+  "name": "FormSubmission",
+  "type": "object",
+  "properties": {
+    "form_id": {
+      "type": "string",
+      "description": "Reference to ContactForm"
+    },
+    "form_name": {
+      "type": "string",
+      "description": "Snapshot of form name"
+    },
+    "data": {
+      "type": "object",
+      "description": "Submitted field values"
+    },
+    "contact_id": {
+      "type": "string",
+      "description": "Auto-linked contact if matched"
+    },
+    "contact_email": {
+      "type": "string",
+      "description": "Email from submission"
+    },
+    "ip_address": {
+      "type": "string"
+    },
+    "source_url": {
+      "type": "string",
+      "description": "Page URL where form was submitted"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "new",
+        "reviewed",
+        "converted",
+        "spam"
+      ],
+      "default": "new"
+    }
+  },
+  "required": [
+    "form_id",
+    "data"
+  ]
+}

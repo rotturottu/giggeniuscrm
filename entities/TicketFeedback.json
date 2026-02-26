@@ -1,0 +1,45 @@
+{
+  "name": "TicketFeedback",
+  "type": "object",
+  "properties": {
+    "ticket_id": {
+      "type": "string",
+      "description": "Reference to the ticket"
+    },
+    "ticket_number": {
+      "type": "string",
+      "description": "Ticket number for display"
+    },
+    "submitter_email": {
+      "type": "string",
+      "description": "Email of the customer"
+    },
+    "submitter_name": {
+      "type": "string",
+      "description": "Name of the customer"
+    },
+    "rating": {
+      "type": "number",
+      "description": "Satisfaction rating 1-5"
+    },
+    "comment": {
+      "type": "string",
+      "description": "Optional feedback comment"
+    },
+    "survey_sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the survey email was sent"
+    },
+    "responded_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the customer submitted the survey"
+    }
+  },
+  "required": [
+    "ticket_id",
+    "ticket_number",
+    "submitter_email"
+  ]
+}

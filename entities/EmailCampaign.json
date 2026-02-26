@@ -1,0 +1,77 @@
+{
+  "name": "EmailCampaign",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Campaign name"
+    },
+    "template_id": {
+      "type": "string",
+      "description": "Reference to email template (null if using custom content)"
+    },
+    "custom_content": {
+      "type": "object",
+      "description": "Custom email content built with visual builder"
+    },
+    "segment_criteria": {
+      "type": "object",
+      "description": "Segmentation criteria for target audience"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "scheduled",
+        "sending",
+        "sent",
+        "paused"
+      ],
+      "default": "draft",
+      "description": "Campaign status"
+    },
+    "scheduled_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When to send the campaign"
+    },
+    "recipients_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of recipients"
+    },
+    "sent_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of emails sent"
+    },
+    "delivered_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of emails delivered"
+    },
+    "opened_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of emails opened"
+    },
+    "clicked_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of clicks"
+    },
+    "bounced_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of bounces"
+    },
+    "sent_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the campaign was sent"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

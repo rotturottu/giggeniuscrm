@@ -1,0 +1,63 @@
+{
+  "name": "EmailDomain",
+  "type": "object",
+  "properties": {
+    "domain": {
+      "type": "string",
+      "description": "Domain name (e.g., example.com)"
+    },
+    "dkim_verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "DKIM record verified"
+    },
+    "spf_verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "SPF record verified"
+    },
+    "dmarc_verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "DMARC record verified"
+    },
+    "dkim_selector": {
+      "type": "string",
+      "description": "DKIM selector"
+    },
+    "dkim_public_key": {
+      "type": "string",
+      "description": "DKIM public key"
+    },
+    "dkim_private_key": {
+      "type": "string",
+      "description": "DKIM private key (encrypted)"
+    },
+    "spf_record": {
+      "type": "string",
+      "description": "SPF record value"
+    },
+    "dmarc_record": {
+      "type": "string",
+      "description": "DMARC record value"
+    },
+    "verification_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "verified",
+        "failed"
+      ],
+      "default": "pending",
+      "description": "Overall verification status"
+    },
+    "last_verified": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last verification check timestamp"
+    }
+  },
+  "required": [
+    "domain"
+  ]
+}

@@ -1,0 +1,131 @@
+{
+  "name": "ProjectTask",
+  "type": "object",
+  "properties": {
+    "project_id": {
+      "type": "string",
+      "description": "Reference to project"
+    },
+    "title": {
+      "type": "string",
+      "description": "Task title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Task description"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "todo",
+        "in_progress",
+        "review",
+        "for_approval",
+        "completed"
+      ],
+      "default": "todo",
+      "description": "Task status"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "urgent"
+      ],
+      "default": "medium",
+      "description": "Task priority"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Assigned team member email"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Task start date"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "Start time in HH:MM format"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Task due date"
+    },
+    "due_time": {
+      "type": "string",
+      "description": "Due time in HH:MM format"
+    },
+    "parent_task_id": {
+      "type": "string",
+      "description": "Parent task ID for subtasks"
+    },
+    "subtasks": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "description": "Array of subtask objects {id, title, completed}"
+    },
+    "attachments": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Attachment URLs"
+    },
+    "is_recurring": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether task is recurring"
+    },
+    "recurrence_pattern": {
+      "type": "string",
+      "description": "Recurrence pattern: daily, weekly, bi-weekly, monthly"
+    },
+    "recurrence_dates": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Specific dates for recurrence occurrences"
+    },
+    "notification_before": {
+      "type": "string",
+      "description": "How early to notify: 5min, 10min, 15min, 30min, 1hour, 2hours, 12hours, 24hours"
+    },
+    "notification_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Notification channels: email, in_app"
+    },
+    "timer_running": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether timer is active"
+    },
+    "timer_started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When timer was started"
+    },
+    "time_spent_seconds": {
+      "type": "number",
+      "default": 0,
+      "description": "Total time spent in seconds"
+    },
+    "list_name": {
+      "type": "string",
+      "description": "Task list category"
+    }
+  },
+  "required": [
+    "title",
+    "status"
+  ]
+}

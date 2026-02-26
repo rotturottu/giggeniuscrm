@@ -1,0 +1,78 @@
+{
+  "name": "Deal",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Deal name"
+    },
+    "contact_id": {
+      "type": "string",
+      "description": "Associated contact"
+    },
+    "lead_id": {
+      "type": "string",
+      "description": "Associated lead"
+    },
+    "stage": {
+      "type": "string",
+      "enum": [
+        "prospecting",
+        "qualification",
+        "proposal",
+        "negotiation",
+        "closed_won",
+        "closed_lost"
+      ],
+      "default": "prospecting",
+      "description": "Current deal stage"
+    },
+    "value": {
+      "type": "number",
+      "description": "Deal value in dollars"
+    },
+    "probability": {
+      "type": "number",
+      "description": "Win probability percentage (0-100)",
+      "default": 50
+    },
+    "expected_close_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Expected close date"
+    },
+    "actual_close_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Actual close date"
+    },
+    "owner_email": {
+      "type": "string",
+      "description": "Deal owner email"
+    },
+    "source": {
+      "type": "string",
+      "description": "Deal source"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Deal notes"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Deal tags"
+    },
+    "lost_reason": {
+      "type": "string",
+      "description": "Reason for lost deal"
+    }
+  },
+  "required": [
+    "name",
+    "stage",
+    "value"
+  ]
+}

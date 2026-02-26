@@ -1,0 +1,70 @@
+{
+  "name": "SMTPConfig",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Configuration name"
+    },
+    "host": {
+      "type": "string",
+      "description": "SMTP server host"
+    },
+    "port": {
+      "type": "number",
+      "description": "SMTP server port"
+    },
+    "username": {
+      "type": "string",
+      "description": "SMTP username"
+    },
+    "password": {
+      "type": "string",
+      "description": "SMTP password (encrypted)"
+    },
+    "from_email": {
+      "type": "string",
+      "format": "email",
+      "description": "Default from email"
+    },
+    "from_name": {
+      "type": "string",
+      "description": "Default from name"
+    },
+    "encryption": {
+      "type": "string",
+      "enum": [
+        "none",
+        "ssl",
+        "tls"
+      ],
+      "default": "tls",
+      "description": "Encryption method"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": false,
+      "description": "Is this the active SMTP config"
+    },
+    "daily_limit": {
+      "type": "number",
+      "description": "Daily sending limit"
+    },
+    "emails_sent_today": {
+      "type": "number",
+      "default": 0,
+      "description": "Emails sent today"
+    },
+    "verified": {
+      "type": "boolean",
+      "default": false,
+      "description": "SMTP connection verified"
+    }
+  },
+  "required": [
+    "name",
+    "host",
+    "port",
+    "from_email"
+  ]
+}

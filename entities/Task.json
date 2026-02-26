@@ -1,0 +1,68 @@
+{
+  "name": "Task",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Task title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Task description"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "todo",
+        "in_progress",
+        "completed",
+        "cancelled"
+      ],
+      "default": "todo",
+      "description": "Task status"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high",
+        "urgent"
+      ],
+      "default": "medium",
+      "description": "Task priority"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "User email assigned to"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Task due date"
+    },
+    "related_to_type": {
+      "type": "string",
+      "enum": [
+        "lead",
+        "deal",
+        "contact",
+        "campaign"
+      ],
+      "description": "Type of related entity"
+    },
+    "related_to_id": {
+      "type": "string",
+      "description": "ID of related entity"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When task was completed"
+    }
+  },
+  "required": [
+    "title",
+    "status"
+  ]
+}

@@ -1,0 +1,30 @@
+{
+  "name": "Department",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Department name"
+    },
+    "head_email": {
+      "type": "string",
+      "description": "Department head email"
+    },
+    "description": {
+      "type": "string",
+      "description": "Department description"
+    },
+    "budget": {
+      "type": "number",
+      "description": "Annual budget"
+    },
+    "employee_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of employees"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

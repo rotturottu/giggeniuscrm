@@ -1,0 +1,51 @@
+{
+  "name": "EmailMetric",
+  "type": "object",
+  "properties": {
+    "campaign_id": {
+      "type": "string",
+      "description": "Reference to email campaign"
+    },
+    "recipient_email": {
+      "type": "string",
+      "description": "Recipient email address"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "sent",
+        "delivered",
+        "opened",
+        "clicked",
+        "bounced",
+        "failed"
+      ],
+      "description": "Email status"
+    },
+    "opened_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the email was opened"
+    },
+    "clicked_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When a link was clicked"
+    },
+    "clicks_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of clicks"
+    },
+    "opens_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of opens"
+    }
+  },
+  "required": [
+    "campaign_id",
+    "recipient_email",
+    "status"
+  ]
+}

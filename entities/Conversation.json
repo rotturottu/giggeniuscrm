@@ -1,0 +1,65 @@
+{
+  "name": "Conversation",
+  "type": "object",
+  "properties": {
+    "contact_id": {
+      "type": "string",
+      "description": "Associated contact or lead ID"
+    },
+    "contact_name": {
+      "type": "string",
+      "description": "Contact name"
+    },
+    "contact_email": {
+      "type": "string",
+      "description": "Contact email"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "gmail",
+        "outlook",
+        "facebook",
+        "linkedin",
+        "instagram"
+      ],
+      "description": "Source platform"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Email subject or conversation topic"
+    },
+    "last_message": {
+      "type": "string",
+      "description": "Preview of last message"
+    },
+    "last_message_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last message timestamp"
+    },
+    "unread_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of unread messages"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "archived",
+        "spam"
+      ],
+      "default": "active",
+      "description": "Conversation status"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Staff member assigned to this conversation"
+    }
+  },
+  "required": [
+    "contact_email",
+    "platform"
+  ]
+}

@@ -1,0 +1,163 @@
+{
+  "name": "Contact",
+  "type": "object",
+  "properties": {
+    "first_name": {
+      "type": "string",
+      "description": "First name"
+    },
+    "last_name": {
+      "type": "string",
+      "description": "Last name"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Email address"
+    },
+    "company": {
+      "type": "string",
+      "description": "Company name"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Primary phone number"
+    },
+    "phone_country_code": {
+      "type": "string",
+      "default": "+1",
+      "description": "Country code for primary phone"
+    },
+    "phone_type": {
+      "type": "string",
+      "enum": [
+        "mobile",
+        "landline",
+        "work"
+      ],
+      "default": "mobile",
+      "description": "Type of primary phone"
+    },
+    "other_phone": {
+      "type": "string",
+      "description": "Secondary phone number"
+    },
+    "other_phone_country_code": {
+      "type": "string",
+      "default": "+1",
+      "description": "Country code for secondary phone"
+    },
+    "contact_type": {
+      "type": "string",
+      "enum": [
+        "lead",
+        "customer",
+        "partner",
+        "spam_blocked"
+      ],
+      "default": "lead",
+      "description": "Contact type classification"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags for segmentation"
+    },
+    "campaign_id": {
+      "type": "string",
+      "description": "Associated campaign ID"
+    },
+    "campaign_name": {
+      "type": "string",
+      "description": "Associated campaign name"
+    },
+    "logo_url": {
+      "type": "string",
+      "description": "Contact/company logo URL"
+    },
+    "business_name": {
+      "type": "string",
+      "description": "Business name"
+    },
+    "business_address": {
+      "type": "string",
+      "description": "Business address"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "subscribed",
+        "unsubscribed",
+        "bounced",
+        "complained"
+      ],
+      "default": "subscribed",
+      "description": "Subscription status"
+    },
+    "source": {
+      "type": "string",
+      "description": "How the contact was acquired"
+    },
+    "custom_fields": {
+      "type": "object",
+      "description": "Custom data fields"
+    },
+    "last_engaged": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last engagement timestamp"
+    },
+    "subscribed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Subscription timestamp"
+    },
+    "opportunity_assignee_team": {
+      "type": "string",
+      "description": "Opportunity assignee team"
+    },
+    "opportunity_salesperson": {
+      "type": "string",
+      "description": "Salesperson email"
+    },
+    "opportunity_pipeline": {
+      "type": "string",
+      "description": "Pipeline name"
+    },
+    "opportunity_stage": {
+      "type": "string",
+      "enum": [
+        "prospecting",
+        "qualification",
+        "proposal",
+        "negotiation",
+        "closed_won",
+        "closed_lost"
+      ],
+      "description": "Deal stage"
+    },
+    "opportunity_status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "on_hold",
+        "won",
+        "lost"
+      ],
+      "description": "Opportunity status"
+    },
+    "opportunity_value": {
+      "type": "number",
+      "description": "Opportunity value in USD"
+    },
+    "opportunity_concern": {
+      "type": "string",
+      "description": "Main concern or pain point"
+    }
+  },
+  "required": [
+    "email"
+  ]
+}

@@ -1,0 +1,78 @@
+{
+  "name": "Lead",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Lead full name"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Lead email address"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Phone number"
+    },
+    "company": {
+      "type": "string",
+      "description": "Company name"
+    },
+    "title": {
+      "type": "string",
+      "description": "Job title"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "new",
+        "contacted",
+        "qualified",
+        "proposal",
+        "negotiation",
+        "won",
+        "lost"
+      ],
+      "default": "new",
+      "description": "Lead status"
+    },
+    "source": {
+      "type": "string",
+      "description": "Lead source (e.g., website, referral, event)"
+    },
+    "score": {
+      "type": "number",
+      "default": 0,
+      "description": "Lead qualification score (0-100)"
+    },
+    "score_grade": {
+      "type": "string",
+      "enum": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "F"
+      ],
+      "description": "Score grade based on points"
+    },
+    "last_score_update": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When score was last calculated"
+    },
+    "deal_value": {
+      "type": "number",
+      "description": "Potential deal value"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes"
+    }
+  },
+  "required": [
+    "name",
+    "email"
+  ]
+}

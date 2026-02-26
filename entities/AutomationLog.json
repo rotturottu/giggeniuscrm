@@ -1,0 +1,51 @@
+{
+  "name": "AutomationLog",
+  "type": "object",
+  "properties": {
+    "automation_id": {
+      "type": "string",
+      "description": "Reference to automation"
+    },
+    "contact_id": {
+      "type": "string",
+      "description": "Contact being processed"
+    },
+    "contact_email": {
+      "type": "string",
+      "description": "Contact email snapshot"
+    },
+    "node_id": {
+      "type": "string",
+      "description": "Node that was executed"
+    },
+    "node_type": {
+      "type": "string",
+      "description": "Type of node executed"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "success",
+        "failed",
+        "skipped",
+        "waiting"
+      ],
+      "description": "Execution status"
+    },
+    "message": {
+      "type": "string",
+      "description": "Log message or error details"
+    },
+    "executed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Execution timestamp"
+    }
+  },
+  "required": [
+    "automation_id",
+    "contact_email",
+    "node_type",
+    "status"
+  ]
+}
