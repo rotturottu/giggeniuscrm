@@ -30,8 +30,8 @@ export default function Home() {
         <IntegrationFlow />
         <HowItWorksSection />
         <TestimonialsSection />
-        <PricingSection />
         <BusinessPromoSection />
+        <PricingSection />
         <Footer />
       </div>
     </div>
