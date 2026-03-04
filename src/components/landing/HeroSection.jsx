@@ -2,8 +2,11 @@ import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 import { Rocket, Sparkles } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function HeroSection() {
+  const navigate = useNavigate();
+
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden px-4">
       {/* Orbiting planets animation */}
@@ -59,7 +62,7 @@ export default function HeroSection() {
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
             <Button
               size="lg"
-              onClick={() => base44.auth.redirectToLogin()}
+              onClick={() => navigate('/Overview')}
               className="group relative px-8 py-6 text-lg font-semibold bg-gradient-to-r from-blue-600 to-pink-600 hover:from-blue-700 hover:to-pink-700 text-white rounded-full shadow-xl hover:shadow-2xl transition-all duration-300">
 
               <Rocket className="w-5 h-5 mr-2 group-hover:translate-y-[-2px] transition-transform" />
@@ -74,7 +77,7 @@ export default function HeroSection() {
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-pink-500" />
-              <span>14-day free trial</span>
+              <span>Start with a free plan</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 rounded-full bg-purple-500" />
@@ -84,8 +87,7 @@ export default function HeroSection() {
         </motion.div>
       </div>
 
-      {/* Gradient overlay at bottom */}
       <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white to-transparent" />
-    </section>);
-
+    </section>
+  );
 }

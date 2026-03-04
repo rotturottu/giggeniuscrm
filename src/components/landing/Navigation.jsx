@@ -1,11 +1,9 @@
-import { base44 } from '@/api/base44Client';
 import { Button } from '@/components/ui/button';
 import { LogIn } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 export default function Navigation() {
-  const handleLoginClick = () => {
-    base44.auth.redirectToLogin();
-  };
+  const navigate = useNavigate();
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white/80 backdrop-blur-md border-b border-gray-200">
@@ -22,7 +20,7 @@ export default function Navigation() {
         </div>
 
         <Button
-          onClick={handleLoginClick}
+          onClick={() => navigate('/Overview')}
           className="px-6 py-2 bg-gradient-to-r from-blue-600 to-pink-600 hover:from-blue-700 hover:to-pink-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-300"
         >
           <LogIn className="w-4 h-4 mr-2" />

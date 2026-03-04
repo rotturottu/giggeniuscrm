@@ -117,38 +117,6 @@ export default function TestimonialsSection() {
             </motion.div>
           ))}
         </div>
-
-        {/* Social Proof */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
-          viewport={{ once: true }}
-          className="mt-16 text-center"
-        >
-          <div className="inline-flex items-center gap-8 px-8 py-4 rounded-full bg-white border-2 border-gray-200 shadow-lg">
-            <div>
-              <p className="text-3xl font-black bg-gradient-to-r from-blue-600 to-pink-600 bg-clip-text text-transparent">
-                10K+
-              </p>
-              <p className="text-sm text-black">Active Users</p>
-            </div>
-            <div className="w-px h-12 bg-gray-200" />
-            <div>
-              <p className="text-3xl font-black bg-gradient-to-r from-pink-600 to-blue-600 bg-clip-text text-transparent">
-                $2B+
-              </p>
-              <p className="text-sm text-black">Revenue Generated</p>
-            </div>
-            <div className="w-px h-12 bg-gray-200" />
-            <div>
-              <p className="text-3xl font-black bg-gradient-to-r from-blue-600 to-pink-600 bg-clip-text text-transparent">
-                98%
-              </p>
-              <p className="text-sm text-black">Satisfaction Rate</p>
-            </div>
-          </div>
-        </motion.div>
       </div>
     </section>
   );
