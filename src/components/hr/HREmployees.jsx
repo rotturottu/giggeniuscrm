@@ -102,14 +102,11 @@ export default function HREmployees() {
   
   const openNew = () => { setEditing(null); setForm(emptyForm); setError(''); setShowForm(true); };
 
-  // Real-time validation for number-only fields
+  // Real-time strict validation for number-only fields (removes alphabets instantly)
   const handleNumberChange = (key, value) => {
-    setForm(p => ({ ...p, [key]: value }));
-    if (/[a-zA-Z]/.test(value)) {
-      setError('Invalid Input! Alphabets are not allowed in number-only sections.');
-    } else {
-      setError('');
-    }
+    const strictNumericValue = value.replace(/[^0-9.]/g, '');
+    setForm(p => ({ ...p, [key]: strictNumericValue }));
+    if (error) setError('');
   };
 
   // Real-time validation for emails
@@ -138,7 +135,7 @@ export default function HREmployees() {
       return;
     }
 
-    // 3. Alphabet Check in Number Sections
+    // 3. Alphabet Check in Number Sections (Fallback safety check)
     if (/[a-zA-Z]/.test(form.salary) || /[a-zA-Z]/.test(form.hourly_rate) || /[a-zA-Z]/.test(form.phone)) {
       setError('Invalid Input! Alphabets are not allowed in number-only sections.');
       return;

@@ -43,6 +43,11 @@ export default function HRPayroll() {
     queryFn: () => base44.entities.PayrollRecord.list('-created_date', 100),
   });
 
+  const { data: employees = [] } = useQuery({
+    queryKey: ['employees'],
+    queryFn: () => base44.entities.Employee.list('-created_date', 200),
+  });
+
   const saveMutation = useMutation({
     mutationFn: (d) => editing ? base44.entities.PayrollRecord.update(editing.id, d) : base44.entities.PayrollRecord.create(d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll'] }); setShowForm(false); setEditing(null); setForm(empty); setError(''); },
@@ -72,11 +77,21 @@ export default function HRPayroll() {
   };
 
   const setField = (key, val) => {
+    // List of fields that must strictly be numbers
+    const numericFields = ['base_salary', 'hours_worked', 'overtime_hours', 'overtime_pay', 'bonuses', 'deductions', 'tax'];
+    
+    // If typing into a numeric field, instantly strip out alphabets
+    let finalVal = val;
+    if (numericFields.includes(key)) {
+      finalVal = val.replace(/[^0-9.]/g, '');
+    }
+
     setForm(p => {
-      const updated = { ...p, [key]: val };
+      const updated = { ...p, [key]: finalVal };
       updated.net_pay = calcNet(updated);
       return updated;
     });
+    
     if (error) setError(''); // Clear error as the user types
   };
 
@@ -90,18 +105,9 @@ export default function HRPayroll() {
       return;
     }
 
-    // 2. "@" Symbol Check for Email
+    // 2. "@" Symbol Check for Email (Redundant due to select dropdown, but good safety net)
     if (!form.employee_email.includes('@')) {
       setError('Invalid Input! Email fields must contain an "@" symbol.');
-      return;
-    }
-
-    // 3. Alphabet Check in Number Fields
-    const numFields = ['base_salary', 'hours_worked', 'overtime_hours', 'overtime_pay', 'bonuses', 'deductions', 'tax'];
-    const hasAlphabets = numFields.some(field => /[a-zA-Z]/.test(form[field]));
-    
-    if (hasAlphabets) {
-      setError('Invalid Input! Alphabets are not allowed in number-only sections.');
       return;
     }
 
@@ -169,7 +175,41 @@ export default function HRPayroll() {
           <DialogHeader><DialogTitle>{editing ? 'Edit Payroll Record' : 'New Payroll Record'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             
-            {[['employee_name', 'Employee Name *', 'text'], ['employee_email', 'Employee Email *', 'text'], ['period_start', 'Period Start *', 'date'], ['period_end', 'Period End *', 'date'], ['base_salary', 'Base Salary *', 'text'], ['hours_worked', 'Hours Worked *', 'text'], ['overtime_hours', 'Overtime Hours *', 'text'], ['overtime_pay', 'Overtime Pay *', 'text'], ['bonuses', 'Bonuses *', 'text'], ['deductions', 'Deductions *', 'text'], ['tax', 'Tax *', 'text']].map(([key, label, type]) => {
+            {/* New Employee Select Dropdown */}
+            <div className="space-y-1">
+              <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Employee</Label>
+              <Select 
+                value={form.employee_email} 
+                onValueChange={val => {
+                  const emp = employees.find(e => e.email === val);
+                  if (emp) {
+                    setForm(p => ({ 
+                      ...p, 
+                      employee_email: emp.email, 
+                      employee_name: `${emp.first_name} ${emp.last_name}` 
+                    }));
+                    if (error) setError('');
+                  }
+                }}
+              >
+                <SelectTrigger><SelectValue placeholder="Select an employee..." /></SelectTrigger>
+                <SelectContent>
+                  {employees.map(emp => (
+                    <SelectItem key={emp.id} value={emp.email}>
+                      {emp.first_name} {emp.last_name} {emp.department ? `(${emp.department})` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Auto-filled read-only Email */}
+            <div className="space-y-1">
+              <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Employee Email</Label>
+              <Input value={form.employee_email || ''} readOnly className="bg-gray-50 text-gray-500" placeholder="Auto-filled from selection" />
+            </div>
+            
+            {[['period_start', 'Period Start *', 'date'], ['period_end', 'Period End *', 'date'], ['base_salary', 'Base Salary *', 'text'], ['hours_worked', 'Hours Worked *', 'text'], ['overtime_hours', 'Overtime Hours *', 'text'], ['overtime_pay', 'Overtime Pay *', 'text'], ['bonuses', 'Bonuses *', 'text'], ['deductions', 'Deductions *', 'text'], ['tax', 'Tax *', 'text']].map(([key, label, type]) => {
               const isMonetary = ['overtime_pay', 'bonuses', 'deductions', 'tax'].includes(key);
 
               return (
@@ -177,7 +217,6 @@ export default function HRPayroll() {
                   <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500" : ""}>{label.replace(' *', '')}</Label>
                   
                   {key === 'base_salary' ? (
-                    // Base Salary gets the Dropdown selector
                     <div className="flex gap-2">
                       <Select value={form.currency} onValueChange={v => setForm(p => ({ ...p, currency: v }))}>
                         <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
@@ -195,13 +234,11 @@ export default function HRPayroll() {
                       </div>
                     </div>
                   ) : isMonetary ? (
-                    // Other monetary fields just get the symbol injection
                     <div className="relative">
                       <span className="absolute left-3 top-2 text-gray-500 font-medium">{currencySymbols[form.currency]}</span>
                       <Input className="pl-8" type={type} value={form[key] || ''} onChange={e => setField(key, e.target.value)} />
                     </div>
                   ) : (
-                    // Default inputs
                     <Input type={type} value={form[key] || ''} onChange={e => setField(key, e.target.value)} />
                   )}
                 </div>
