@@ -17,10 +17,27 @@ const statusColors = {
   terminated: 'bg-red-100 text-red-700',
 };
 
+// Map to display the designated currency symbol inside the input
+const currencySymbols = {
+  USD: '$',
+  EUR: '€',
+  PHP: '₱',
+  CAD: 'C$',
+  AUD: 'A$'
+};
+
+// Line directory for phone numbers
+const phoneCodes = [
+  { code: '+63', label: '🇵🇭 (+63)' },
+  { code: '+1', label: '🇺🇸 (+1)' },
+  { code: '+44', label: '🇬🇧 (+44)' },
+  { code: '+61', label: '🇦🇺 (+61)' }
+];
+
 const emptyForm = {
-  first_name: '', last_name: '', email: '', phone: '',
+  first_name: '', last_name: '', email: '', phone: '', country_code: '+63',
   department: '', job_title: '', employment_type: 'full_time',
-  status: 'active', start_date: '', salary: '', hourly_rate: '',
+  status: 'active', start_date: '', salary: '', currency: 'PHP', hourly_rate: '',
   manager_email: '', notes: '',
 };
 
@@ -31,6 +48,7 @@ export default function HREmployees() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [error, setError] = useState('');
 
   const { data: employees = [] } = useQuery({
     queryKey: ['employees'],
@@ -41,7 +59,13 @@ export default function HREmployees() {
     mutationFn: (data) => editing
       ? base44.entities.Employee.update(editing.id, data)
       : base44.entities.Employee.create(data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['employees'] }); setShowForm(false); setEditing(null); setForm(emptyForm); },
+    onSuccess: () => { 
+      qc.invalidateQueries({ queryKey: ['employees'] }); 
+      setShowForm(false); 
+      setEditing(null); 
+      setForm(emptyForm); 
+      setError('');
+    },
   });
 
   const deleteMutation = useMutation({
@@ -57,8 +81,79 @@ export default function HREmployees() {
     return matchSearch && matchDept;
   });
 
-  const openEdit = (emp) => { setEditing(emp); setForm({ ...emptyForm, ...emp }); setShowForm(true); };
-  const openNew = () => { setEditing(null); setForm(emptyForm); setShowForm(true); };
+  const openEdit = (emp) => { 
+    let code = '+63';
+    let phoneNum = emp.phone || '';
+    
+    // Parse the saved phone string back into country code and local number
+    for (const pc of phoneCodes) {
+      if (phoneNum.startsWith(pc.code + ' ')) {
+        code = pc.code;
+        phoneNum = phoneNum.substring(pc.code.length + 1);
+        break;
+      }
+    }
+
+    setEditing(emp); 
+    setForm({ ...emptyForm, ...emp, currency: emp.currency || 'PHP', country_code: code, phone: phoneNum }); 
+    setError(''); 
+    setShowForm(true); 
+  };
+  
+  const openNew = () => { setEditing(null); setForm(emptyForm); setError(''); setShowForm(true); };
+
+  // Real-time validation for number-only fields
+  const handleNumberChange = (key, value) => {
+    setForm(p => ({ ...p, [key]: value }));
+    if (/[a-zA-Z]/.test(value)) {
+      setError('Invalid Input! Alphabets are not allowed in number-only sections.');
+    } else {
+      setError('');
+    }
+  };
+
+  // Real-time validation for emails
+  const handleEmailChange = (key, value) => {
+    setForm(p => ({ ...p, [key]: value }));
+    if (value && !value.includes('@')) {
+      setError('Invalid Input! Email fields must contain an "@" symbol.');
+    } else {
+      setError('');
+    }
+  };
+
+  const handleSave = () => {
+    // 1. Completely filled out check
+    const requiredFields = ['first_name', 'last_name', 'email', 'phone', 'department', 'job_title', 'manager_email', 'start_date', 'salary', 'hourly_rate'];
+    const hasEmptyFields = requiredFields.some(field => !form[field] || form[field].toString().trim() === '');
+    
+    if (hasEmptyFields) {
+      setError('Invalid Input! Please ensure the form is completely filled out.');
+      return;
+    }
+
+    // 2. "@" Check
+    if (!form.email.includes('@') || !form.manager_email.includes('@')) {
+      setError('Invalid Input! Email fields must contain an "@" symbol.');
+      return;
+    }
+
+    // 3. Alphabet Check in Number Sections
+    if (/[a-zA-Z]/.test(form.salary) || /[a-zA-Z]/.test(form.hourly_rate) || /[a-zA-Z]/.test(form.phone)) {
+      setError('Invalid Input! Alphabets are not allowed in number-only sections.');
+      return;
+    }
+
+    setError('');
+    
+    // Combine country code and phone number before saving to API
+    const payloadToSave = { 
+      ...form, 
+      phone: `${form.country_code} ${form.phone}` 
+    };
+    
+    saveMutation.mutate(payloadToSave);
+  };
 
   return (
     <div className="space-y-4">
@@ -119,13 +214,81 @@ export default function HREmployees() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? 'Edit Employee' : 'Add Employee'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
-            {[['first_name', 'First Name'], ['last_name', 'Last Name'], ['email', 'Email'], ['phone', 'Phone'], ['department', 'Department'], ['job_title', 'Job Title'], ['manager_email', 'Manager Email'], ['start_date', 'Start Date'], ['salary', 'Annual Salary'], ['hourly_rate', 'Hourly Rate']].map(([key, label]) => (
+            
+            {/* Map over fields to dynamically render inputs based on requirements */}
+            {[['first_name', 'First Name *'], ['last_name', 'Last Name *'], ['email', 'Email *'], ['phone', 'Phone *'], ['department', 'Department *'], ['job_title', 'Job Title *'], ['manager_email', 'Manager Email *'], ['start_date', 'Start Date *'], ['salary', 'Annual Salary *'], ['hourly_rate', 'Hourly Rate *']].map(([key, label]) => (
               <div key={key} className="space-y-1">
-                <Label>{label}</Label>
-                <Input type={key === 'salary' || key === 'hourly_rate' ? 'number' : key === 'start_date' ? 'date' : 'text'}
-                  value={form[key] || ''} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} />
+                <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500" : ""}>{label.replace(' *', '')}</Label>
+                
+                {key === 'salary' || key === 'hourly_rate' ? (
+                  // SALARY & HOURLY RATE: Dropdown + Currency Input Wrapper
+                  <div className="flex gap-2">
+                    <Select value={form.currency} onValueChange={v => setForm(p => ({ ...p, currency: v }))}>
+                      <SelectTrigger className="w-24">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="USD">USD</SelectItem>
+                        <SelectItem value="EUR">EUR</SelectItem>
+                        <SelectItem value="PHP">PHP</SelectItem>
+                        <SelectItem value="CAD">CAD</SelectItem>
+                        <SelectItem value="AUD">AUD</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <div className="relative flex-1">
+                      {/* Designated Currency Symbol Placed inside */}
+                      <span className="absolute left-3 top-2 text-gray-500 font-medium">
+                        {currencySymbols[form.currency]}
+                      </span>
+                      <Input 
+                        type="text" 
+                        className="pl-8"
+                        value={form[key] || ''} 
+                        onChange={e => handleNumberChange(key, e.target.value)} 
+                      />
+                    </div>
+                  </div>
+                ) : key === 'phone' ? (
+                  // PHONE: Country Code Dropdown + Phone Input
+                  <div className="flex gap-2">
+                    <Select value={form.country_code} onValueChange={v => setForm(p => ({ ...p, country_code: v }))}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {phoneCodes.map(pc => (
+                          <SelectItem key={pc.code} value={pc.code}>{pc.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Input 
+                      type="text" 
+                      className="flex-1"
+                      value={form[key] || ''} 
+                      onChange={e => handleNumberChange(key, e.target.value)} 
+                    />
+                  </div>
+                ) : key === 'email' || key === 'manager_email' ? (
+                  // EMAILS: Checked for '@'
+                  <Input 
+                    type="email"
+                    value={form[key] || ''} 
+                    onChange={e => handleEmailChange(key, e.target.value)} 
+                  />
+                ) : (
+                  // DEFAULT TEXT & DATE INPUTS
+                  <Input 
+                    type={key === 'start_date' ? 'date' : 'text'}
+                    value={form[key] || ''} 
+                    onChange={e => {
+                      setForm(p => ({ ...p, [key]: e.target.value }));
+                      if (error) setError('');
+                    }} 
+                  />
+                )}
               </div>
             ))}
+            
             <div className="space-y-1">
               <Label>Employment Type</Label>
               <Select value={form.employment_type} onValueChange={v => setForm(p => ({ ...p, employment_type: v }))}>
@@ -150,9 +313,17 @@ export default function HREmployees() {
               </Select>
             </div>
           </div>
-          <div className="flex justify-end gap-2 mt-2">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">
+          
+          {/* Dynamic Error Message Banner */}
+          {error && (
+            <div className="mt-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold flex items-center justify-between animate-in fade-in duration-300">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
+            <Button variant="outline" onClick={() => { setShowForm(false); setError(''); }}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">
               {saveMutation.isPending ? 'Saving...' : 'Save'}
             </Button>
           </div>
