@@ -13,14 +13,6 @@ export default function LeadScoringTab() {
   const [showRuleBuilder, setShowRuleBuilder] = useState(false);
   const [editingRule, setEditingRule] = useState(null);
 
-  // Fetch leads to check if we should show the empty state or the dashboard
-  const { data: leads = [] } = useQuery({
-    queryKey: ['scored-leads'],
-    queryFn: () => base44.entities.Lead.list('-score', 10),
-  });
-
-  const hasLeads = leads.length > 0;
-
   const handleEdit = (rule) => {
     setEditingRule(rule);
     setShowRuleBuilder(true);
@@ -32,38 +24,37 @@ export default function LeadScoringTab() {
   };
 
   return (
-    <div className="w-full space-y-6 animate-in fade-in duration-500">
+    <div className="w-full max-w-7xl mx-auto space-y-6 animate-in fade-in duration-500">
       <Tabs defaultValue="overview" className="w-full">
-        <div className="flex items-center justify-between mb-6">
+        {/* Centered Tabs List */}
+        <div className="flex justify-center mb-8">
           <TabsList className="bg-gray-100/80 p-1">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="rules">Scoring Rules</TabsTrigger>
+            <TabsTrigger value="overview" className="px-8">Overview</TabsTrigger>
+            <TabsTrigger value="rules" className="px-8">Scoring Rules</TabsTrigger>
           </TabsList>
         </div>
 
-        <TabsContent value="overview" className="space-y-6 outline-none">
-          {!hasLeads ? (
-            /* 1. CLEAN EMPTY STATE - Only shows when no data exists */
-            <div className="flex flex-col items-center justify-center py-20 px-4 border-2 border-dashed border-gray-200 rounded-2xl bg-white/50">
-              <div className="bg-gray-100 p-5 rounded-full mb-4">
-                 <BarChart3 className="w-10 h-10 text-gray-400" />
-              </div>
-              <h3 className="text-xl font-bold text-gray-900">No scored leads yet</h3>
-              <p className="text-sm text-gray-500 text-center max-w-sm mt-2">
-                Once you set up your scoring rules, your lead rankings and distribution charts will appear here automatically.
-              </p>
+        <TabsContent value="overview" className="space-y-8 outline-none">
+          {/* Centered Large Info Banner */}
+          <div className="flex flex-col items-center justify-center py-12 px-4 border-2 border-dashed border-gray-200 rounded-2xl bg-white/50 w-full text-center">
+            <div className="bg-gray-100 p-5 rounded-full mb-4">
+               <BarChart3 className="w-10 h-10 text-gray-400" />
             </div>
-          ) : (
-            /* 2. FULL DASHBOARD - Shows when leads exist */
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start">
-              <div className="space-y-6">
-                <TopScoredLeads />
-              </div>
-              <div className="space-y-6">
-                <LeadScoreDistribution />
-              </div>
+            <h3 className="text-xl font-bold text-gray-900">No scored leads yet</h3>
+            <p className="text-sm text-gray-500 max-w-sm mt-2">
+              Once you set up your scoring rules, your lead rankings and distribution charts will appear here automatically.
+            </p>
+          </div>
+
+          {/* Balanced Grid for Charts and Lists */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 w-full">
+            <div className="w-full">
+              <TopScoredLeads />
             </div>
-          )}
+            <div className="w-full">
+              <LeadScoreDistribution />
+            </div>
+          </div>
         </TabsContent>
 
         <TabsContent value="rules" className="outline-none">
