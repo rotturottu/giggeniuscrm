@@ -24,7 +24,6 @@ const currencySymbols = {
   AUD: 'A$'
 };
 
-// Updated empty state to have blank strings instead of '0'
 const empty = {
   employee_name: '', employee_email: '', period_start: '', period_end: '', currency: 'PHP',
   base_salary: '', hours_worked: '', overtime_hours: '', overtime_pay: '',
@@ -45,8 +44,14 @@ export default function HRPayroll() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (d) => editing ? base44.entities.Department.update(editing.id, d) : base44.entities.Department.create(d), // Note: Ensure entity name is correct here
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll'] }); setShowForm(false); setEditing(null); setForm(empty); setError(''); }
+    mutationFn: (d) => editing ? base44.entities.PayrollRecord.update(editing.id, d) : base44.entities.PayrollRecord.create(d),
+    onSuccess: () => { 
+      qc.invalidateQueries({ queryKey: ['payroll'] }); 
+      setShowForm(false); 
+      setEditing(null); 
+      setForm(empty); 
+      setError(''); 
+    }
   });
 
   const updateStatus = useMutation({
@@ -64,7 +69,6 @@ export default function HRPayroll() {
   };
 
   const calcNet = (f) => {
-    // We use parseFloat || 0 to handle empty strings as 0 for calculation
     const base = parseFloat(f.base_salary) || 0;
     const ot = parseFloat(f.overtime_pay) || 0;
     const bonus = parseFloat(f.bonuses) || 0;
@@ -170,10 +174,10 @@ export default function HRPayroll() {
               if (key === 'base_salary') {
                 return (
                   <div key={key} className="space-y-1">
-                    <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">{label.replace(' *', '')}</Label>
+                    <Label className="after:content-['*'] after:ml-0.5 after:text-red-500 text-xs uppercase tracking-wider text-gray-500">{label.replace(' *', '')}</Label>
                     <div className="flex gap-2">
                       <Select value={form.currency} onValueChange={v => setForm(p => ({ ...p, currency: v }))}>
-                        <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-24 bg-gray-50"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {Object.keys(currencySymbols).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                         </SelectContent>
@@ -189,7 +193,7 @@ export default function HRPayroll() {
 
               return (
                 <div key={key} className="space-y-1">
-                  <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500" : ""}>{label.replace(' *', '')}</Label>
+                  <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500 text-xs uppercase tracking-wider text-gray-500" : "text-xs uppercase tracking-wider text-gray-500"}>{label.replace(' *', '')}</Label>
                   <div className="relative">
                     {isMonetary && <span className="absolute left-3 top-2.5 text-gray-400 text-sm font-medium">{currencySymbols[form.currency]}</span>}
                     <Input className={isMonetary ? "pl-8" : ""} type={type} value={form[key]} onChange={e => setField(key, e.target.value)} placeholder={isMonetary ? "0.00" : ""} />
@@ -198,11 +202,11 @@ export default function HRPayroll() {
               );
             })}
             
-            <div className="space-y-1 col-span-2">
-              <Label className="text-indigo-600 font-bold">Net Pay (auto-calculated)</Label>
+            <div className="space-y-1">
+              <Label className="text-indigo-600 font-bold text-xs uppercase tracking-wider">Net Pay (auto-calculated)</Label>
               <div className="relative">
                 <span className="absolute left-3 top-2.5 text-indigo-400 font-bold">{currencySymbols[form.currency]}</span>
-                <Input value={form.net_pay} readOnly className="bg-indigo-50 pl-8 font-bold text-indigo-700 border-indigo-200" />
+                <Input value={form.net_pay} readOnly className="bg-indigo-50/50 pl-8 font-bold text-indigo-700 border-indigo-100" />
               </div>
             </div>
           </div>
