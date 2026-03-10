@@ -15,6 +15,7 @@ export default function HRDepartments() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
+  const [error, setError] = useState(''); // Added error state
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
@@ -27,7 +28,13 @@ export default function HRDepartments() {
 
   const saveMutation = useMutation({
     mutationFn: (d) => editing ? base44.entities.Department.update(editing.id, d) : base44.entities.Department.create(d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['departments'] }); setShowForm(false); setEditing(null); setForm(empty); },
+    onSuccess: () => { 
+      qc.invalidateQueries({ queryKey: ['departments'] }); 
+      setShowForm(false); 
+      setEditing(null); 
+      setForm(empty); 
+      setError(''); 
+    },
   });
 
   const deleteMutation = useMutation({
@@ -37,8 +44,55 @@ export default function HRDepartments() {
 
   const getCount = (name) => employees.filter(e => e.department === name).length;
 
-  const openEdit = (d) => { setEditing(d); setForm({ ...empty, ...d }); setShowForm(true); };
-  const openNew = () => { setEditing(null); setForm(empty); setShowForm(true); };
+  const openEdit = (d) => { setEditing(d); setForm({ ...empty, ...d }); setError(''); setShowForm(true); };
+  const openNew = () => { setEditing(null); setForm(empty); setError(''); setShowForm(true); };
+
+  // Real-time validation for the budget (numbers only)
+  const handleNumberChange = (key, value) => {
+    setForm(p => ({ ...p, [key]: value }));
+    if (/[a-zA-Z]/.test(value)) {
+      setError('Invalid Input! Alphabets are not allowed in number-only sections.');
+    } else {
+      setError('');
+    }
+  };
+
+  // Real-time validation for email
+  const handleEmailChange = (key, value) => {
+    setForm(p => ({ ...p, [key]: value }));
+    if (value && !value.includes('@')) {
+      setError('Invalid Input! Email fields must contain an "@" symbol.');
+    } else {
+      setError('');
+    }
+  };
+
+  // Validation check before saving
+  const handleSave = () => {
+    // 1. Completely filled out check
+    const requiredFields = ['name', 'head_email', 'description', 'budget'];
+    const hasEmptyFields = requiredFields.some(field => !form[field] || form[field].toString().trim() === '');
+    
+    if (hasEmptyFields) {
+      setError('Invalid Input! Please ensure the form is completely filled out.');
+      return;
+    }
+
+    // 2. "@" Check
+    if (!form.head_email.includes('@')) {
+      setError('Invalid Input! Email fields must contain an "@" symbol.');
+      return;
+    }
+
+    // 3. Alphabet Check in Budget
+    if (/[a-zA-Z]/.test(form.budget)) {
+      setError('Invalid Input! Alphabets are not allowed in number-only sections.');
+      return;
+    }
+
+    setError('');
+    saveMutation.mutate(form);
+  };
 
   return (
     <div className="space-y-4">
@@ -77,16 +131,50 @@ export default function HRDepartments() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editing ? 'Edit Department' : 'New Department'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            {[['name', 'Department Name'], ['head_email', 'Head Email'], ['description', 'Description'], ['budget', 'Annual Budget']].map(([key, label]) => (
+            
+            {/* Map over inputs with required asterisks and custom handlers */}
+            {[['name', 'Department Name *'], ['head_email', 'Head Email *'], ['description', 'Description *'], ['budget', 'Annual Budget *']].map(([key, label]) => (
               <div key={key} className="space-y-1">
-                <Label>{label}</Label>
-                <Input type={key === 'budget' ? 'number' : 'text'} value={form[key] || ''} onChange={e => setForm(p => ({ ...p, [key]: e.target.value }))} />
+                <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500" : ""}>{label.replace(' *', '')}</Label>
+                
+                {key === 'budget' ? (
+                  <Input 
+                    type="text" 
+                    value={form[key] || ''} 
+                    onChange={e => handleNumberChange(key, e.target.value)} 
+                  />
+                ) : key === 'head_email' ? (
+                  <Input 
+                    type="email" 
+                    value={form[key] || ''} 
+                    onChange={e => handleEmailChange(key, e.target.value)} 
+                  />
+                ) : (
+                  <Input 
+                    type="text" 
+                    value={form[key] || ''} 
+                    onChange={e => { 
+                      setForm(p => ({ ...p, [key]: e.target.value })); 
+                      if(error) setError(''); 
+                    }} 
+                  />
+                )}
               </div>
             ))}
           </div>
-          <div className="flex justify-end gap-2 mt-2">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">Save</Button>
+
+          {/* Error Message Banner */}
+          {error && (
+            <div className="mt-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold flex items-center justify-between animate-in fade-in duration-300">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
+            <Button variant="outline" onClick={() => { setShowForm(false); setError(''); }}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">
+              {saveMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
