@@ -106,28 +106,47 @@ export default function InvoicesList({ onCreateNew }) {
   };
 
   const handleSaveTemplateForm = () => {
+    const missingFields = [];
+
     // 1. Check base header fields
-    if (!templateFormData.company_name || !templateFormData.client_name) {
-      setError('Please complete all fields, including Company Name and Client Name.');
-      return;
+    if (!templateFormData.company_name?.trim()) {
+      missingFields.push('Company Name');
+    }
+    if (!templateFormData.client_name?.trim()) {
+      missingFields.push('Client Name');
     }
 
     // 2. Check dynamic template fields based on config
     const config = templateFieldsConfig[selectedTemplate];
-    for (const field of config.fields) {
-      if (field.type === 'textarea' && !templateFormData[field.key]) {
-        setError(`Please fill out the "${field.label}" section.`);
-        return;
-      }
-      if (field.type === 'payment_group') {
-        if (!templateFormData.payment_amount || !templateFormData.payment_schedule || !templateFormData.payment_terms) {
-          setError('Please complete all Payment Details fields.');
-          return;
+    if (config && config.fields) {
+      for (const field of config.fields) {
+        // Check dynamic textareas (Scope of Work, Project Scope, Timeline, etc.)
+        if (field.type === 'textarea' && !templateFormData[field.key]?.trim()) {
+          missingFields.push(field.label);
+        }
+        
+        // Check payment group fields
+        if (field.type === 'payment_group') {
+          if (!templateFormData.payment_amount) {
+            missingFields.push('Total Compensation / Rate');
+          }
+          if (!templateFormData.payment_schedule) {
+            missingFields.push('Payment Schedule');
+          }
+          if (!templateFormData.payment_terms?.trim()) {
+            missingFields.push('Additional Payment Terms');
+          }
         }
       }
     }
 
-    // 3. Clear errors and Save to backend
+    // 3. If any fields are missing, display the dynamic error message and stop
+    if (missingFields.length > 0) {
+      setError(`Please complete the following blank fields: ${missingFields.join(', ')}.`);
+      return;
+    }
+
+    // 4. Clear errors and Save to backend
     setError('');
     
     const newContractPayload = {
