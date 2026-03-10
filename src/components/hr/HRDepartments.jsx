@@ -9,7 +9,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, DollarSign, Edit, Plus, Trash2, Users } from 'lucide-react';
 import { useState } from 'react';
 
-// Map to display the designated currency symbol inside the input and on the card
 const currencySymbols = {
   USD: '$',
   EUR: '€',
@@ -25,7 +24,7 @@ export default function HRDepartments() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState(empty);
-  const [error, setError] = useState(''); // Added error state
+  const [error, setError] = useState('');
 
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
@@ -45,13 +44,6 @@ export default function HRDepartments() {
       setForm(empty); 
       setError(''); 
     },
-    onSuccess: () => { 
-      qc.invalidateQueries({ queryKey: ['departments'] }); 
-      setShowForm(false); 
-      setEditing(null); 
-      setForm(empty); 
-      setError(''); 
-    },
   });
 
   const deleteMutation = useMutation({
@@ -64,7 +56,6 @@ export default function HRDepartments() {
   const openEdit = (d) => { setEditing(d); setForm({ ...empty, ...d }); setError(''); setShowForm(true); };
   const openNew = () => { setEditing(null); setForm(empty); setError(''); setShowForm(true); };
 
-  // Real-time validation for the budget (numbers only)
   const handleNumberChange = (key, value) => {
     setForm(p => ({ ...p, [key]: value }));
     if (/[a-zA-Z]/.test(value)) {
@@ -74,7 +65,6 @@ export default function HRDepartments() {
     }
   };
 
-  // Real-time validation for email
   const handleEmailChange = (key, value) => {
     setForm(p => ({ ...p, [key]: value }));
     if (value && !value.includes('@')) {
@@ -84,9 +74,7 @@ export default function HRDepartments() {
     }
   };
 
-  // Validation check before saving
   const handleSave = () => {
-    // 1. Completely filled out check
     const requiredFields = ['name', 'head_email', 'description', 'budget'];
     const hasEmptyFields = requiredFields.some(field => !form[field] || form[field].toString().trim() === '');
     
@@ -95,13 +83,11 @@ export default function HRDepartments() {
       return;
     }
 
-    // 2. "@" Check
     if (!form.head_email.includes('@')) {
       setError('Invalid Input! Email fields must contain an "@" symbol.');
       return;
     }
 
-    // 3. Alphabet Check in Budget
     if (/[a-zA-Z]/.test(form.budget)) {
       setError('Invalid Input! Alphabets are not allowed in number-only sections.');
       return;
@@ -156,15 +142,9 @@ export default function HRDepartments() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editing ? 'Edit Department' : 'New Department'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            
-            {/* Map over inputs with required asterisks and custom handlers */}
-            {[['name', 'Department Name *'], ['head_email', 'Head Email *'], ['description', 'Description *'], ['budget', 'Annual Budget *']].map(([key, label]) => (
-            
-            {/* Map over inputs with required asterisks and custom handlers */}
             {[['name', 'Department Name *'], ['head_email', 'Head Email *'], ['description', 'Description *'], ['budget', 'Annual Budget *']].map(([key, label]) => (
               <div key={key} className="space-y-1">
                 <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500" : ""}>{label.replace(' *', '')}</Label>
-                
                 {key === 'budget' ? (
                   <Input 
                     type="text" 
@@ -191,20 +171,6 @@ export default function HRDepartments() {
             ))}
           </div>
 
-          {/* Error Message Banner */}
-          {error && (
-            <div className="mt-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold flex items-center justify-between animate-in fade-in duration-300">
-              {error}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
-            <Button variant="outline" onClick={() => { setShowForm(false); setError(''); }}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">
-              {saveMutation.isPending ? 'Saving...' : 'Save'}
-            </Button>
-
-          {/* Error Message Banner */}
           {error && (
             <div className="mt-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold flex items-center justify-between animate-in fade-in duration-300">
               {error}
