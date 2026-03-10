@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Bell, CreditCard, DollarSign } from 'lucide-react';
+import { Bell, CreditCard, Settings, DollarSign } from 'lucide-react'; // Added Settings
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -16,10 +16,11 @@ export default function PaymentSettings() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-blue-600" />
-            Payment Methods
+            {/* Changed from CreditCard to Settings to match the tab icon intent */}
+            <Settings className="w-5 h-5 text-indigo-600" />
+            Payment Configuration
           </CardTitle>
-          <CardDescription>Connect payment providers to accept payments</CardDescription>
+          <CardDescription>Connect payment providers and manage your financial settings</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between p-4 border rounded-lg">
@@ -59,7 +60,7 @@ export default function PaymentSettings() {
           <div className="flex items-center justify-between p-4 border rounded-lg">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-gray-600" />
+                <Settings className="w-6 h-6 text-gray-600" />
               </div>
               <div>
                 <p className="font-semibold">Manual Payment</p>
@@ -73,8 +74,11 @@ export default function PaymentSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Tax Information</CardTitle>
-          <CardDescription>Configure your tax details</CardDescription>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="w-5 h-5 text-gray-500" />
+            Tax Information
+          </CardTitle>
+          <CardDescription>Configure your tax details for legal compliance</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
@@ -86,7 +90,7 @@ export default function PaymentSettings() {
               className="mt-1"
             />
           </div>
-          <Button>Save Tax Information</Button>
+          <Button className="bg-indigo-600 hover:bg-indigo-700">Save Tax Information</Button>
         </CardContent>
       </Card>
 
