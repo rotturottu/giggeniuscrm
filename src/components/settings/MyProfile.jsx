@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { User, Mail, Lock, Save } from 'lucide-react';
+import { User, Lock, Save } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
@@ -12,9 +12,17 @@ import toast from 'react-hot-toast';
 export default function MyProfile() {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
+  const [emailError, setEmailError] = useState(''); 
+  
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState(''); // New state for password validation
+  
+  // State & ref for Avatar Upload
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [avatarFile, setAvatarFile] = useState(null);
+  const fileInputRef = useRef(null);
 
   const queryClient = useQueryClient();
 
@@ -27,6 +35,9 @@ export default function MyProfile() {
     if (user) {
       setFullName(user.full_name || '');
       setEmail(user.email || '');
+      if (user.avatar_url) {
+        setAvatarPreview(user.avatar_url);
+      }
     }
   }, [user]);
 
@@ -41,28 +52,73 @@ export default function MyProfile() {
     },
   });
 
-  const handleUpdateProfile = () => {
-    if (!fullName) {
-      toast.error('Full name is required');
-      return;
+  // Handle Image Selection
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
     }
-    updateProfileMutation.mutate({ full_name: fullName });
   };
 
-  const handleUpdatePassword = () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      toast.error('All password fields are required');
+  // Handle Email Input & Validation
+  const handleEmailChange = (e) => {
+    const val = e.target.value;
+    setEmail(val);
+    
+    if (val && !val.includes('@')) {
+      setEmailError('Invalid email!');
+    } else {
+      setEmailError('');
+    }
+  };
+
+  const handleUpdateProfile = () => {
+    if (!fullName || !email) {
+      toast.error('Full name and email are required');
       return;
     }
-    if (newPassword !== confirmPassword) {
-      toast.error('New passwords do not match');
-      return;
-    }
-    if (newPassword.length < 8) {
-      toast.error('Password must be at least 8 characters');
+
+    if (!email.includes('@')) {
+      setEmailError('Invalid email!');
+      toast.error('Please provide a valid email address.');
       return;
     }
     
+    const payload = { 
+      full_name: fullName, 
+      email: email 
+    };
+    
+    if (avatarFile) {
+      payload.avatar = avatarFile; 
+    }
+
+    updateProfileMutation.mutate(payload);
+  };
+
+  const handleUpdatePassword = () => {
+    // Check for empty fields
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      setPasswordError('Invalid password! All fields are required!');
+      return;
+    }
+    // Check if passwords match
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Invalid password! New passwords do not match!');
+      return;
+    }
+    // Check minimum length
+    if (newPassword.length < 8) {
+      setPasswordError('Invalid password! Password must be at least 8 characters!');
+      return;
+    }
+    
+    setPasswordError(''); // Clear errors if everything is good
     toast.success('Password change functionality coming soon');
     setCurrentPassword('');
     setNewPassword('');
@@ -91,14 +147,27 @@ export default function MyProfile() {
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="flex items-center gap-4">
-            <Avatar className="w-20 h-20">
-              <AvatarFallback className="bg-gradient-to-r from-blue-600 to-purple-600 text-white text-2xl">
-                {getInitials(user?.full_name)}
-              </AvatarFallback>
+            <Avatar className="w-20 h-20 overflow-hidden">
+              {avatarPreview ? (
+                <img src={avatarPreview} alt="Avatar Preview" className="w-full h-full object-cover" />
+              ) : (
+                <AvatarFallback className="bg-gradient-to-r from-blue-600 to-purple-600 text-white text-2xl">
+                  {getInitials(user?.full_name)}
+                </AvatarFallback>
+              )}
             </Avatar>
             <div>
               <p className="text-sm text-gray-600 mb-1">Profile Picture</p>
-              <Button variant="outline" size="sm">Change Avatar</Button>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="image/*" 
+                onChange={handleAvatarChange} 
+              />
+              <Button variant="outline" size="sm" onClick={() => fileInputRef.current.click()}>
+                Change Avatar
+              </Button>
             </div>
           </div>
 
@@ -117,10 +186,16 @@ export default function MyProfile() {
               <Label>Email Address</Label>
               <Input
                 value={email}
-                disabled
-                className="mt-1 bg-gray-50"
+                onChange={handleEmailChange}
+                placeholder="john.doe@example.com"
+                className={`mt-1 ${emailError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
               />
-              <p className="text-xs text-gray-500 mt-1">Email cannot be changed</p>
+              {emailError && (
+                <p className="text-sm text-red-500 font-medium mt-1">{emailError}</p>
+              )}
+              <p className="text-xs text-gray-500 mt-1">
+                Note: please make sure if you are a giggenius user, use the same email.
+              </p>
             </div>
 
             <div>
@@ -154,13 +229,21 @@ export default function MyProfile() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label>Current Password</Label>
+            <Label className="flex items-center gap-2">
+              Current Password
+              <span className="text-xs font-normal text-gray-500 italic">
+                (for users who signed up using SSO, you can't change password)
+              </span>
+            </Label>
             <Input
               type="password"
               value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
+              onChange={(e) => {
+                setCurrentPassword(e.target.value);
+                if (passwordError) setPasswordError('');
+              }}
               placeholder="Enter current password"
-              className="mt-1"
+              className={`mt-1 ${passwordError && !currentPassword ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
             />
           </div>
 
@@ -169,9 +252,12 @@ export default function MyProfile() {
             <Input
               type="password"
               value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
+              onChange={(e) => {
+                setNewPassword(e.target.value);
+                if (passwordError) setPasswordError('');
+              }}
               placeholder="Enter new password"
-              className="mt-1"
+              className={`mt-1 ${passwordError && (!newPassword || newPassword !== confirmPassword || newPassword.length < 8) ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
             />
           </div>
 
@@ -180,11 +266,21 @@ export default function MyProfile() {
             <Input
               type="password"
               value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                if (passwordError) setPasswordError('');
+              }}
               placeholder="Confirm new password"
-              className="mt-1"
+              className={`mt-1 ${passwordError && (!confirmPassword || newPassword !== confirmPassword) ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
             />
           </div>
+
+          {/* Password Validation Error Warning */}
+          {passwordError && (
+            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold animate-in fade-in duration-300">
+              {passwordError}
+            </div>
+          )}
 
           <Button
             onClick={handleUpdatePassword}

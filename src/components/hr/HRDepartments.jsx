@@ -4,11 +4,21 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Building2, DollarSign, Edit, Plus, Trash2, Users } from 'lucide-react';
 import { useState } from 'react';
 
-const empty = { name: '', head_email: '', description: '', budget: '' };
+// Map to display the designated currency symbol inside the input and on the card
+const currencySymbols = {
+  USD: '$',
+  EUR: '€',
+  PHP: '₱',
+  CAD: 'C$',
+  AUD: 'A$'
+};
+
+const empty = { name: '', head_email: '', description: '', budget: '', currency: 'PHP' };
 
 export default function HRDepartments() {
   const qc = useQueryClient();
@@ -28,6 +38,13 @@ export default function HRDepartments() {
 
   const saveMutation = useMutation({
     mutationFn: (d) => editing ? base44.entities.Department.update(editing.id, d) : base44.entities.Department.create(d),
+    onSuccess: () => { 
+      qc.invalidateQueries({ queryKey: ['departments'] }); 
+      setShowForm(false); 
+      setEditing(null); 
+      setForm(empty); 
+      setError(''); 
+    },
     onSuccess: () => { 
       qc.invalidateQueries({ queryKey: ['departments'] }); 
       setShowForm(false); 
@@ -100,30 +117,38 @@ export default function HRDepartments() {
         <Button onClick={openNew} className="bg-indigo-600 hover:bg-indigo-700 gap-2"><Plus className="w-4 h-4" />Add Department</Button>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {departments.map(dept => (
-          <Card key={dept.id} className="hover:shadow-md transition-shadow">
-            <CardHeader className="pb-2">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
-                    <Building2 className="w-5 h-5 text-indigo-600" />
+        {departments.map(dept => {
+          const sym = currencySymbols[dept.currency] || '$';
+          return (
+            <Card key={dept.id} className="hover:shadow-md transition-shadow">
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-10 h-10 bg-indigo-100 rounded-lg flex items-center justify-center">
+                      <Building2 className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <CardTitle className="text-lg">{dept.name}</CardTitle>
                   </div>
-                  <CardTitle className="text-lg">{dept.name}</CardTitle>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(dept)}><Edit className="w-4 h-4" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => deleteMutation.mutate(dept.id)}><Trash2 className="w-4 h-4" /></Button>
+                  </div>
                 </div>
-                <div className="flex gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(dept)}><Edit className="w-4 h-4" /></Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => deleteMutation.mutate(dept.id)}><Trash2 className="w-4 h-4" /></Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-gray-600">
-              {dept.description && <p>{dept.description}</p>}
-              <div className="flex items-center gap-2"><Users className="w-4 h-4" />{getCount(dept.name)} Employees</div>
-              {dept.head_email && <div className="flex items-center gap-2">👤 {dept.head_email}</div>}
-              {dept.budget && <div className="flex items-center gap-2"><DollarSign className="w-4 h-4" />${Number(dept.budget).toLocaleString()} budget</div>}
-            </CardContent>
-          </Card>
-        ))}
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-gray-600">
+                {dept.description && <p>{dept.description}</p>}
+                <div className="flex items-center gap-2"><Users className="w-4 h-4" />{getCount(dept.name)} Employees</div>
+                {dept.head_email && <div className="flex items-center gap-2">👤 {dept.head_email}</div>}
+                {dept.budget && (
+                  <div className="flex items-center gap-2">
+                    <DollarSign className="w-4 h-4" />
+                    {sym}{Number(dept.budget).toLocaleString()} budget
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })}
         {departments.length === 0 && <div className="col-span-3 text-center py-12 text-gray-400">No departments yet.</div>}
       </div>
 
@@ -131,6 +156,9 @@ export default function HRDepartments() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editing ? 'Edit Department' : 'New Department'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
+            
+            {/* Map over inputs with required asterisks and custom handlers */}
+            {[['name', 'Department Name *'], ['head_email', 'Head Email *'], ['description', 'Description *'], ['budget', 'Annual Budget *']].map(([key, label]) => (
             
             {/* Map over inputs with required asterisks and custom handlers */}
             {[['name', 'Department Name *'], ['head_email', 'Head Email *'], ['description', 'Description *'], ['budget', 'Annual Budget *']].map(([key, label]) => (
@@ -162,6 +190,19 @@ export default function HRDepartments() {
               </div>
             ))}
           </div>
+
+          {/* Error Message Banner */}
+          {error && (
+            <div className="mt-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold flex items-center justify-between animate-in fade-in duration-300">
+              {error}
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
+            <Button variant="outline" onClick={() => { setShowForm(false); setError(''); }}>Cancel</Button>
+            <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">
+              {saveMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
 
           {/* Error Message Banner */}
           {error && (
