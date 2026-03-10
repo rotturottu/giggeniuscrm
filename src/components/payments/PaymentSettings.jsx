@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Bell, CreditCard, DollarSign } from 'lucide-react';
+import { Bell, CreditCard, Settings, DollarSign } from 'lucide-react'; 
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -13,10 +13,14 @@ export default function PaymentSettings() {
 
   return (
     <div className="space-y-6">
+      {/* NOTE: If you are calling this component from a parent file (like Sales.jsx), 
+         make sure the <TabsTrigger> in that file also uses the <Settings /> icon.
+      */}
+
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CreditCard className="w-5 h-5 text-blue-600" />
+            <Settings className="w-5 h-5 text-indigo-600" />
             Payment Methods
           </CardTitle>
           <CardDescription>Connect payment providers to accept payments</CardDescription>
@@ -59,7 +63,8 @@ export default function PaymentSettings() {
           <div className="flex items-center justify-between p-4 border rounded-lg">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-gray-600" />
+                {/* Updated this icon to Settings (Cog) */}
+                <Settings className="w-6 h-6 text-gray-600" />
               </div>
               <div>
                 <p className="font-semibold">Manual Payment</p>
@@ -73,7 +78,10 @@ export default function PaymentSettings() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Tax Information</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Settings className="w-5 h-5 text-gray-500" />
+            Tax Information
+          </CardTitle>
           <CardDescription>Configure your tax details</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -86,7 +94,7 @@ export default function PaymentSettings() {
               className="mt-1"
             />
           </div>
-          <Button>Save Tax Information</Button>
+          <Button className="bg-indigo-600 hover:bg-indigo-700">Save Tax Information</Button>
         </CardContent>
       </Card>
 

@@ -26,8 +26,8 @@ const currencySymbols = {
 
 const empty = {
   employee_name: '', employee_email: '', period_start: '', period_end: '', currency: 'PHP',
-  base_salary: '', hours_worked: '', overtime_hours: '0', overtime_pay: '0',
-  bonuses: '0', deductions: '0', tax: '0', net_pay: '', status: 'draft', notes: '',
+  base_salary: '', hours_worked: '', overtime_hours: '', overtime_pay: '',
+  bonuses: '', deductions: '', tax: '', net_pay: '', status: 'draft', notes: '',
 };
 
 export default function HRPayroll() {
@@ -45,7 +45,13 @@ export default function HRPayroll() {
 
   const saveMutation = useMutation({
     mutationFn: (d) => editing ? base44.entities.PayrollRecord.update(editing.id, d) : base44.entities.PayrollRecord.create(d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['payroll'] }); setShowForm(false); setEditing(null); setForm(empty); setError(''); }
+    onSuccess: () => { 
+      qc.invalidateQueries({ queryKey: ['payroll'] }); 
+      setShowForm(false); 
+      setEditing(null); 
+      setForm(empty); 
+      setError(''); 
+    }
   });
 
   const updateStatus = useMutation({
@@ -68,15 +74,18 @@ export default function HRPayroll() {
     const bonus = parseFloat(f.bonuses) || 0;
     const ded = parseFloat(f.deductions) || 0;
     const tax = parseFloat(f.tax) || 0;
-    return (base + ot + bonus - ded - tax).toFixed(2);
+    const total = base + ot + bonus - ded - tax;
+    return total > 0 ? total.toFixed(2) : '0.00';
   };
 
   const setField = (key, val) => {
     const numericFields = ['base_salary', 'hours_worked', 'overtime_hours', 'overtime_pay', 'bonuses', 'deductions', 'tax'];
     let finalVal = val;
+    
     if (numericFields.includes(key)) {
       finalVal = val.replace(/[^0-9.]/g, '');
     }
+    
     setForm(p => {
       const updated = { ...p, [key]: finalVal };
       updated.net_pay = calcNet(updated);
@@ -86,24 +95,16 @@ export default function HRPayroll() {
   };
 
   const handleSave = () => {
-    const requiredFields = ['employee_name', 'employee_email', 'period_start', 'period_end', 'base_salary', 'hours_worked', 'overtime_hours', 'overtime_pay', 'bonuses', 'deductions', 'tax'];
-    const hasEmptyFields = requiredFields.some(field => form[field] === '' || form[field] === undefined);
+    const requiredFields = ['employee_name', 'employee_email', 'period_start', 'period_end', 'base_salary'];
+    const hasEmptyFields = requiredFields.some(field => !form[field] || form[field].toString().trim() === '');
     
     if (hasEmptyFields) {
-      setError('Please fill out the form completely.');
+      setError('Please fill out the required fields (*).');
       return;
     }
 
     if (!form.employee_email.includes('@')) {
-      setError('Invalid Input! Email fields must contain an "@" symbol.');
-      return;
-    }
-
-    const numFields = ['base_salary', 'hours_worked', 'overtime_hours', 'overtime_pay', 'bonuses', 'deductions', 'tax'];
-    const hasAlphabets = numFields.some(field => /[a-zA-Z]/.test(form[field]));
-    
-    if (hasAlphabets) {
-      setError('Invalid Input! Alphabets are not allowed in number-only sections.');
+      setError('Invalid email format.');
       return;
     }
 
@@ -141,21 +142,18 @@ export default function HRPayroll() {
                     </div>
                     <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                       <span>Period: {rec.period_start} → {rec.period_end}</span>
-                      <span className="flex items-center gap-1">
-                        <DollarSign className="w-3.5 h-3.5" />Net Pay: 
-                        <strong className="text-gray-900">{sym}{Number(rec.net_pay).toLocaleString()}</strong>
+                      <span className="flex items-center gap-1 font-medium">
+                        Net Pay: <strong className="text-indigo-600">{sym}{Number(rec.net_pay || 0).toLocaleString()}</strong>
                       </span>
-                      {rec.bonuses > 0 && <span>Bonus: +{sym}{rec.bonuses}</span>}
-                      {rec.deductions > 0 && <span>Deductions: -{sym}{rec.deductions}</span>}
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="gap-1" onClick={() => openEdit(rec)}><Edit className="w-3.5 h-3.5" /></Button>
+                    <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => openEdit(rec)}><Edit className="w-3.5 h-3.5" /></Button>
                     {rec.status === 'draft' && (
-                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700 gap-1" onClick={() => updateStatus.mutate({ id: rec.id, status: 'approved' })}>Approve</Button>
+                      <Button size="sm" className="bg-blue-600 hover:bg-blue-700 h-8" onClick={() => updateStatus.mutate({ id: rec.id, status: 'approved' })}>Approve</Button>
                     )}
                     {rec.status === 'approved' && (
-                      <Button size="sm" className="bg-green-600 hover:bg-green-700 gap-1" onClick={() => updateStatus.mutate({ id: rec.id, status: 'paid' })}><CheckCircle className="w-3.5 h-3.5" />Mark Paid</Button>
+                      <Button size="sm" className="bg-green-600 hover:bg-green-700 h-8 gap-1" onClick={() => updateStatus.mutate({ id: rec.id, status: 'paid' })}><CheckCircle className="w-3.5 h-3.5" />Mark Paid</Button>
                     )}
                   </div>
                 </div>
@@ -163,7 +161,6 @@ export default function HRPayroll() {
             </Card>
           );
         })}
-        {filtered.length === 0 && <div className="text-center py-12 text-gray-400">No payroll records found.</div>}
       </div>
 
       <Dialog open={showForm} onOpenChange={setShowForm}>
@@ -171,40 +168,24 @@ export default function HRPayroll() {
           <DialogHeader><DialogTitle>{editing ? 'Edit Payroll Record' : 'New Payroll Record'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4">
             
-            {[['employee_name', 'Employee Name *', 'text'], ['employee_email', 'Employee Email *', 'text'], ['period_start', 'Period Start *', 'date'], ['period_end', 'Period End *', 'date'], ['base_salary', 'Base Salary *', 'text'], ['hours_worked', 'Hours Worked *', 'text'], ['overtime_hours', 'Overtime Hours *', 'text'], ['overtime_pay', 'Overtime Pay *', 'text'], ['bonuses', 'Bonuses *', 'text'], ['deductions', 'Deductions *', 'text'], ['tax', 'Tax *', 'text']].map(([key, label, type]) => {
+            {[['employee_name', 'Employee Name *', 'text'], ['employee_email', 'Employee Email *', 'text'], ['period_start', 'Period Start *', 'date'], ['period_end', 'Period End *', 'date'], ['base_salary', 'Base Salary *', 'text'], ['hours_worked', 'Hours Worked', 'text'], ['overtime_hours', 'Overtime Hours', 'text'], ['overtime_pay', 'Overtime Pay', 'text'], ['bonuses', 'Bonuses', 'text'], ['deductions', 'Deductions', 'text'], ['tax', 'Tax', 'text']].map(([key, label, type]) => {
               const isMonetary = ['overtime_pay', 'bonuses', 'deductions', 'tax'].includes(key);
 
               if (key === 'base_salary') {
                 return (
                   <div key={key} className="space-y-1">
-                    <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500" : ""}>{label.replace(' *', '')}</Label>
+                    <Label className="after:content-['*'] after:ml-0.5 after:text-red-500 text-xs uppercase tracking-wider text-gray-500">{label.replace(' *', '')}</Label>
                     <div className="flex gap-2">
                       <Select value={form.currency} onValueChange={v => setForm(p => ({ ...p, currency: v }))}>
-                        <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-24 bg-gray-50"><SelectValue /></SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="USD">USD</SelectItem>
-                          <SelectItem value="EUR">EUR</SelectItem>
-                          <SelectItem value="PHP">PHP</SelectItem>
-                          <SelectItem value="CAD">CAD</SelectItem>
-                          <SelectItem value="AUD">AUD</SelectItem>
+                          {Object.keys(currencySymbols).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       <div className="relative flex-1">
-                        <span className="absolute left-3 top-2 text-gray-500 font-medium">{currencySymbols[form.currency]}</span>
-                        <Input className="pl-8" type={type} value={form[key] || ''} onChange={e => setField(key, e.target.value)} />
+                        <span className="absolute left-3 top-2.5 text-gray-400 text-sm font-medium">{currencySymbols[form.currency]}</span>
+                        <Input className="pl-8" type={type} value={form[key]} onChange={e => setField(key, e.target.value)} placeholder="0.00" />
                       </div>
-                    </div>
-                  </div>
-                );
-              }
-
-              if (isMonetary) {
-                return (
-                  <div key={key} className="space-y-1">
-                    <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500" : ""}>{label.replace(' *', '')}</Label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2 text-gray-500 font-medium">{currencySymbols[form.currency]}</span>
-                      <Input className="pl-8" type={type} value={form[key] || ''} onChange={e => setField(key, e.target.value)} />
                     </div>
                   </div>
                 );
@@ -212,30 +193,35 @@ export default function HRPayroll() {
 
               return (
                 <div key={key} className="space-y-1">
-                  <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500" : ""}>{label.replace(' *', '')}</Label>
-                  <Input type={type} value={form[key] || ''} onChange={e => setField(key, e.target.value)} />
+                  <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500 text-xs uppercase tracking-wider text-gray-500" : "text-xs uppercase tracking-wider text-gray-500"}>{label.replace(' *', '')}</Label>
+                  <div className="relative">
+                    {isMonetary && <span className="absolute left-3 top-2.5 text-gray-400 text-sm font-medium">{currencySymbols[form.currency]}</span>}
+                    <Input className={isMonetary ? "pl-8" : ""} type={type} value={form[key]} onChange={e => setField(key, e.target.value)} placeholder={isMonetary ? "0.00" : ""} />
+                  </div>
                 </div>
               );
             })}
             
             <div className="space-y-1">
-              <Label>Net Pay (auto-calculated)</Label>
+              <Label className="text-indigo-600 font-bold text-xs uppercase tracking-wider">Net Pay (auto-calculated)</Label>
               <div className="relative">
-                <span className="absolute left-3 top-2 text-gray-500 font-medium">{currencySymbols[form.currency]}</span>
-                <Input value={form.net_pay || ''} readOnly className="bg-gray-50 pl-8" />
+                <span className="absolute left-3 top-2.5 text-indigo-400 font-bold">{currencySymbols[form.currency]}</span>
+                <Input value={form.net_pay} readOnly className="bg-indigo-50/50 pl-8 font-bold text-indigo-700 border-indigo-100" />
               </div>
             </div>
           </div>
 
           {error && (
-            <div className="mt-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold flex items-center justify-between animate-in fade-in duration-300">
+            <div className="mt-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold animate-in fade-in duration-300">
               {error}
             </div>
           )}
 
           <div className="flex justify-end gap-2 mt-4 pt-4 border-t border-gray-100">
             <Button variant="outline" onClick={() => { setShowForm(false); setError(''); }}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">Save</Button>
+            <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 px-8">
+              {saveMutation.isPending ? 'Saving...' : 'Save Record'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
