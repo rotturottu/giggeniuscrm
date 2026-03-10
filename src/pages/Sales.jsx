@@ -1,5 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { DollarSign, FileText, Target, TrendingUp, Users } from 'lucide-react';
+import { Settings, FileText, Target, TrendingUp, Users } from 'lucide-react'; // Swapped DollarSign for Settings
 import { useState } from 'react';
 import ContactsTab from '../components/deals/ContactsTab';
 import DealsPipeline from '../components/deals/DealsPipeline';
@@ -39,8 +39,10 @@ export default function Sales() {
               <FileText className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
               <span className="hidden sm:inline">Invoices</span>
             </TabsTrigger>
+            
+            {/* FIXED: Changed DollarSign to Settings icon here */}
             <TabsTrigger value="payments" className="text-xs sm:text-sm">
-              <DollarSign className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <Settings className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
               <span className="hidden sm:inline">Settings</span>
             </TabsTrigger>
           </TabsList>
