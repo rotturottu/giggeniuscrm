@@ -65,6 +65,10 @@ export default function HRDepartments() {
     }
   };
 
+  const handleCurrencyChange = (value) => {
+    setForm(p => ({ ...p, currency: value }));
+  };
+
   const handleEmailChange = (key, value) => {
     setForm(p => ({ ...p, [key]: value }));
     if (value && !value.includes('@')) {
@@ -75,7 +79,7 @@ export default function HRDepartments() {
   };
 
   const handleSave = () => {
-    const requiredFields = ['name', 'head_email', 'description', 'budget'];
+    const requiredFields = ['name', 'head_email', 'description', 'budget', 'currency'];
     const hasEmptyFields = requiredFields.some(field => !form[field] || form[field].toString().trim() === '');
     
     if (hasEmptyFields) {
@@ -126,9 +130,9 @@ export default function HRDepartments() {
                 <div className="flex items-center gap-2"><Users className="w-4 h-4" />{getCount(dept.name)} Employees</div>
                 {dept.head_email && <div className="flex items-center gap-2">👤 {dept.head_email}</div>}
                 {dept.budget && (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 font-medium text-indigo-700">
                     <DollarSign className="w-4 h-4" />
-                    {sym}{Number(dept.budget).toLocaleString()} budget
+                    {sym}{Number(dept.budget).toLocaleString()} budget ({dept.currency})
                   </div>
                 )}
               </CardContent>
@@ -142,37 +146,45 @@ export default function HRDepartments() {
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{editing ? 'Edit Department' : 'New Department'}</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            {[['name', 'Department Name *'], ['head_email', 'Head Email *'], ['description', 'Description *'], ['budget', 'Annual Budget *']].map(([key, label]) => (
-              <div key={key} className="space-y-1">
-                <Label className={label.includes('*') ? "after:content-['*'] after:ml-0.5 after:text-red-500" : ""}>{label.replace(' *', '')}</Label>
-                {key === 'budget' ? (
-                  <Input 
-                    type="text" 
-                    value={form[key] || ''} 
-                    onChange={e => handleNumberChange(key, e.target.value)} 
-                  />
-                ) : key === 'head_email' ? (
-                  <Input 
-                    type="email" 
-                    value={form[key] || ''} 
-                    onChange={e => handleEmailChange(key, e.target.value)} 
-                  />
-                ) : (
-                  <Input 
-                    type="text" 
-                    value={form[key] || ''} 
-                    onChange={e => { 
-                      setForm(p => ({ ...p, [key]: e.target.value })); 
-                      if(error) setError(''); 
-                    }} 
-                  />
-                )}
+            <div className="space-y-1">
+                <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Department Name</Label>
+                <Input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} />
+            </div>
+            <div className="space-y-1">
+                <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Head Email</Label>
+                <Input type="email" value={form.head_email} onChange={e => handleEmailChange('head_email', e.target.value)} />
+            </div>
+            <div className="space-y-1">
+                <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Description</Label>
+                <Input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+            </div>
+            
+            <div className="space-y-1">
+              <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Annual Budget</Label>
+              <div className="flex gap-2">
+                <Select value={form.currency} onValueChange={handleCurrencyChange}>
+                    <SelectTrigger className="w-[100px]">
+                        <SelectValue placeholder="CCY" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {Object.keys(currencySymbols).map(ccy => (
+                            <SelectItem key={ccy} value={ccy}>{ccy}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Input 
+                  placeholder="0.00"
+                  type="text" 
+                  className="flex-1"
+                  value={form.budget || ''} 
+                  onChange={e => handleNumberChange('budget', e.target.value)} 
+                />
               </div>
-            ))}
+            </div>
           </div>
 
           {error && (
-            <div className="mt-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold flex items-center justify-between animate-in fade-in duration-300">
+            <div className="mt-2 p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold animate-in fade-in duration-300">
               {error}
             </div>
           )}
