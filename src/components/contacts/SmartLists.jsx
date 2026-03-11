@@ -163,6 +163,9 @@ export default function SmartLists({ onSelectList, selectedListId }) {
     queryFn: () => base44.entities.SmartList.list('-created_date'),
   });
 
+  // --- SAFETY NET: Force lists to be an array ---
+  const safeLists = Array.isArray(lists) ? lists : [];
+
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.SmartList.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['smart-lists'] }),
@@ -187,9 +190,11 @@ export default function SmartLists({ onSelectList, selectedListId }) {
           All Contacts
         </button>
 
-        {lists.length > 0 && <div className="pt-2 pb-1 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Folders</div>}
+        {/* UPDATED: safeLists.length instead of lists.length */}
+        {safeLists.length > 0 && <div className="pt-2 pb-1 px-3 text-xs font-semibold text-gray-400 uppercase tracking-wider">Folders</div>}
 
-        {lists.map((list) => (
+        {/* UPDATED: safeLists.map instead of lists.map */}
+        {safeLists.map((list) => (
           <div
             key={list.id}
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors cursor-pointer group ${selectedListId === list.id ? 'bg-blue-50 text-blue-700 font-medium' : 'text-gray-600 hover:bg-gray-50'}`}
@@ -215,7 +220,8 @@ export default function SmartLists({ onSelectList, selectedListId }) {
           </div>
         ))}
 
-        {lists.length === 0 && (
+        {/* UPDATED: safeLists.length instead of lists.length */}
+        {safeLists.length === 0 && (
           <div className="text-center py-6 text-xs text-gray-400 px-3">
             <Folder className="w-6 h-6 mx-auto mb-1 opacity-30" />
             No lists yet.<br />Create one to segment your contacts.
