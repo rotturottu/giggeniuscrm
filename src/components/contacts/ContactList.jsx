@@ -31,7 +31,11 @@ export default function ContactList({ onEdit, onView, smartListId }) {
     enabled: !!smartListId,
   });
 
-  const selectedList = smartLists.find(l => l.id === smartListId);
+  // --- SAFETY NETS: Forcing the data to always be an array ---
+  const safeSmartLists = Array.isArray(smartLists) ? smartLists : [];
+  const safeContacts = Array.isArray(contacts) ? contacts : [];
+
+  const selectedList = safeSmartLists.find(l => l.id === smartListId);
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Contact.delete(id),
@@ -41,7 +45,8 @@ export default function ContactList({ onEdit, onView, smartListId }) {
     },
   });
 
-  const filtered = contacts.filter(c => {
+  // --- UPDATED: Now filtering safeContacts instead of raw contacts ---
+  const filtered = safeContacts.filter(c => {
     const matchType = typeFilter === 'all' || c.contact_type === typeFilter;
     const q = search.toLowerCase();
     const matchSearch = !q ||
