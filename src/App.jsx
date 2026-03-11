@@ -9,11 +9,12 @@ import { BrowserRouter as Router, Route, Routes, Navigate } from 'react-router-d
 import PageNotFound from './lib/PageNotFound';
 import Login from './pages/Login'; 
 import Register from './pages/Register';
-import { PublicClientApplication } from '@azure/msal-browser';
-import { MsalProvider, useMsal } from '@azure/msal-react';
-import { msalConfig } from './authConfig';
 
-const msalInstance = new PublicClientApplication(msalConfig);
+// --- MICROSOFT AZURE BYPASSED ---
+// import { PublicClientApplication } from '@azure/msal-browser';
+// import { MsalProvider, useMsal } from '@azure/msal-react';
+// import { msalConfig } from './authConfig';
+// const msalInstance = new PublicClientApplication(msalConfig);
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -23,18 +24,13 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
 
-// THE BOUNCER: This component protects your dashboard routes
+// THE BOUNCER: Protected Route (Native Auth Only)
 const ProtectedRoute = ({ children }) => {
-  const { instance } = useMsal();
-  
-  // Check for Microsoft Account
-  const isMicrosoftAuth = instance.getAllAccounts().length > 0;
-  
   // Check for Native Local Account (The badge we set in Login.jsx)
   const isNativeAuth = localStorage.getItem('gigGeniusAuth') === 'true';
 
-  if (!isMicrosoftAuth && !isNativeAuth) {
-    // Kick them to the login page if they have neither!
+  if (!isNativeAuth) {
+    // Kick them to the login page
     return <Navigate to="/login" replace />;
   }
 
@@ -45,13 +41,13 @@ const ProtectedRoute = ({ children }) => {
 const AuthenticatedApp = () => {
   return (
     <Routes>
-      {/* Public Routes (No protection needed) */}
+      {/* Public Routes */}
       <Route path="/login" element={<Login />} />
       <Route path="/Login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/Register" element={<Register />} />
 
-      {/* Protected Routes (Wrapped in our Bouncer) */}
+      {/* Protected Routes */}
       <Route path="/" element={
         <ProtectedRoute>
           <LayoutWrapper currentPageName={mainPageKey}>
@@ -80,7 +76,7 @@ const AuthenticatedApp = () => {
 
 function App() {
   return (
-    <MsalProvider instance={msalInstance}>
+    // <MsalProvider instance={msalInstance}> --- REMOVED ---
       <QueryClientProvider client={queryClientInstance}>
         <Router>
           <NavigationTracker />
@@ -89,7 +85,7 @@ function App() {
         <Toaster />
         <VisualEditAgent />
       </QueryClientProvider>
-    </MsalProvider>
+    // </MsalProvider>
   )
 }
 

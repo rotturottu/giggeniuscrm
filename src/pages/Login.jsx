@@ -3,23 +3,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Link, useNavigate } from 'react-router-dom';
-import { useMsal } from '@azure/msal-react';
-import { loginRequest } from '../authConfig';
+
+// --- MICROSOFT AZURE BYPASSED ---
+// import { useMsal } from '@azure/msal-react';
+// import { loginRequest } from '../authConfig';
 
 export default function Login() {
-  const { instance } = useMsal();
   const navigate = useNavigate();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
-  const handleMicrosoftLogin = () => {
-    instance.loginRedirect(loginRequest).catch((error) => {
-      console.error("Login redirect failed:", error);
-    });
-  };
 
   const handleNativeLogin = async (e) => {
     e.preventDefault();
@@ -45,11 +40,9 @@ export default function Login() {
         throw new Error(data.error || 'Invalid email or password');
       }
       
-      // SUCCESS! Save a digital ID badge to the browser memory
       localStorage.setItem('gigGeniusAuth', 'true');
       localStorage.setItem('gigGeniusUser', email);
       
-      // Teleport to the dashboard
       navigate('/Overview');
     } catch (err) {
       setError(err.message || 'Invalid email or password.');
@@ -111,37 +104,13 @@ export default function Login() {
           </Button>
         </form>
 
-        <div className="mt-6">
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-white text-gray-500">Or continue with</span>
-            </div>
-          </div>
-
-          <div className="mt-6">
-            <Button 
-              type="button"
-              className="w-full py-6 text-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-xl shadow-md hover:shadow-lg transition-all" 
-              onClick={handleMicrosoftLogin}
-            >
-              Sign In with Microsoft
-            </Button>
-          </div>
-        </div>
-
-        <div className="flex flex-col space-y-3 text-center pt-4">
+        <div className="flex flex-col space-y-3 text-center pt-4 mt-6">
           <p className="text-sm text-gray-600">
             Don't have an account?{' '}
             <Link to="/register" className="font-semibold text-blue-600 hover:text-blue-500 transition-colors">
               Sign up here
             </Link>
           </p>
-          <Link to="/" className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors">
-            ← Back to Homepage
-          </Link>
         </div>
       </div>
     </div>
