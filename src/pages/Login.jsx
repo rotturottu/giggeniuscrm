@@ -4,10 +4,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Link, useNavigate } from 'react-router-dom';
 
-// --- MICROSOFT AZURE BYPASSED ---
-// import { useMsal } from '@azure/msal-react';
-// import { loginRequest } from '../authConfig';
-
 export default function Login() {
   const navigate = useNavigate();
 

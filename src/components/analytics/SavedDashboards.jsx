@@ -27,7 +27,7 @@ export default function SavedDashboards({ dashboards, onSelect, activeDashboardI
     },
   });
 
-  if (dashboards.length === 0) return null;
+  if (!Array.isArray(dashboards) || dashboards.length === 0) return null;
 
   const currentDefault = dashboards.find(d => d.is_default)?.id;
 
