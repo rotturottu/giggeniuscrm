@@ -122,6 +122,10 @@ export default function ContactForm({ open, onClose, contact }) {
     queryFn: () => base44.entities.User.list(),
   });
 
+  // --- SAFETY NETS: Force arrays ---
+  const safeCampaigns = Array.isArray(campaigns) ? campaigns : [];
+  const safeUsers = Array.isArray(users) ? users : [];
+
   useEffect(() => {
     if (contact) {
       setForm({
@@ -277,14 +281,15 @@ export default function ContactForm({ open, onClose, contact }) {
               <Label className="text-xs text-gray-500">Campaign</Label>
               <Select value={form.campaign_id || '__none'} onValueChange={v => {
                 if (v === '__none') { set('campaign_id', ''); set('campaign_name', ''); return; }
-                const camp = campaigns.find(c => c.id === v);
+                const camp = safeCampaigns.find(c => c.id === v); // UPDATED
                 set('campaign_id', v);
                 set('campaign_name', camp?.name || '');
               }}>
                 <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="No campaign" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none">No campaign</SelectItem>
-                  {campaigns.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+                  {/* UPDATED */}
+                  {safeCampaigns.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
@@ -340,7 +345,8 @@ export default function ContactForm({ open, onClose, contact }) {
                   <SelectTrigger className="mt-1 h-9"><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="__none">None</SelectItem>
-                    {users.map(u => <SelectItem key={u.email} value={u.email}>{u.full_name || u.email}</SelectItem>)}
+                    {/* UPDATED */}
+                    {safeUsers.map(u => <SelectItem key={u.email} value={u.email}>{u.full_name || u.email}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
