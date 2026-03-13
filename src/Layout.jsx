@@ -17,7 +17,10 @@ const navigation = [
   { name: 'Support', path: 'ContactUs', icon: HeadphonesIcon },
 ];
 
-export default function Layout({ children, currentPage, setCurrentPage }) {
+export default function Layout({ children }) {
+  // Read the current URL to know which button to highlight
+  const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
       {/* Top Navigation Bar */}
@@ -25,24 +28,26 @@ export default function Layout({ children, currentPage, setCurrentPage }) {
         <div className="w-full px-4 sm:px-6 flex items-center justify-between h-16 gap-4">
           
           {/* Logo & Branding */}
-          <div className="flex items-center gap-2 cursor-pointer flex-shrink-0" onClick={() => setCurrentPage && setCurrentPage('Overview')}>
+          <a href="/Overview" className="flex items-center gap-2 cursor-pointer flex-shrink-0 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
               G
             </div>
             <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent hidden md:block">
               GigGenius
             </span>
-          </div>
+          </a>
 
-          {/* Navigation Links (Scrollable on small screens) */}
+          {/* Navigation Links */}
           <nav className="flex items-center gap-1 overflow-x-auto flex-1 hide-scrollbar">
             {navigation.map((item) => {
               const Icon = item.icon;
-              const isActive = currentPage === item.path;
+              // Check if the current URL matches this button's path
+              const isActive = currentPath.includes(item.path);
+              
               return (
-                <button
+                <a
                   key={item.name}
-                  onClick={() => setCurrentPage && setCurrentPage(item.path)}
+                  href={`/${item.path}`}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
                     isActive
                       ? 'bg-blue-50 text-blue-700'
@@ -51,7 +56,7 @@ export default function Layout({ children, currentPage, setCurrentPage }) {
                 >
                   <Icon className="w-4 h-4" />
                   <span className="hidden lg:inline">{item.name}</span>
-                </button>
+                </a>
               );
             })}
           </nav>
