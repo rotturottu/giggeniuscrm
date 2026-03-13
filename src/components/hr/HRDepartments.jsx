@@ -98,4 +98,70 @@ export default function HRDepartments() {
             </CardHeader>
             <CardContent className="space-y-4 text-sm">
               <p className="text-slate-500 line-clamp-2 min-h-[40px] italic">"{dept.description}"</p>
-              <div className="pt-4 space-y-3
+              
+              {/* REPAIRED SECTION STARTS HERE */}
+              <div className="pt-4 space-y-3 border-t">
+                <div className="flex justify-between items-center text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    <span>Employees</span>
+                  </div>
+                  <span className="font-semibold">{getCount(dept.name)}</span>
+                </div>
+                
+                <div className="flex justify-between items-center text-slate-600">
+                  <div className="flex items-center gap-2">
+                    <Wallet className="w-4 h-4" />
+                    <span>Budget</span>
+                  </div>
+                  <span className="font-semibold text-emerald-600">
+                    {currencySymbols[dept.currency] || '$'}
+                    {Number(dept.budget).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* MODAL FORM */}
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit' : 'Add'} Department</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Department Name</Label>
+              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Input value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Budget</Label>
+                <Input type="number" value={form.budget} onChange={e => setForm({ ...form, budget: e.target.value })} />
+              </div>
+              <div>
+                <Label>Currency</Label>
+                <Select value={form.currency} onValueChange={v => setForm({ ...form, currency: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {Object.keys(currencySymbols).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button onClick={() => saveMutation.mutate(form)} className="bg-indigo-600 hover:bg-indigo-700">Save</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
