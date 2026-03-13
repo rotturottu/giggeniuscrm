@@ -12,6 +12,9 @@ export default function ProjectsList() {
     queryFn: () => base44.entities.Project.list('-created_date'),
   });
 
+  // --- SAFETY NET ---
+  const safeProjects = Array.isArray(projects) ? projects : [];
+
   const statusColors = {
     planning: 'bg-gray-100 text-gray-700',
     in_progress: 'bg-blue-100 text-blue-700',
@@ -33,14 +36,16 @@ export default function ProjectsList() {
           </div>
         </CardHeader>
         <CardContent>
-          {projects.length === 0 ? (
+          {/* UPDATED: safeProjects instead of projects */}
+          {safeProjects.length === 0 ? (
             <div className="text-center py-12">
               <FolderKanban className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500">No projects yet. Create your first project!</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {projects.map(project => (
+              {/* UPDATED: safeProjects instead of projects */}
+              {safeProjects.map(project => (
                 <Card key={project.id} className="hover:shadow-md transition-all">
                   <CardContent className="pt-6">
                     <div className="flex justify-between items-start mb-3">
