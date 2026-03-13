@@ -18,6 +18,9 @@ export default function ConversationDetail({ conversation }) {
     queryFn: () => base44.entities.Message.filter({ conversation_id: conversation.id }, 'created_date'),
   });
 
+  // --- SAFETY NET ---
+  const safeMessages = Array.isArray(messages) ? messages : [];
+
   const sendMessageMutation = useMutation({
     mutationFn: (data) => base44.entities.Message.create(data),
     onSuccess: () => {
@@ -49,7 +52,7 @@ export default function ConversationDetail({ conversation }) {
           <div className="flex items-center gap-3">
             <Avatar>
               <AvatarFallback className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                {conversation.contact_name?.[0]?.toUpperCase() || conversation.contact_email[0].toUpperCase()}
+                {conversation.contact_name?.[0]?.toUpperCase() || conversation.contact_email?.[0]?.toUpperCase() || '?'}
               </AvatarFallback>
             </Avatar>
             <div>
@@ -61,12 +64,12 @@ export default function ConversationDetail({ conversation }) {
       </CardHeader>
 
       <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 ? (
+        {safeMessages.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
             No messages yet
           </div>
         ) : (
-          messages.map((message) => (
+          safeMessages.map((message) => (
             <div
               key={message.id}
               className={`flex ${message.is_outbound ? 'justify-end' : 'justify-start'}`}
