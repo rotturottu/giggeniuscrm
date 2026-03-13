@@ -27,13 +27,18 @@ export default function Conversations() {
     },
   });
 
-  const filteredConversations = conversations.filter(conv =>
+  // --- SAFETY NET: Force conversations to be an array ---
+  const safeConversations = Array.isArray(conversations) ? conversations : [];
+
+  // UPDATED: Use safeConversations instead of conversations
+  const filteredConversations = safeConversations.filter(conv =>
     conv.contact_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     conv.contact_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     conv.subject?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const unreadCount = conversations.filter(c => c.unread_count > 0).length;
+  // UPDATED: Use safeConversations instead of conversations
+  const unreadCount = safeConversations.filter(c => c.unread_count > 0).length;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-3 sm:p-6">
