@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   BarChart3, Users, MessageSquare, FolderKanban, Mail, 
-  Share2, Globe, UserCog, Target, HeadphonesIcon 
+  Share2, Globe, UserCog, Target, HeadphonesIcon, Settings, LogOut
 } from 'lucide-react';
 
 const navigation = [
@@ -18,7 +18,7 @@ const navigation = [
 ];
 
 export default function Layout({ children }) {
-  // Read the current URL to know which button to highlight
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
 
   return (
@@ -41,7 +41,6 @@ export default function Layout({ children }) {
           <nav className="flex items-center gap-1 overflow-x-auto flex-1 hide-scrollbar">
             {navigation.map((item) => {
               const Icon = item.icon;
-              // Check if the current URL matches this button's path
               const isActive = currentPath.includes(item.path);
               
               return (
@@ -61,11 +60,50 @@ export default function Layout({ children }) {
             })}
           </nav>
 
-          {/* User Profile */}
-          <div className="flex items-center gap-3 flex-shrink-0 border-l pl-4">
-            <div className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium cursor-pointer shadow-sm">
+          {/* User Profile Dropdown */}
+          <div className="relative flex items-center gap-3 flex-shrink-0 border-l pl-4">
+            <button 
+              onClick={() => setIsProfileOpen(!isProfileOpen)}
+              className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium cursor-pointer shadow-sm hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            >
               LA
-            </div>
+            </button>
+
+            {/* The Popup Menu */}
+            {isProfileOpen && (
+              <>
+                {/* Invisible overlay to close menu when clicking outside */}
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setIsProfileOpen(false)}
+                />
+                
+                <div className="absolute right-0 top-12 w-56 bg-white border border-gray-100 rounded-xl shadow-lg py-2 z-50 animate-in fade-in slide-in-from-top-2">
+                  <div className="px-4 py-3 border-b border-gray-100 mb-1">
+                    <p className="text-sm font-semibold text-gray-900">Admin User</p>
+                    <p className="text-xs text-gray-500 truncate">admin@giggenius.local</p>
+                  </div>
+                  
+                  <a 
+                    href="/AccountSettings" 
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    <Settings className="w-4 h-4 text-gray-500" /> 
+                    Account Settings
+                  </a>
+                  
+                  <div className="h-px bg-gray-100 my-1" />
+                  
+                  <a 
+                    href="/login" 
+                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" /> 
+                    Sign Out
+                  </a>
+                </div>
+              </>
+            )}
           </div>
           
         </div>
