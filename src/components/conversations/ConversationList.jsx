@@ -22,7 +22,10 @@ export default function ConversationList({ conversations, selectedId, onSelect }
     instagram: 'text-pink-600',
   };
 
-  if (conversations.length === 0) {
+  // --- SAFETY NET ---
+  const safeConversations = Array.isArray(conversations) ? conversations : [];
+
+  if (safeConversations.length === 0) {
     return (
       <div className="text-center py-8 text-gray-500">
         <p>No conversations found</p>
@@ -32,7 +35,7 @@ export default function ConversationList({ conversations, selectedId, onSelect }
 
   return (
     <div className="space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
-      {conversations.map((conv) => {
+      {safeConversations.map((conv) => {
         const Icon = platformIcons[conv.platform] || Mail;
         const isSelected = conv.id === selectedId;
         
@@ -47,7 +50,7 @@ export default function ConversationList({ conversations, selectedId, onSelect }
             <div className="flex gap-3">
               <Avatar>
                 <AvatarFallback className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                  {conv.contact_name?.[0]?.toUpperCase() || conv.contact_email[0].toUpperCase()}
+                  {conv.contact_name?.[0]?.toUpperCase() || conv.contact_email?.[0]?.toUpperCase() || '?'}
                 </AvatarFallback>
               </Avatar>
               

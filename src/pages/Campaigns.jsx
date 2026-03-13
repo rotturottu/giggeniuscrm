@@ -6,13 +6,13 @@ import { base44 } from '@/api/base44Client';
 import { Megaphone, Plus, BarChart3, Users, Target } from 'lucide-react';
 
 export default function Campaigns() {
-  // 1. Fetch data with a safety catch to prevent 'null' results
+ 
   const { data: remoteData, isLoading } = useQuery({
     queryKey: ['campaigns'],
     queryFn: async () => {
       try {
         const res = await base44.entities.Campaign.list('-created_date', 50);
-        // Ensure we ALWAYS return an array, even if the API fails
+        
         return Array.isArray(res) ? res : [];
       } catch (error) {
         console.error("Campaign API Error:", error);

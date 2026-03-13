@@ -33,14 +33,19 @@ export default function TaskBoard({ isPaidUser = false }) {
     queryFn: () => base44.entities.ProjectTask.list('-created_date'),
   });
 
+  // --- SAFETY NET ---
+  const safeTasks = Array.isArray(tasks) ? tasks : [];
+
   const updateStatusMutation = useMutation({
     mutationFn: ({ id, status }) => base44.entities.ProjectTask.update(id, { status }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project-tasks'] }),
   });
 
-  const lists = ['all', ...new Set(tasks.map(t => t.list_name).filter(Boolean))];
+  // UPDATED: Use safeTasks
+  const lists = ['all', ...new Set(safeTasks.map(t => t.list_name).filter(Boolean))];
 
-  const filteredTasks = tasks.filter(task => {
+  // UPDATED: Use safeTasks
+  const filteredTasks = safeTasks.filter(task => {
     const matchesList = listFilter === 'all' || task.list_name === listFilter;
     const matchesSearch = task.title?.toLowerCase().includes(searchTerm.toLowerCase());
     return matchesList && matchesSearch;
