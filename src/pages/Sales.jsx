@@ -37,7 +37,7 @@ export default function Sales() {
             </TabsTrigger>
             <TabsTrigger value="invoices" className="text-xs sm:text-sm">
               <FileText className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-              <span className="hidden sm:inline">Invoices</span>
+              <span className="hidden sm:inline">Documents</span>
             </TabsTrigger>
             
             {/* FIXED: Changed DollarSign to Settings icon here */}
