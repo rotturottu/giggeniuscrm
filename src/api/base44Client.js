@@ -1,13 +1,10 @@
-import { appParams } from '@/lib/app-params';
+// src/api/base44Client.js
 import { createClient } from '@base44/sdk';
 
-const { appId, serverUrl, token, functionsVersion } = appParams;
-
-//Create a client with authentication required
 export const base44 = createClient({
-  appId,
-  serverUrl,
-  token,
-  functionsVersion,
+  appId: 'giggenius-crm',
+  serverUrl: 'http://72.61.114.146:5000', // MUST be http:// + IP
+  token: '', 
+  functionsVersion: 'v1',
   requiresAuth: false
 });
