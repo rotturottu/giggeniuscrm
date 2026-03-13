@@ -27,17 +27,14 @@ export default function Conversations() {
     },
   });
 
-  // --- SAFETY NET: Force conversations to be an array ---
   const safeConversations = Array.isArray(conversations) ? conversations : [];
 
-  // UPDATED: Use safeConversations instead of conversations
   const filteredConversations = safeConversations.filter(conv =>
     conv.contact_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     conv.contact_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     conv.subject?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // UPDATED: Use safeConversations instead of conversations
   const unreadCount = safeConversations.filter(c => c.unread_count > 0).length;
 
   return (
