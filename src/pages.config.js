@@ -63,7 +63,6 @@ import SocialMedia from './pages/SocialMedia';
 import SurveyResponse from './pages/SurveyResponse';
 import Tasks from './pages/Tasks';
 
-
 export const PAGES = {
     "AccountSettings": AccountSettings,
     "Campaigns": Campaigns,
