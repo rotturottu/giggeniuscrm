@@ -1,13 +1,10 @@
-import { appParams } from '@/lib/app-params';
 import { createClient } from '@base44/sdk';
 
-const { appId, serverUrl, token, functionsVersion } = appParams;
-
-//Create a client with authentication required
+// Manually override for the VPS
 export const base44 = createClient({
-  appId,
-  serverUrl,
-  token,
-  functionsVersion,
+  appId: 'giggenius-crm', // Use your actual App ID
+  serverUrl: 'http://72.61.114.146:5000', 
+  token: '', 
+  functionsVersion: 'v1',
   requiresAuth: false
 });
