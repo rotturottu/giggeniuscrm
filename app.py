@@ -4,7 +4,8 @@ import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-CORS(app) 
+# Updated CORS for better handling of headers
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 def init_db():
     conn = sqlite3.connect('giggenius.db')
@@ -47,7 +48,6 @@ def init_db():
                   status TEXT DEFAULT 'Pending',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # 10. Payroll Records
     c.execute('''CREATE TABLE IF NOT EXISTS payroll_records
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
@@ -146,6 +146,8 @@ def init_db():
 
 init_db()
 
+# --- AUTH ROUTES ---
+
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     data = request.json
@@ -177,29 +179,53 @@ def login():
     
     return jsonify({"error": "Invalid email or password"}), 401
 
-@app.route('/api/contacts', methods=['GET', 'POST'])
-def manage_contacts():
+# --- DYNAMIC USER PROFILE ROUTES (FIXES 405 AND MOCK DATA) ---
+
+@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
+def handle_me():
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
+
+    user_email = request.headers.get('User-Email')
+    if not user_email:
+        return jsonify({"error": "No user email provided"}), 401
+
     conn = sqlite3.connect('giggenius.db')
-    conn.row_factory = sqlite3.Row # This magically formats the data as JSON dictionaries!
+    conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # If React is ASKING for contacts to display on the page
+    # GET: Fetch real user data for UI reflection
     if request.method == 'GET':
-        c.execute("SELECT * FROM contacts ORDER BY created_date DESC")
-        contacts = [dict(row) for row in c.fetchall()]
+        c.execute("SELECT id, first_name, last_name, email FROM users WHERE email=?", (user_email,))
+        user_row = c.fetchone()
         conn.close()
-        return jsonify(contacts)
 
-    # If React is SENDING a new contact from the "Add Contact" button
-    if request.method == 'POST':
+        if user_row:
+            user_data = dict(user_row)
+            return jsonify({
+                "id": user_data['id'],
+                "name": f"{user_data['first_name']} {user_data['last_name']}",
+                "email": user_data['email'],
+                "subscription_plan": "pro"
+            }), 200
+        return jsonify({"error": "User not found"}), 404
+
+    # PUT: Update User Name from Account Settings
+    if request.method == 'PUT':
         data = request.json
-        c.execute('''INSERT INTO contacts (name, email, phone, company, status) 
-                     VALUES (?, ?, ?, ?, ?)''', 
-                  (data.get('name'), data.get('email'), data.get('phone'), data.get('company'), data.get('status')))
+        new_name = data.get('name', '')
+        
+        # Split name back into first and last
+        parts = new_name.split(' ', 1)
+        f_name = parts[0]
+        l_name = parts[1] if len(parts) > 1 else ''
+
+        c.execute("UPDATE users SET first_name=?, last_name=? WHERE email=?", (f_name, l_name, user_email))
         conn.commit()
-        new_id = c.lastrowid
         conn.close()
-        return jsonify({"message": "Contact added!", "id": new_id}), 201
+        return jsonify({"message": "Profile updated successfully", "name": new_name}), 200
+
+# --- ENTITY HANDLERS ---
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST'])
 def handle_base44_entities(entity_name):
@@ -224,14 +250,12 @@ def handle_base44_entities(entity_name):
     conn.row_factory = sqlite3.Row 
     c = conn.cursor()
 
-    # READ: React is asking for the list of items
     if request.method == 'GET':
         c.execute(f"SELECT * FROM {table_name} ORDER BY id DESC")
         data = [dict(row) for row in c.fetchall()]
         conn.close()
         return jsonify(data), 200
 
-    # CREATE: React is saving a new item
     if request.method == 'POST':
         data = request.json
         columns = ', '.join(data.keys())
@@ -265,14 +289,12 @@ def handle_base44_single_item(entity_name, entity_id):
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
     
-    # DELETE: React clicked the Trash icon
     if request.method == 'DELETE':
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
         return jsonify({"success": True}), 200
         
-    # UPDATE: React clicked the Edit icon and saved
     if request.method == 'PUT':
         data = request.json
         set_clause = ', '.join([f"{k} = ?" for k in data.keys()])
