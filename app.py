@@ -1,8 +1,10 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS 
 import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
+CORS(app) 
 
 def init_db():
     conn = sqlite3.connect('giggenius.db')
@@ -116,5 +118,39 @@ def login():
     
     return jsonify({"error": "Invalid email or password"}), 401
 
+@app.route('/api/contacts', methods=['GET', 'POST'])
+def manage_contacts():
+    conn = sqlite3.connect('giggenius.db')
+    conn.row_factory = sqlite3.Row # This magically formats the data as JSON dictionaries!
+    c = conn.cursor()
+
+    # If React is ASKING for contacts to display on the page
+    if request.method == 'GET':
+        c.execute("SELECT * FROM contacts ORDER BY created_date DESC")
+        contacts = [dict(row) for row in c.fetchall()]
+        conn.close()
+        return jsonify(contacts)
+
+    # If React is SENDING a new contact from the "Add Contact" button
+    if request.method == 'POST':
+        data = request.json
+        c.execute('''INSERT INTO contacts (name, email, phone, company, status) 
+                     VALUES (?, ?, ?, ?, ?)''', 
+                  (data.get('name'), data.get('email'), data.get('phone'), data.get('company'), data.get('status')))
+        conn.commit()
+        new_id = c.lastrowid
+        conn.close()
+        return jsonify({"message": "Contact added!", "id": new_id}), 201
+
+@app.route('/<path:catchall>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+def intercept_base44(catchall):
+    print(f"\n🚨 BASE44 SDK KNOCKING AT DOOR: /{catchall}")
+    print(f"METHOD: {request.method}")
+    print(f"DATA: {request.get_json(silent=True)}")
+    print("------------------------------------------\n")
+    
+    # Send a fake success back so the React modal finally closes!
+    return jsonify({"message": "Intercepted!", "id": 999}), 200
+
 if __name__ == '__main__':
-    app.run(debug=True, port=5000)
+    app.run(host='0.0.0.0', debug=True, port=5000)
