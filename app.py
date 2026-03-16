@@ -47,6 +47,7 @@ def init_db():
                   status TEXT DEFAULT 'Pending',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # 10. Payroll Records
     c.execute('''CREATE TABLE IF NOT EXISTS payroll_records
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
@@ -62,6 +63,7 @@ def init_db():
                   deductions REAL,
                   tax REAL,
                   net_pay REAL,
+                  notes TEXT,  
                   status TEXT DEFAULT 'draft',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
