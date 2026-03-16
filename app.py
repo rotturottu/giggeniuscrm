@@ -126,7 +126,7 @@ def init_db():
                   strengths TEXT,
                   areas_of_improvement TEXT,
                   goals_next_period TEXT,
-                  additional_comments TEXT,
+                  comments TEXT,
                   status TEXT DEFAULT 'Draft',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
