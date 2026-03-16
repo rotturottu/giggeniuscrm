@@ -119,7 +119,7 @@ def init_db():
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
                   employee_email TEXT,
-                  reviewer_email TEXT,  # <--- ADD THIS LINE
+                  reviewer_email TEXT, 
                   review_period TEXT,
                   overall_rating TEXT,
                   goals_met TEXT,
