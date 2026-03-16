@@ -129,6 +129,17 @@ def init_db():
                   comments TEXT,
                   status TEXT DEFAULT 'Draft',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS onboarding_tasks
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT,
+                  employee_email TEXT,
+                  task_name TEXT,       
+                  category TEXT,        
+                  assigned_to TEXT,     
+                  due_date TEXT,
+                  status TEXT DEFAULT 'Pending',
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
     conn.close()
