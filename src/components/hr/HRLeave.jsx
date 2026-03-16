@@ -50,7 +50,7 @@ export default function HRLeave() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['leave_requests'] }),
   });
 
-  const filtered = statusFilter === 'all' ? requests : requests.filter(r => r.status === statusFilter);
+  const filtered = statusFilter === 'all' ? requests : requests.filter(r => r.status?.toLowerCase() === statusFilter);
 
   // Added validation function
   const handleSave = () => {
