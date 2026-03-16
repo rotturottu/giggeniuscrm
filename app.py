@@ -4,7 +4,7 @@ import sqlite3
 from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
-# Updated CORS for better handling of headers
+# Enable CORS for all routes and allow the User-Email header
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 def init_db():
@@ -179,7 +179,7 @@ def login():
     
     return jsonify({"error": "Invalid email or password"}), 401
 
-# --- DYNAMIC USER PROFILE ROUTES (FIXES 405 AND MOCK DATA) ---
+# --- DYNAMIC USER PROFILE ROUTE (DATABASE CONNECTED) ---
 
 @app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
 def handle_me():
@@ -194,7 +194,7 @@ def handle_me():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # GET: Fetch real user data for UI reflection
+    # GET: Fetch actual user data for UI
     if request.method == 'GET':
         c.execute("SELECT id, first_name, last_name, email FROM users WHERE email=?", (user_email,))
         user_row = c.fetchone()
@@ -215,7 +215,7 @@ def handle_me():
         data = request.json
         new_name = data.get('name', '')
         
-        # Split name back into first and last
+        # Split full name into first and last
         parts = new_name.split(' ', 1)
         f_name = parts[0]
         l_name = parts[1] if len(parts) > 1 else ''
@@ -225,7 +225,7 @@ def handle_me():
         conn.close()
         return jsonify({"message": "Profile updated successfully", "name": new_name}), 200
 
-# --- ENTITY HANDLERS ---
+# --- GENERIC ENTITY HANDLERS ---
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST'])
 def handle_base44_entities(entity_name):
