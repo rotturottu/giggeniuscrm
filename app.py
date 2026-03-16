@@ -47,6 +47,24 @@ def init_db():
                   status TEXT DEFAULT 'Pending',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    c.execute('''CREATE TABLE IF NOT EXISTS payroll_records
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT,
+                  employee_email TEXT,
+                  period_start TEXT,
+                  period_end TEXT,
+                  currency TEXT,
+                  base_salary REAL,
+                  hours_worked REAL,
+                  overtime_hours REAL,
+                  overtime_pay REAL,
+                  bonuses REAL,
+                  deductions REAL,
+                  tax REAL,
+                  net_pay REAL,
+                  status TEXT DEFAULT 'draft',
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
     c.execute('''CREATE TABLE IF NOT EXISTS conversations
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   contact_name TEXT,
@@ -164,7 +182,8 @@ def handle_base44_entities(entity_name):
         'Task': 'project_tasks',
         'Project': 'projects',
         'Conversation': 'conversations',
-        'LeaveRequest': 'leave_requests'  
+        'LeaveRequest': 'leave_requests',
+        'PayrollRecord': 'payroll_records'  
     }
     
     table_name = table_map.get(entity_name)
@@ -206,7 +225,8 @@ def handle_base44_single_item(entity_name, entity_id):
         'Task': 'project_tasks',
         'Project': 'projects',
         'Conversation': 'conversations',
-        'LeaveRequest': 'leave_requests'  
+        'LeaveRequest': 'leave_requests',
+        'PayrollRecord': 'payroll_records'  
     }
     table_name = table_map.get(entity_name)
     
