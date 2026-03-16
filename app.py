@@ -114,6 +114,21 @@ def init_db():
                   company TEXT,
                   status TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    
+    # 11. Performance Reviews
+    c.execute('''CREATE TABLE IF NOT EXISTS performance_reviews
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT,
+                  employee_email TEXT,
+                  review_period TEXT,
+                  overall_rating TEXT,
+                  goals_met TEXT,
+                  strengths TEXT,
+                  areas_of_improvement TEXT,
+                  goals_for_next_period TEXT,
+                  additional_comments TEXT,
+                  status TEXT DEFAULT 'Draft',
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
     conn.close()
@@ -185,7 +200,8 @@ def handle_base44_entities(entity_name):
         'Project': 'projects',
         'Conversation': 'conversations',
         'LeaveRequest': 'leave_requests',
-        'PayrollRecord': 'payroll_records'  
+        'PayrollRecord': 'payroll_records',
+        'PerformanceReview': 'performance_reviews' 
     }
     
     table_name = table_map.get(entity_name)
@@ -228,7 +244,8 @@ def handle_base44_single_item(entity_name, entity_id):
         'Project': 'projects',
         'Conversation': 'conversations',
         'LeaveRequest': 'leave_requests',
-        'PayrollRecord': 'payroll_records'  
+        'PayrollRecord': 'payroll_records',
+        'PerformanceReview': 'performance_reviews' # <--- NEW ADDITION
     }
     table_name = table_map.get(entity_name)
     
