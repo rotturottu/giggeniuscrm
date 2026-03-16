@@ -34,7 +34,6 @@ def init_db():
                   department TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     
-    # 9. Leave Requests
     c.execute('''CREATE TABLE IF NOT EXISTS leave_requests
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
@@ -43,7 +42,8 @@ def init_db():
                   start_date TEXT,
                   end_date TEXT,
                   reason TEXT,
-                  days_count INTEGER,  
+                  employee_id INTEGER,  
+                  days_count INTEGER,
                   status TEXT DEFAULT 'Pending',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
