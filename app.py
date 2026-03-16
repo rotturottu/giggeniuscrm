@@ -212,7 +212,8 @@ def handle_base44_entities(entity_name):
         'Conversation': 'conversations',
         'LeaveRequest': 'leave_requests',
         'PayrollRecord': 'payroll_records',
-        'PerformanceReview': 'performance_reviews' 
+        'PerformanceReview': 'performance_reviews',
+        'OnboardingTask': 'onboarding_tasks' 
     }
     
     table_name = table_map.get(entity_name)
@@ -256,7 +257,8 @@ def handle_base44_single_item(entity_name, entity_id):
         'Conversation': 'conversations',
         'LeaveRequest': 'leave_requests',
         'PayrollRecord': 'payroll_records',
-        'PerformanceReview': 'performance_reviews' # <--- NEW ADDITION
+        'PerformanceReview': 'performance_reviews',
+        'OnboardingTask': 'onboarding_tasks' 
     }
     table_name = table_map.get(entity_name)
     
