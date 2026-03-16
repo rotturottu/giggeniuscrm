@@ -7,12 +7,79 @@ app = Flask(__name__)
 def init_db():
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
+        
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   first_name TEXT,
                   last_name TEXT,
                   email TEXT UNIQUE,
                   password TEXT)''')
+                  
+    c.execute('''CREATE TABLE IF NOT EXISTS departments
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT,
+                  head_email TEXT,
+                  description TEXT,
+                  budget REAL,
+                  currency TEXT,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS employees
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  first_name TEXT,
+                  last_name TEXT,
+                  email TEXT,
+                  department TEXT,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS conversations
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  contact_name TEXT,
+                  contact_email TEXT,
+                  subject TEXT,
+                  platform TEXT,
+                  status TEXT,
+                  unread_count INTEGER DEFAULT 0,
+                  last_message TEXT,
+                  last_message_at DATETIME,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS messages
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  conversation_id INTEGER,
+                  sender_name TEXT,
+                  sender_email TEXT,
+                  content TEXT,
+                  platform TEXT,
+                  is_outbound BOOLEAN,
+                  read BOOLEAN,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS projects
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT,
+                  description TEXT,
+                  status TEXT,
+                  budget REAL,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  title TEXT,
+                  list_name TEXT,
+                  status TEXT,
+                  parent_task_id INTEGER,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS contacts
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT,
+                  email TEXT,
+                  phone TEXT,
+                  company TEXT,
+                  status TEXT,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
     conn.commit()
     conn.close()
 
