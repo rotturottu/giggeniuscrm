@@ -33,6 +33,17 @@ def init_db():
                   email TEXT,
                   department TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    
+    c.execute('''CREATE TABLE IF NOT EXISTS leave_requests
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT,
+                  employee_email TEXT,
+                  leave_type TEXT,
+                  start_date TEXT,
+                  end_date TEXT,
+                  reason TEXT,
+                  status TEXT DEFAULT 'Pending',
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS conversations
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,14 +155,14 @@ def manage_contacts():
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST'])
 def handle_base44_entities(entity_name):
-    # Map the Base44 names to your exact SQLite table names
     table_map = {
         'Department': 'departments',
         'Employee': 'employees',
         'Contact': 'contacts',
         'Task': 'project_tasks',
         'Project': 'projects',
-        'Conversation': 'conversations'
+        'Conversation': 'conversations',
+        'LeaveRequest': 'leave_requests'  
     }
     
     table_name = table_map.get(entity_name)
@@ -187,9 +198,13 @@ def handle_base44_entities(entity_name):
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE'])
 def handle_base44_single_item(entity_name, entity_id):
     table_map = {
-        'Department': 'departments', 'Employee': 'employees',
-        'Contact': 'contacts', 'Task': 'project_tasks',
-        'Project': 'projects', 'Conversation': 'conversations'
+        'Department': 'departments',
+        'Employee': 'employees',
+        'Contact': 'contacts',
+        'Task': 'project_tasks',
+        'Project': 'projects',
+        'Conversation': 'conversations',
+        'LeaveRequest': 'leave_requests'  
     }
     table_name = table_map.get(entity_name)
     
