@@ -115,11 +115,11 @@ def init_db():
                   status TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     
-    # 11. Performance Reviews
     c.execute('''CREATE TABLE IF NOT EXISTS performance_reviews
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
                   employee_email TEXT,
+                  reviewer_email TEXT,  # <--- ADD THIS LINE
                   review_period TEXT,
                   overall_rating TEXT,
                   goals_met TEXT,
