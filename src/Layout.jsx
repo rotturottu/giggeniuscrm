@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query'; // Import useQuery
-import { base44 } from '@/api/base44Client';     // Import your API client
+import { useQuery } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 import { 
   BarChart3, Users, MessageSquare, FolderKanban, Mail, 
   Share2, Globe, UserCog, Target, HeadphonesIcon, Settings, LogOut
@@ -23,21 +23,30 @@ export default function Layout({ children }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
 
-  // 1. Fetch the actual logged-in user
-  const { data: user } = useQuery({
+  // 1. Fetch the actual logged-in user from your Flask backend
+  const { data: user, error } = useQuery({
     queryKey: ['user-profile'],
-    queryFn: () => base44.auth.me().catch(() => null),
+    queryFn: async () => {
+      const userData = await base44.auth.me();
+      console.log("Layout - Fetched User Data:", userData); // Debug: see what's in your DB
+      return userData;
+    },
+    retry: 1,
+    refetchOnWindowFocus: false
   });
 
-  // 2. Helper to get initials (e.g., "John Doe" -> "JD")
+  // 2. Improved Helper to get initials (e.g., "Triple X" -> "TX")
   const getInitials = (name) => {
-    if (!name) return '??';
-    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+    if (!name || name === 'Loading...') return '??';
+    const parts = name.trim().split(/\s+/);
+    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
   };
 
   // 3. Logout function
   const handleLogout = () => {
     localStorage.removeItem('gigGeniusAuth');
+    localStorage.removeItem('userEmail'); // Clear the email on logout
     window.location.href = '/login';
   };
 
@@ -82,8 +91,8 @@ export default function Layout({ children }) {
               onClick={() => setIsProfileOpen(!isProfileOpen)}
               className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium cursor-pointer shadow-sm hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              {/* DYNAMIC INITIALS */}
-              {user ? getInitials(user.name) : '...'}
+              {/* DYNAMIC INITIALS: This will update once the query finishes */}
+              {user?.name ? getInitials(user.name) : '...'}
             </button>
 
             {isProfileOpen && (
@@ -92,8 +101,12 @@ export default function Layout({ children }) {
                 <div className="absolute right-0 top-12 w-56 bg-white border border-gray-100 rounded-xl shadow-lg py-2 z-50 animate-in fade-in slide-in-from-top-2">
                   <div className="px-4 py-3 border-b border-gray-100 mb-1">
                     {/* DYNAMIC USER INFO */}
-                    <p className="text-sm font-semibold text-gray-900">{user?.name || 'Loading...'}</p>
-                    <p className="text-xs text-gray-500 truncate">{user?.email || 'Please wait...'}</p>
+                    <p className="text-sm font-semibold text-gray-900">
+                      {user?.name || (error ? 'Guest User' : 'Loading...')}
+                    </p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {user?.email || (error ? 'Please sign in again' : 'Please wait...')}
+                    </p>
                   </div>
                   
                   <a href="/AccountSettings" className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
