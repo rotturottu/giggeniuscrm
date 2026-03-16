@@ -142,15 +142,77 @@ def manage_contacts():
         conn.close()
         return jsonify({"message": "Contact added!", "id": new_id}), 201
 
-@app.route('/<path:catchall>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
-def intercept_base44(catchall):
-    print(f"\n🚨 BASE44 SDK KNOCKING AT DOOR: /{catchall}")
-    print(f"METHOD: {request.method}")
-    print(f"DATA: {request.get_json(silent=True)}")
-    print("------------------------------------------\n")
+@app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST'])
+def handle_base44_entities(entity_name):
+    # Map the Base44 names to your exact SQLite table names
+    table_map = {
+        'Department': 'departments',
+        'Employee': 'employees',
+        'Contact': 'contacts',
+        'Task': 'project_tasks',
+        'Project': 'projects',
+        'Conversation': 'conversations'
+    }
     
-    # Send a fake success back so the React modal finally closes!
-    return jsonify({"message": "Intercepted!", "id": 999}), 200
+    table_name = table_map.get(entity_name)
+    if not table_name:
+        return jsonify({"error": f"Table for {entity_name} not found"}), 404
+
+    conn = sqlite3.connect('giggenius.db')
+    conn.row_factory = sqlite3.Row 
+    c = conn.cursor()
+
+    # READ: React is asking for the list of items
+    if request.method == 'GET':
+        c.execute(f"SELECT * FROM {table_name} ORDER BY id DESC")
+        data = [dict(row) for row in c.fetchall()]
+        conn.close()
+        return jsonify(data), 200
+
+    # CREATE: React is saving a new item
+    if request.method == 'POST':
+        data = request.json
+        columns = ', '.join(data.keys())
+        placeholders = ', '.join(['?'] * len(data))
+        values = tuple(data.values())
+        
+        c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", values)
+        conn.commit()
+        new_id = c.lastrowid
+        conn.close()
+        
+        data['id'] = new_id
+        return jsonify(data), 201
+
+@app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE'])
+def handle_base44_single_item(entity_name, entity_id):
+    table_map = {
+        'Department': 'departments', 'Employee': 'employees',
+        'Contact': 'contacts', 'Task': 'project_tasks',
+        'Project': 'projects', 'Conversation': 'conversations'
+    }
+    table_name = table_map.get(entity_name)
+    
+    conn = sqlite3.connect('giggenius.db')
+    c = conn.cursor()
+    
+    # DELETE: React clicked the Trash icon
+    if request.method == 'DELETE':
+        c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True}), 200
+        
+    # UPDATE: React clicked the Edit icon and saved
+    if request.method == 'PUT':
+        data = request.json
+        set_clause = ', '.join([f"{k} = ?" for k in data.keys()])
+        values = tuple(data.values()) + (entity_id,)
+        
+        c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", values)
+        conn.commit()
+        conn.close()
+        return jsonify(data), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True, port=5000)
