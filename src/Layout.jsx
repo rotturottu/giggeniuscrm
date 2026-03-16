@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { useQuery } from '@tanstack/react-query'; // Import useQuery
+import { base44 } from '@/api/base44Client';     // Import your API client
 import { 
   BarChart3, Users, MessageSquare, FolderKanban, Mail, 
   Share2, Globe, UserCog, Target, HeadphonesIcon, Settings, LogOut
@@ -8,7 +10,7 @@ const navigation = [
   { name: 'Overview', path: 'Overview', icon: BarChart3 },
   { name: 'Contacts', path: 'Contacts', icon: Users },
   { name: 'Conversations', path: 'Conversations', icon: MessageSquare }, 
-  { name: 'Tasks', path: 'Tasks', icon: FolderKanban },            
+  { name: 'Tasks', path: 'Tasks', icon: FolderKanban },             
   { name: 'Campaigns', path: 'Campaigns', icon: Mail },
   { name: 'Social Media', path: 'SocialMedia', icon: Share2 },
   { name: 'Sites', path: 'Sites', icon: Globe },
@@ -21,9 +23,26 @@ export default function Layout({ children }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
 
+  // 1. Fetch the actual logged-in user
+  const { data: user } = useQuery({
+    queryKey: ['user-profile'],
+    queryFn: () => base44.auth.me().catch(() => null),
+  });
+
+  // 2. Helper to get initials (e.g., "John Doe" -> "JD")
+  const getInitials = (name) => {
+    if (!name) return '??';
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+  };
+
+  // 3. Logout function
+  const handleLogout = () => {
+    localStorage.removeItem('gigGeniusAuth');
+    window.location.href = '/login';
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
-      {/* Top Navigation Bar */}
       <header className="bg-white border-b sticky top-0 z-50">
         <div className="w-full px-4 sm:px-6 flex items-center justify-between h-16 gap-4">
           
@@ -42,15 +61,12 @@ export default function Layout({ children }) {
             {navigation.map((item) => {
               const Icon = item.icon;
               const isActive = currentPath.includes(item.path);
-              
               return (
                 <a
                   key={item.name}
                   href={`/${item.path}`}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors whitespace-nowrap ${
-                    isActive
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'text-gray-600 hover:bg-gray-100'
+                    isActive ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >
                   <Icon className="w-4 h-4" />
@@ -66,50 +82,41 @@ export default function Layout({ children }) {
               onClick={() => setIsProfileOpen(!isProfileOpen)}
               className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium cursor-pointer shadow-sm hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              LA
+              {/* DYNAMIC INITIALS */}
+              {user ? getInitials(user.name) : '...'}
             </button>
 
-            {/* The Popup Menu */}
             {isProfileOpen && (
               <>
-                {/* Invisible overlay to close menu when clicking outside */}
-                <div 
-                  className="fixed inset-0 z-40" 
-                  onClick={() => setIsProfileOpen(false)}
-                />
-                
+                <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)} />
                 <div className="absolute right-0 top-12 w-56 bg-white border border-gray-100 rounded-xl shadow-lg py-2 z-50 animate-in fade-in slide-in-from-top-2">
                   <div className="px-4 py-3 border-b border-gray-100 mb-1">
-                    <p className="text-sm font-semibold text-gray-900">Admin User</p>
-                    <p className="text-xs text-gray-500 truncate">admin@giggenius.local</p>
+                    {/* DYNAMIC USER INFO */}
+                    <p className="text-sm font-semibold text-gray-900">{user?.name || 'Loading...'}</p>
+                    <p className="text-xs text-gray-500 truncate">{user?.email || 'Please wait...'}</p>
                   </div>
                   
-                  <a 
-                    href="/AccountSettings" 
-                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                  >
+                  <a href="/AccountSettings" className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">
                     <Settings className="w-4 h-4 text-gray-500" /> 
                     Account Settings
                   </a>
                   
                   <div className="h-px bg-gray-100 my-1" />
                   
-                  <a 
-                    href="/login" 
-                    className="flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  <button 
+                    onClick={handleLogout}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
                   >
                     <LogOut className="w-4 h-4" /> 
                     Sign Out
-                  </a>
+                  </button>
                 </div>
               </>
             )}
           </div>
-          
         </div>
       </header>
 
-      {/* Main Page Content */}
       <main className="flex-1 overflow-auto">
         {children}
       </main>
