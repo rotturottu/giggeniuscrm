@@ -113,7 +113,7 @@ export default function Layout({ children }) {
                     <div className="flex-1 truncate">
                       <p className="text-sm font-bold text-gray-900 truncate">
                         {/* Fallback to Gabrielle Dela Cruz if API is still loading */}
-                        {user?.firstName ? `${user.firstName} ${user.lastName}` : 'Gabrielle Dela Cruz'}
+                        {user?.firstName ? `${user.firstName} ${user.lastName}` : (savedEmail || 'Guest User')}
                       </p>
                       <p className="text-xs text-gray-500 truncate">
                         {user?.email || savedEmail}
