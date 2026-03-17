@@ -20,18 +20,19 @@ export default function MyProfile() {
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState('');
   
   const [avatarPreview, setAvatarPreview] = useState(null);
   const fileInputRef = useRef(null);
 
   const queryClient = useQueryClient();
 
+  // Fetch user data from backend
   const { data: user } = useQuery({
     queryKey: ['current-user'],
     queryFn: () => base44.auth.me(),
   });
 
+  // Load data into state when user is fetched
   useEffect(() => {
     if (user) {
       setFirstName(user.firstName || '');
@@ -43,9 +44,10 @@ export default function MyProfile() {
     }
   }, [user]);
 
-  // --- REAL-TIME EMAIL DATABASE CHECK ---
+  // Real-time Email Availability Check
   useEffect(() => {
     const checkEmailDatabase = async () => {
+      // Don't check if it's their own email
       if (!email || email === user?.email) {
         setIsEmailAvailable(true);
         setEmailError('');
@@ -75,14 +77,16 @@ export default function MyProfile() {
       }
     };
 
-    const timeoutId = setTimeout(checkEmailDatabase, 500); // Debounce check
+    const timeoutId = setTimeout(checkEmailDatabase, 500); 
     return () => clearTimeout(timeoutId);
   }, [email, user?.email]);
 
   const updateProfileMutation = useMutation({
     mutationFn: (data) => base44.auth.updateMe(data),
     onSuccess: () => {
+      // CRITICAL: Refetch both keys to update MyProfile AND the Layout/Navbar
       queryClient.invalidateQueries({ queryKey: ['current-user'] });
+      queryClient.invalidateQueries({ queryKey: ['user-profile'] });
       toast.success('Profile updated successfully');
     },
     onError: (error) => {
@@ -95,7 +99,7 @@ export default function MyProfile() {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setAvatarPreview(reader.result); // Base64 string to store in SQLite
+        setAvatarPreview(reader.result); 
       };
       reader.readAsDataURL(file);
     }
@@ -116,15 +120,16 @@ export default function MyProfile() {
       firstName: firstName,
       lastName: lastName,
       email: email,
-      profilePicture: avatarPreview // Sending the Base64 string to our new column
+      profilePicture: avatarPreview 
     };
 
     updateProfileMutation.mutate(payload);
   };
 
   const getInitials = () => {
-    if (!firstName) return 'U';
-    return `${firstName[0]}${lastName ? lastName[0] : ''}`.toUpperCase();
+    const first = firstName?.[0] || '';
+    const last = lastName?.[0] || '';
+    return (first + last).toUpperCase() || 'U';
   };
 
   return (
@@ -138,9 +143,9 @@ export default function MyProfile() {
           <CardDescription>Update your personal details and how others see you.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          {/* AVATAR SECTION */}
+          
           <div className="flex items-center gap-4">
-            <Avatar className="w-20 h-20 border-2 border-gray-100 shadow-sm">
+            <Avatar className="w-20 h-20 border-2 border-gray-100 shadow-sm overflow-hidden">
               {avatarPreview ? (
                 <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" />
               ) : (
@@ -165,7 +170,6 @@ export default function MyProfile() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* FIRST NAME */}
             <div className="space-y-2">
               <Label>First Name</Label>
               <Input
@@ -175,7 +179,6 @@ export default function MyProfile() {
               />
             </div>
 
-            {/* LAST NAME */}
             <div className="space-y-2">
               <Label>Last Name</Label>
               <Input
@@ -185,7 +188,6 @@ export default function MyProfile() {
               />
             </div>
 
-            {/* EMAIL WITH DB CHECK */}
             <div className="md:col-span-2 space-y-2">
               <Label>Email Address</Label>
               <div className="relative">
@@ -205,7 +207,7 @@ export default function MyProfile() {
                 </p>
               )}
               <p className="text-xs text-gray-400 italic">
-                Note: Email is managed by your organization and must be unique.
+                Note: Email must be unique to your account.
               </p>
             </div>
           </div>
@@ -216,12 +218,11 @@ export default function MyProfile() {
             className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white"
           >
             <Save className="w-4 h-4 mr-2" />
-            Save Changes
+            {updateProfileMutation.isPending ? 'Saving...' : 'Save Changes'}
           </Button>
         </CardContent>
       </Card>
 
-      {/* PASSWORD SECTION (Hides the Role field as requested) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -234,30 +235,15 @@ export default function MyProfile() {
           <div className="grid gap-4">
              <div className="space-y-2">
               <Label>Current Password</Label>
-              <Input 
-                type="password" 
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                placeholder="••••••••" 
-              />
+              <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="••••••••" />
             </div>
             <div className="space-y-2">
               <Label>New Password</Label>
-              <Input 
-                type="password" 
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Min 8 characters" 
-              />
+              <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Min 8 characters" />
             </div>
             <div className="space-y-2">
               <Label>Confirm New Password</Label>
-              <Input 
-                type="password" 
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Repeat new password" 
-              />
+              <Input type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} placeholder="Repeat new password" />
             </div>
           </div>
           <Button variant="outline" className="mt-2">Update Password</Button>

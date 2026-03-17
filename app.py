@@ -11,7 +11,7 @@ def init_db():
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
     
-    # Updated users table with profile_picture column
+    # 1. USERS TABLE: Supports split names and profile picture
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   first_name TEXT,
@@ -20,6 +20,7 @@ def init_db():
                   password TEXT,
                   profile_picture TEXT)''')
                   
+    # 2. OTHER TABLES: Existing CRM entities
     c.execute('''CREATE TABLE IF NOT EXISTS departments
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   name TEXT,
@@ -153,11 +154,12 @@ init_db()
 def check_email():
     data = request.json
     email = data.get('email')
-    exclude_current = data.get('exclude_current') # Used to ignore the user's own email during profile updates
+    exclude_current = data.get('exclude_current')
 
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
     
+    # If checking availability during update, ignore the current user's email
     if exclude_current and email == exclude_current:
         conn.close()
         return jsonify({"available": True}), 200
@@ -242,7 +244,7 @@ def handle_me():
         new_email = data.get('email')
         p_pic = data.get('profilePicture')
 
-        # Prevent email duplication if the email is being changed
+        # Check for email conflicts if the user is attempting to change their email
         if new_email != user_email:
             c.execute("SELECT id FROM users WHERE email=?", (new_email,))
             if c.fetchone():
