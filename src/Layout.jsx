@@ -25,10 +25,25 @@ export default function Layout({ children }) {
   
   const savedEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : '';
 
-  // 1. Helper function to capitalize names
-  const capitalize = (str) => {
-    if (!str) return '';
-    return str.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+  // 1. Improved Helper function to capitalize and handle combined names
+  const formatDisplayName = (first, last, email) => {
+    // If we have proper names in the DB
+    if (first && last) {
+      const full = `${first} ${last}`;
+      return full.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    }
+    
+    // Fallback: If no names, take email prefix (e.g., christianroldan)
+    let namePart = email.split('@')[0] || 'User';
+    
+    // If it looks like "firstnameLastName" or "firstname.lastname", try to clean it
+    // This is a simple regex to help capitalize if the names are joined
+    return namePart
+      .replace(/([a-z])([A-Z])/g, '$1 $2') // split camelCase
+      .replace(/[._-]/g, ' ')               // replace dots/dashes with space
+      .split(' ')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
   };
 
   const { data: user } = useQuery({
@@ -55,10 +70,8 @@ export default function Layout({ children }) {
     window.location.href = '/login';
   };
 
-  // Determine the display name and capitalize it
-  const displayName = user?.firstName 
-    ? capitalize(`${user.firstName} ${user.lastName}`)
-    : capitalize(savedEmail.split('@')[0] || 'User');
+  // Generate the formatted name
+  const displayName = formatDisplayName(user?.firstName, user?.lastName, savedEmail);
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
@@ -117,7 +130,6 @@ export default function Layout({ children }) {
                     </div>
                     <div className="flex-1 truncate">
                       <p className="text-sm font-bold text-gray-900 truncate">
-                        {/* Capitalized Name Display */}
                         {displayName}
                       </p>
                       <p className="text-xs text-gray-500 truncate">
