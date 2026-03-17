@@ -1,7 +1,7 @@
 // src/api/base44Client.js
 import { createClient } from '@base44/sdk';
 
-const SERVER_URL = 'http://72.61.114.146:5000';
+const SERVER_URL = 'http://72.61.114.146';
 
 export const base44 = createClient({
   appId: 'giggenius-crm',
