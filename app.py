@@ -15,6 +15,7 @@ def init_db():
                   first_name TEXT,
                   last_name TEXT,
                   email TEXT UNIQUE,
+                  profile_picture TEXT,
                   password TEXT)''')
                   
     c.execute('''CREATE TABLE IF NOT EXISTS departments
