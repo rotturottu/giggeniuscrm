@@ -23,10 +23,14 @@ export default function Layout({ children }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
   
-  // Get the email from storage as an immediate backup/identity
   const savedEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : '';
 
-  // 1. Fetch user including the new firstName, lastName, and profilePicture fields
+  // 1. Helper function to capitalize names
+  const capitalize = (str) => {
+    if (!str) return '';
+    return str.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+  };
+
   const { data: user } = useQuery({
     queryKey: ['user-profile'],
     queryFn: async () => {
@@ -37,13 +41,11 @@ export default function Layout({ children }) {
     refetchOnWindowFocus: false
   });
 
-  // 2. Dynamic initials helper based on user data or email
   const getInitials = () => {
     if (user?.firstName && user?.lastName) {
       return (user.firstName[0] + user.lastName[0]).toUpperCase();
     }
     if (user?.firstName) return user.firstName[0].toUpperCase();
-    // Fallback to first letter of email if names aren't in DB yet
     return savedEmail ? savedEmail[0].toUpperCase() : '?';
   };
 
@@ -53,12 +55,16 @@ export default function Layout({ children }) {
     window.location.href = '/login';
   };
 
+  // Determine the display name and capitalize it
+  const displayName = user?.firstName 
+    ? capitalize(`${user.firstName} ${user.lastName}`)
+    : capitalize(savedEmail.split('@')[0] || 'User');
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans flex flex-col">
       <header className="bg-white border-b sticky top-0 z-50 h-16">
         <div className="w-full px-4 sm:px-6 flex items-center justify-between h-full gap-4">
           
-          {/* Logo & Branding */}
           <a href="/Overview" className="flex items-center gap-2 cursor-pointer flex-shrink-0 hover:opacity-80 transition-opacity">
             <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center text-white font-bold text-xl">
               G
@@ -68,7 +74,6 @@ export default function Layout({ children }) {
             </span>
           </a>
 
-          {/* Navigation Links */}
           <nav className="flex items-center gap-1 overflow-x-auto flex-1 hide-scrollbar">
             {navigation.map((item) => {
               const Icon = item.icon;
@@ -88,11 +93,10 @@ export default function Layout({ children }) {
             })}
           </nav>
 
-          {/* User Profile Dropdown */}
           <div className="relative flex items-center gap-3 flex-shrink-0 border-l pl-4">
             <button 
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="w-9 h-9 rounded-full overflow-hidden bg-blue-600 text-white flex items-center justify-center text-sm font-bold cursor-pointer shadow-sm hover:opacity-90 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="w-9 h-9 rounded-full overflow-hidden bg-blue-600 text-white flex items-center justify-center text-sm font-medium cursor-pointer shadow-sm hover:opacity-90 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               {user?.profilePicture ? (
                 <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
@@ -113,8 +117,8 @@ export default function Layout({ children }) {
                     </div>
                     <div className="flex-1 truncate">
                       <p className="text-sm font-bold text-gray-900 truncate">
-                        {/* Dynamic name check */}
-                        {user?.firstName ? `${user.firstName} ${user.lastName}` : (savedEmail.split('@')[0] || 'User')}
+                        {/* Capitalized Name Display */}
+                        {displayName}
                       </p>
                       <p className="text-xs text-gray-500 truncate">
                         {user?.email || savedEmail}
