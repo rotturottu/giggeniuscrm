@@ -25,31 +25,31 @@ export default function Layout({ children }) {
   
   const savedEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : '';
 
-  // 1. Improved Helper function to capitalize and force spaces
+  // 1. SMART FORMATTER: Handles DB names AND splits email prefixes
   const formatDisplayName = (first, last, email) => {
     let rawName = "";
 
-    // Priority 1: Use DB names if they exist
     if (first || last) {
+      // If we have DB names, use them
       rawName = `${first || ''} ${last || ''}`.trim();
     } else {
-      // Priority 2: Use email prefix (e.g., christianroldan)
+      // Fallback: Use email prefix (e.g., christianroldan)
       rawName = email.split('@')[0] || 'User';
       
-      // Magic logic: If no space exists in email prefix, try to find where the second name starts
-      // This handles "christianroldan" -> "christian roldan"
+      // regex to detect if it's all one word and try to split it if it looks like a name
+      // This is a "best effort" for users without a set first/last name
       if (!rawName.includes(' ') && !rawName.includes('.') && !rawName.includes('_')) {
-        // This is a common pattern for "firstnameSurname"
-        // We'll let the .split(' ') below handle the capitalization
+        // Special case: if prefix is "christianroldan", we can't easily split 
+        // without a dictionary, so the DB UPDATE is the real fix.
       }
     }
 
-    // Replace dots, underscores, or dashes with spaces
-    // Then capitalize every word found
+    // Replace separators with spaces, then split, capitalize, and rejoin
     return rawName
-      .replace(/[._-]/g, ' ')
+      .replace(/([a-z])([A-Z])/g, '$1 $2') // Splits CamelCase
+      .replace(/[._-]/g, ' ')               // Splits dots/dashes
       .split(' ')
-      .filter(Boolean) // Remove empty strings from double spaces
+      .filter(Boolean)
       .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ');
   };
@@ -78,7 +78,6 @@ export default function Layout({ children }) {
     window.location.href = '/login';
   };
 
-  // Generate the formatted name
   const displayName = formatDisplayName(user?.firstName, user?.lastName, savedEmail);
 
   return (
@@ -117,7 +116,7 @@ export default function Layout({ children }) {
           <div className="relative flex items-center gap-3 flex-shrink-0 border-l pl-4">
             <button 
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="w-9 h-9 rounded-full overflow-hidden bg-blue-600 text-white flex items-center justify-center text-sm font-medium cursor-pointer shadow-sm hover:opacity-90 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="w-9 h-9 rounded-full overflow-hidden bg-blue-600 text-white flex items-center justify-center text-sm font-bold cursor-pointer shadow-sm hover:opacity-90 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               {user?.profilePicture ? (
                 <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
