@@ -12,6 +12,9 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  // Define the base URL to match your base44Client
+  const API_URL = 'http://72.61.114.146';
+
   const handleNativeLogin = async (e) => {
     e.preventDefault();
     
@@ -24,7 +27,8 @@ export default function Login() {
     setError('');
     
     try {
-      const response = await fetch('/api/auth/login', {
+      // Use the absolute URL to prevent Nginx from returning HTML 
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -36,11 +40,13 @@ export default function Login() {
         throw new Error(data.error || 'Invalid email or password');
       }
       
+      // CRITICAL FIX: Save using the key that base44Client.js expects
       localStorage.setItem('gigGeniusAuth', 'true');
-      localStorage.setItem('gigGeniusUser', email);
+      localStorage.setItem('userEmail', email); 
       
       navigate('/Overview');
     } catch (err) {
+      console.error("Login Error:", err);
       setError(err.message || 'Invalid email or password.');
     } finally {
       setIsLoading(false);
