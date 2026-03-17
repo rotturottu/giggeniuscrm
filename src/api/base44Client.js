@@ -1,6 +1,7 @@
 // src/api/base44Client.js
 import { createClient } from '@base44/sdk';
 
+// CRITICAL: Ensure this DOES NOT have :5000 so it goes through the Nginx proxy
 const SERVER_URL = 'http://72.61.114.146';
 
 export const base44 = createClient({
@@ -10,7 +11,8 @@ export const base44 = createClient({
   functionsVersion: 'v1',
   requiresAuth: false,
   
-  // This helps generic SDK calls know who is logged in
+  // This ensures standard SDK calls (like fetching contacts/tasks) 
+  // always include Gabrielle's email in the headers for Nginx to see
   headers: () => {
     const savedEmail = localStorage.getItem('userEmail');
     return {
@@ -21,16 +23,20 @@ export const base44 = createClient({
 });
 
 /**
- * Helper to ensure the Auth object works with your custom SQLite backend
+ * Custom Auth object to sync with your Flask + SQLite backend
  */
 base44.auth = {
   ...base44.auth,
   
   me: async () => {
     const savedEmail = localStorage.getItem('userEmail');
-    if (!savedEmail) return null;
+    if (!savedEmail) {
+      console.warn("No userEmail found in localStorage.");
+      return null;
+    }
 
     try {
+      // Fetching from Nginx (Port 80) which proxies to Flask (Port 5000)
       const response = await fetch(`${SERVER_URL}/api/apps/giggenius-crm/entities/User/me`, {
         method: 'GET',
         headers: {
@@ -40,13 +46,16 @@ base44.auth = {
       });
       
       if (!response.ok) {
-        if (response.status === 401) console.warn("No active session found.");
+        const errorData = await response.json();
+        console.error("Backend error:", errorData.error);
         return null;
       }
       
-      return await response.json();
+      const data = await response.json();
+      // data will now contain { firstName, lastName, email, profilePicture }
+      return data;
     } catch (error) {
-      console.error("Auth Me API Error:", error);
+      console.error("Auth Me API Error (Network or CORS):", error);
       return null;
     }
   },
@@ -61,10 +70,22 @@ base44.auth = {
         'User-Email': savedEmail,
         'Content-Type': 'application/json'
       },
+      // data contains { firstName, lastName, email, profilePicture }
       body: JSON.stringify(data)
     });
 
-    if (!response.ok) throw new Error('Update failed');
-    return await response.json();
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Update failed');
+    }
+
+    const result = await response.json();
+    
+    // If the email was changed, update localStorage so the next refresh still works
+    if (data.email && data.email !== savedEmail) {
+      localStorage.setItem('userEmail', data.email);
+    }
+
+    return result;
   }
 };
