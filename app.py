@@ -10,13 +10,15 @@ CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 def init_db():
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
-        
+    
+    # Updated users table with profile_picture column
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   first_name TEXT,
                   last_name TEXT,
                   email TEXT UNIQUE,
-                  password TEXT)''')
+                  password TEXT,
+                  profile_picture TEXT)''')
                   
     c.execute('''CREATE TABLE IF NOT EXISTS departments
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -146,6 +148,28 @@ def init_db():
 
 init_db()
 
+# --- NEW: EMAIL AVAILABILITY CHECK ---
+@app.route('/api/auth/check-email', methods=['POST'])
+def check_email():
+    data = request.json
+    email = data.get('email')
+    exclude_current = data.get('exclude_current') # Used to ignore the user's own email during profile updates
+
+    conn = sqlite3.connect('giggenius.db')
+    c = conn.cursor()
+    
+    if exclude_current and email == exclude_current:
+        conn.close()
+        return jsonify({"available": True}), 200
+
+    c.execute("SELECT id FROM users WHERE email=?", (email,))
+    user = c.fetchone()
+    conn.close()
+    
+    if user:
+        return jsonify({"available": False, "message": "Email already in use"}), 200
+    return jsonify({"available": True}), 200
+
 # --- AUTH ROUTES ---
 
 @app.route('/api/auth/register', methods=['POST'])
@@ -179,7 +203,7 @@ def login():
     
     return jsonify({"error": "Invalid email or password"}), 401
 
-# --- DYNAMIC USER PROFILE ROUTE (DATABASE CONNECTED) ---
+# --- UPDATED DYNAMIC USER PROFILE ROUTE ---
 
 @app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
 def handle_me():
@@ -194,9 +218,8 @@ def handle_me():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
 
-    # GET: Fetch actual user data for UI
     if request.method == 'GET':
-        c.execute("SELECT id, first_name, last_name, email FROM users WHERE email=?", (user_email,))
+        c.execute("SELECT id, first_name, last_name, email, profile_picture FROM users WHERE email=?", (user_email,))
         user_row = c.fetchone()
         conn.close()
 
@@ -204,26 +227,33 @@ def handle_me():
             user_data = dict(user_row)
             return jsonify({
                 "id": user_data['id'],
-                "name": f"{user_data['first_name']} {user_data['last_name']}",
+                "firstName": user_data['first_name'],
+                "lastName": user_data['last_name'],
                 "email": user_data['email'],
-                "subscription_plan": "pro"
+                "profilePicture": user_data['profile_picture'],
+                "role": "user"
             }), 200
         return jsonify({"error": "User not found"}), 404
 
-    # PUT: Update User Name from Account Settings
     if request.method == 'PUT':
         data = request.json
-        new_name = data.get('name', '')
-        
-        # Split full name into first and last
-        parts = new_name.split(' ', 1)
-        f_name = parts[0]
-        l_name = parts[1] if len(parts) > 1 else ''
+        f_name = data.get('firstName')
+        l_name = data.get('lastName')
+        new_email = data.get('email')
+        p_pic = data.get('profilePicture')
 
-        c.execute("UPDATE users SET first_name=?, last_name=? WHERE email=?", (f_name, l_name, user_email))
+        # Prevent email duplication if the email is being changed
+        if new_email != user_email:
+            c.execute("SELECT id FROM users WHERE email=?", (new_email,))
+            if c.fetchone():
+                conn.close()
+                return jsonify({"error": "Email already in use by another account"}), 400
+
+        c.execute("""UPDATE users SET first_name=?, last_name=?, email=?, profile_picture=? 
+                     WHERE email=?""", (f_name, l_name, new_email, p_pic, user_email))
         conn.commit()
         conn.close()
-        return jsonify({"message": "Profile updated successfully", "name": new_name}), 200
+        return jsonify({"message": "Profile updated successfully", "email": new_email}), 200
 
 # --- GENERIC ENTITY HANDLERS ---
 

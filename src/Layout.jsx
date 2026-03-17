@@ -23,30 +23,29 @@ export default function Layout({ children }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
 
-  // 1. Fetch the actual logged-in user from your Flask backend
+  // 1. Fetch user including the new firstName, lastName, and profilePicture fields
   const { data: user, error } = useQuery({
     queryKey: ['user-profile'],
     queryFn: async () => {
       const userData = await base44.auth.me();
-      console.log("Layout - Fetched User Data:", userData); // Debug: see what's in your DB
       return userData;
     },
     retry: 1,
     refetchOnWindowFocus: false
   });
 
-  // 2. Improved Helper to get initials (e.g., "Triple X" -> "TX")
-  const getInitials = (name) => {
-    if (!name || name === 'Loading...') return '??';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  // 2. Helper for initials (using firstName and lastName)
+  const getInitials = () => {
+    if (user?.firstName && user?.lastName) {
+      return (user.firstName[0] + user.lastName[0]).toUpperCase();
+    }
+    if (user?.firstName) return user.firstName[0].toUpperCase();
+    return '??';
   };
 
-  // 3. Logout function
   const handleLogout = () => {
     localStorage.removeItem('gigGeniusAuth');
-    localStorage.removeItem('userEmail'); // Clear the email on logout
+    localStorage.removeItem('userEmail');
     window.location.href = '/login';
   };
 
@@ -89,24 +88,43 @@ export default function Layout({ children }) {
           <div className="relative flex items-center gap-3 flex-shrink-0 border-l pl-4">
             <button 
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center text-sm font-medium cursor-pointer shadow-sm hover:bg-blue-700 transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              className="w-9 h-9 rounded-full overflow-hidden bg-blue-600 text-white flex items-center justify-center text-sm font-medium cursor-pointer shadow-sm hover:opacity-90 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
-              {/* DYNAMIC INITIALS: This will update once the query finishes */}
-              {user?.name ? getInitials(user.name) : '...'}
+              {/* DYNAMIC AVATAR OR INITIALS */}
+              {user?.profilePicture ? (
+                <img 
+                  src={user.profilePicture} 
+                  alt="Profile" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{user ? getInitials() : '...'}</span>
+              )}
             </button>
 
             {isProfileOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)} />
                 <div className="absolute right-0 top-12 w-56 bg-white border border-gray-100 rounded-xl shadow-lg py-2 z-50 animate-in fade-in slide-in-from-top-2">
-                  <div className="px-4 py-3 border-b border-gray-100 mb-1">
-                    {/* DYNAMIC USER INFO */}
-                    <p className="text-sm font-semibold text-gray-900">
-                      {user?.name || (error ? 'Guest User' : 'Loading...')}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {user?.email || (error ? 'Please sign in again' : 'Please wait...')}
-                    </p>
+                  <div className="px-4 py-3 border-b border-gray-100 mb-1 flex items-center gap-3">
+                    {/* MINI AVATAR IN DROPDOWN */}
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 flex-shrink-0">
+                      {user?.profilePicture ? (
+                        <img src={user.profilePicture} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-blue-100 text-blue-700 font-bold">
+                          {getInitials()}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1 truncate">
+                      <p className="text-sm font-semibold text-gray-900 truncate">
+                        {user ? `${user.firstName} ${user.lastName}` : (error ? 'Guest User' : 'Loading...')}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {user?.email || 'Please wait...'}
+                      </p>
+                    </div>
                   </div>
                   
                   <a href="/AccountSettings" className="flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 transition-colors">

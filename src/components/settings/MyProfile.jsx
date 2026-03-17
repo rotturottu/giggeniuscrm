@@ -4,24 +4,25 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { User, Lock, Save } from 'lucide-react';
+import { User, Lock, Save, AlertCircle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
+import axios from 'axios';
 
 export default function MyProfile() {
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
-  const [emailError, setEmailError] = useState(''); 
+  const [emailError, setEmailError] = useState('');
+  const [isEmailAvailable, setIsEmailAvailable] = useState(true);
   
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordError, setPasswordError] = useState(''); // New state for password validation
+  const [passwordError, setPasswordError] = useState('');
   
-  // State & ref for Avatar Upload
   const [avatarPreview, setAvatarPreview] = useState(null);
-  const [avatarFile, setAvatarFile] = useState(null);
   const fileInputRef = useRef(null);
 
   const queryClient = useQueryClient();
@@ -33,13 +34,50 @@ export default function MyProfile() {
 
   useEffect(() => {
     if (user) {
-      setFullName(user.full_name || '');
+      setFirstName(user.firstName || '');
+      setLastName(user.lastName || '');
       setEmail(user.email || '');
-      if (user.avatar_url) {
-        setAvatarPreview(user.avatar_url);
+      if (user.profilePicture) {
+        setAvatarPreview(user.profilePicture);
       }
     }
   }, [user]);
+
+  // --- REAL-TIME EMAIL DATABASE CHECK ---
+  useEffect(() => {
+    const checkEmailDatabase = async () => {
+      if (!email || email === user?.email) {
+        setIsEmailAvailable(true);
+        setEmailError('');
+        return;
+      }
+
+      if (!email.includes('@')) {
+        setEmailError('Invalid email format');
+        return;
+      }
+
+      try {
+        const response = await axios.post('http://72.61.114.146:5000/api/auth/check-email', { 
+          email: email,
+          exclude_current: user?.email 
+        });
+        
+        if (!response.data.available) {
+          setIsEmailAvailable(false);
+          setEmailError('This email is already taken by another account.');
+        } else {
+          setIsEmailAvailable(true);
+          setEmailError('');
+        }
+      } catch (err) {
+        console.error("Check email failed", err);
+      }
+    };
+
+    const timeoutId = setTimeout(checkEmailDatabase, 500); // Debounce check
+    return () => clearTimeout(timeoutId);
+  }, [email, user?.email]);
 
   const updateProfileMutation = useMutation({
     mutationFn: (data) => base44.auth.updateMe(data),
@@ -48,91 +86,45 @@ export default function MyProfile() {
       toast.success('Profile updated successfully');
     },
     onError: (error) => {
-      toast.error('Failed to update profile: ' + error.message);
+      toast.error('Update failed: ' + (error.response?.data?.error || error.message));
     },
   });
 
-  // Handle Image Selection
   const handleAvatarChange = (e) => {
     const file = e.target.files[0];
     if (file) {
-      setAvatarFile(file);
       const reader = new FileReader();
       reader.onloadend = () => {
-        setAvatarPreview(reader.result);
+        setAvatarPreview(reader.result); // Base64 string to store in SQLite
       };
       reader.readAsDataURL(file);
     }
   };
 
-  // Handle Email Input & Validation
-  const handleEmailChange = (e) => {
-    const val = e.target.value;
-    setEmail(val);
-    
-    if (val && !val.includes('@')) {
-      setEmailError('Invalid email!');
-    } else {
-      setEmailError('');
-    }
-  };
-
   const handleUpdateProfile = () => {
-    if (!fullName || !email) {
-      toast.error('Full name and email are required');
+    if (!firstName || !lastName || !email) {
+      toast.error('All fields are required');
       return;
     }
 
-    if (!email.includes('@')) {
-      setEmailError('Invalid email!');
-      toast.error('Please provide a valid email address.');
+    if (!isEmailAvailable) {
+      toast.error('Please use a different email address.');
       return;
     }
-    
+
     const payload = { 
-      full_name: fullName, 
-      email: email 
+      firstName: firstName,
+      lastName: lastName,
+      email: email,
+      profilePicture: avatarPreview // Sending the Base64 string to our new column
     };
-    
-    if (avatarFile) {
-      payload.avatar = avatarFile; 
-    }
 
     updateProfileMutation.mutate(payload);
   };
 
-  const handleUpdatePassword = () => {
-    // Check for empty fields
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      setPasswordError('Invalid password! All fields are required!');
-      return;
-    }
-    // Check if passwords match
-    if (newPassword !== confirmPassword) {
-      setPasswordError('Invalid password! New passwords do not match!');
-      return;
-    }
-    // Check minimum length
-    if (newPassword.length < 8) {
-      setPasswordError('Invalid password! Password must be at least 8 characters!');
-      return;
-    }
-    
-    setPasswordError(''); // Clear errors if everything is good
-    toast.success('Password change functionality coming soon');
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-  };
-
-  const getInitials = (name) => {
-    if (!name) return 'U';
-    return name
-      .split(' ')
-      .map((n) => n[0])
-      .join('')
-      .toUpperCase()
-      .slice(0, 2);
+  const getInitials = () => {
+    if (!firstName) return 'U';
+    return `${firstName[0]}${lastName ? lastName[0] : ''}`.toUpperCase();
   };
 
   return (
@@ -143,21 +135,22 @@ export default function MyProfile() {
             <User className="w-5 h-5 text-blue-600" />
             Personal Information
           </CardTitle>
-          <CardDescription>Update your personal details</CardDescription>
+          <CardDescription>Update your personal details and how others see you.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          {/* AVATAR SECTION */}
           <div className="flex items-center gap-4">
-            <Avatar className="w-20 h-20 overflow-hidden">
+            <Avatar className="w-20 h-20 border-2 border-gray-100 shadow-sm">
               {avatarPreview ? (
-                <img src={avatarPreview} alt="Avatar Preview" className="w-full h-full object-cover" />
+                <img src={avatarPreview} alt="Profile" className="w-full h-full object-cover" />
               ) : (
-                <AvatarFallback className="bg-gradient-to-r from-blue-600 to-purple-600 text-white text-2xl">
-                  {getInitials(user?.full_name)}
+                <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-2xl">
+                  {getInitials()}
                 </AvatarFallback>
               )}
             </Avatar>
             <div>
-              <p className="text-sm text-gray-600 mb-1">Profile Picture</p>
+              <p className="text-sm font-medium text-gray-700 mb-2">Profile Picture</p>
               <input 
                 type="file" 
                 ref={fileInputRef} 
@@ -171,47 +164,56 @@ export default function MyProfile() {
             </div>
           </div>
 
-          <div className="grid gap-4">
-            <div>
-              <Label>Full Name</Label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* FIRST NAME */}
+            <div className="space-y-2">
+              <Label>First Name</Label>
               <Input
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                placeholder="John Doe"
-                className="mt-1"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                placeholder="Enter first name"
               />
             </div>
 
-            <div>
+            {/* LAST NAME */}
+            <div className="space-y-2">
+              <Label>Last Name</Label>
+              <Input
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                placeholder="Enter last name"
+              />
+            </div>
+
+            {/* EMAIL WITH DB CHECK */}
+            <div className="md:col-span-2 space-y-2">
               <Label>Email Address</Label>
-              <Input
-                value={email}
-                onChange={handleEmailChange}
-                placeholder="john.doe@example.com"
-                className={`mt-1 ${emailError ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
-              />
+              <div className="relative">
+                <Input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className={`${emailError ? 'border-red-500 ring-red-100' : ''}`}
+                  placeholder="email@example.com"
+                />
+                {!isEmailAvailable && (
+                  <AlertCircle className="absolute right-3 top-2.5 h-5 w-5 text-red-500" />
+                )}
+              </div>
               {emailError && (
-                <p className="text-sm text-red-500 font-medium mt-1">{emailError}</p>
+                <p className="text-xs text-red-500 font-medium flex items-center gap-1">
+                  {emailError}
+                </p>
               )}
-              <p className="text-xs text-gray-500 mt-1">
-                Note: please make sure if you are a giggenius user, use the same email.
+              <p className="text-xs text-gray-400 italic">
+                Note: Email is managed by your organization and must be unique.
               </p>
-            </div>
-
-            <div>
-              <Label>Role</Label>
-              <Input
-                value={user?.role || 'user'}
-                disabled
-                className="mt-1 bg-gray-50"
-              />
             </div>
           </div>
 
           <Button
             onClick={handleUpdateProfile}
-            disabled={updateProfileMutation.isPending}
-            className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
+            disabled={updateProfileMutation.isPending || !isEmailAvailable}
+            className="w-full md:w-auto bg-indigo-600 hover:bg-indigo-700 text-white"
           >
             <Save className="w-4 h-4 mr-2" />
             Save Changes
@@ -219,76 +221,46 @@ export default function MyProfile() {
         </CardContent>
       </Card>
 
+      {/* PASSWORD SECTION (Hides the Role field as requested) */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Lock className="w-5 h-5 text-blue-600" />
             Security
           </CardTitle>
-          <CardDescription>Update your password and security settings</CardDescription>
+          <CardDescription>Update your password to keep your account secure.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div>
-            <Label className="flex items-center gap-2">
-              Current Password
-              <span className="text-xs font-normal text-gray-500 italic">
-                (for users who signed up using SSO, you can't change password)
-              </span>
-            </Label>
-            <Input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => {
-                setCurrentPassword(e.target.value);
-                if (passwordError) setPasswordError('');
-              }}
-              placeholder="Enter current password"
-              className={`mt-1 ${passwordError && !currentPassword ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
-            />
-          </div>
-
-          <div>
-            <Label>New Password</Label>
-            <Input
-              type="password"
-              value={newPassword}
-              onChange={(e) => {
-                setNewPassword(e.target.value);
-                if (passwordError) setPasswordError('');
-              }}
-              placeholder="Enter new password"
-              className={`mt-1 ${passwordError && (!newPassword || newPassword !== confirmPassword || newPassword.length < 8) ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
-            />
-          </div>
-
-          <div>
-            <Label>Confirm New Password</Label>
-            <Input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => {
-                setConfirmPassword(e.target.value);
-                if (passwordError) setPasswordError('');
-              }}
-              placeholder="Confirm new password"
-              className={`mt-1 ${passwordError && (!confirmPassword || newPassword !== confirmPassword) ? 'border-red-500 focus-visible:ring-red-500' : ''}`}
-            />
-          </div>
-
-          {/* Password Validation Error Warning */}
-          {passwordError && (
-            <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-red-600 text-sm font-semibold animate-in fade-in duration-300">
-              {passwordError}
+          <div className="grid gap-4">
+             <div className="space-y-2">
+              <Label>Current Password</Label>
+              <Input 
+                type="password" 
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                placeholder="••••••••" 
+              />
             </div>
-          )}
-
-          <Button
-            onClick={handleUpdatePassword}
-            variant="outline"
-          >
-            <Lock className="w-4 h-4 mr-2" />
-            Update Password
-          </Button>
+            <div className="space-y-2">
+              <Label>New Password</Label>
+              <Input 
+                type="password" 
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Min 8 characters" 
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Confirm New Password</Label>
+              <Input 
+                type="password" 
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Repeat new password" 
+              />
+            </div>
+          </div>
+          <Button variant="outline" className="mt-2">Update Password</Button>
         </CardContent>
       </Card>
     </div>
