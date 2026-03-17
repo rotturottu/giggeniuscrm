@@ -23,11 +23,11 @@ export default function Layout({ children }) {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const currentPath = typeof window !== 'undefined' ? window.location.pathname : '/';
   
-  // Get the email from storage as an immediate backup
+  // Get the email from storage as an immediate backup/identity
   const savedEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : '';
 
   // 1. Fetch user including the new firstName, lastName, and profilePicture fields
-  const { data: user, isLoading } = useQuery({
+  const { data: user } = useQuery({
     queryKey: ['user-profile'],
     queryFn: async () => {
       const userData = await base44.auth.me();
@@ -37,13 +37,14 @@ export default function Layout({ children }) {
     refetchOnWindowFocus: false
   });
 
-  // 2. Optimized initials helper
+  // 2. Dynamic initials helper based on user data or email
   const getInitials = () => {
     if (user?.firstName && user?.lastName) {
       return (user.firstName[0] + user.lastName[0]).toUpperCase();
     }
-    // Fallback if we only have the email (first letter of email)
-    return savedEmail ? savedEmail[0].toUpperCase() : 'G';
+    if (user?.firstName) return user.firstName[0].toUpperCase();
+    // Fallback to first letter of email if names aren't in DB yet
+    return savedEmail ? savedEmail[0].toUpperCase() : '?';
   };
 
   const handleLogout = () => {
@@ -91,7 +92,7 @@ export default function Layout({ children }) {
           <div className="relative flex items-center gap-3 flex-shrink-0 border-l pl-4">
             <button 
               onClick={() => setIsProfileOpen(!isProfileOpen)}
-              className="w-9 h-9 rounded-full overflow-hidden bg-blue-600 text-white flex items-center justify-center text-sm font-medium cursor-pointer shadow-sm hover:opacity-90 transition-all"
+              className="w-9 h-9 rounded-full overflow-hidden bg-blue-600 text-white flex items-center justify-center text-sm font-bold cursor-pointer shadow-sm hover:opacity-90 transition-all focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             >
               {user?.profilePicture ? (
                 <img src={user.profilePicture} alt="Profile" className="w-full h-full object-cover" />
@@ -105,15 +106,15 @@ export default function Layout({ children }) {
                 <div className="fixed inset-0 z-40" onClick={() => setIsProfileOpen(false)} />
                 <div className="absolute right-0 top-12 w-64 bg-white border border-gray-100 rounded-xl shadow-xl py-2 z-50 animate-in fade-in slide-in-from-top-2">
                   <div className="px-4 py-3 border-b border-gray-100 mb-1 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full overflow-hidden bg-blue-100 flex-shrink-0 flex items-center justify-center text-blue-700 font-bold">
+                    <div className="w-10 h-10 rounded-full overflow-hidden bg-blue-50 flex-shrink-0 flex items-center justify-center text-blue-700 font-bold">
                       {user?.profilePicture ? (
                         <img src={user.profilePicture} alt="" className="w-full h-full object-cover" />
                       ) : getInitials()}
                     </div>
                     <div className="flex-1 truncate">
                       <p className="text-sm font-bold text-gray-900 truncate">
-                        {/* Fallback to Gabrielle Dela Cruz if API is still loading */}
-                        {user?.firstName ? `${user.firstName} ${user.lastName}` : (savedEmail || 'Guest User')}
+                        {/* Dynamic name check */}
+                        {user?.firstName ? `${user.firstName} ${user.lastName}` : (savedEmail.split('@')[0] || 'User')}
                       </p>
                       <p className="text-xs text-gray-500 truncate">
                         {user?.email || savedEmail}
