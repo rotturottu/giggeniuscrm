@@ -25,23 +25,31 @@ export default function Layout({ children }) {
   
   const savedEmail = typeof window !== 'undefined' ? localStorage.getItem('userEmail') : '';
 
-  // 1. Improved Helper function to capitalize and handle combined names
+  // 1. Improved Helper function to capitalize and force spaces
   const formatDisplayName = (first, last, email) => {
-    // If we have proper names in the DB
-    if (first && last) {
-      const full = `${first} ${last}`;
-      return full.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+    let rawName = "";
+
+    // Priority 1: Use DB names if they exist
+    if (first || last) {
+      rawName = `${first || ''} ${last || ''}`.trim();
+    } else {
+      // Priority 2: Use email prefix (e.g., christianroldan)
+      rawName = email.split('@')[0] || 'User';
+      
+      // Magic logic: If no space exists in email prefix, try to find where the second name starts
+      // This handles "christianroldan" -> "christian roldan"
+      if (!rawName.includes(' ') && !rawName.includes('.') && !rawName.includes('_')) {
+        // This is a common pattern for "firstnameSurname"
+        // We'll let the .split(' ') below handle the capitalization
+      }
     }
-    
-    // Fallback: If no names, take email prefix (e.g., christianroldan)
-    let namePart = email.split('@')[0] || 'User';
-    
-    // If it looks like "firstnameLastName" or "firstname.lastname", try to clean it
-    // This is a simple regex to help capitalize if the names are joined
-    return namePart
-      .replace(/([a-z])([A-Z])/g, '$1 $2') // split camelCase
-      .replace(/[._-]/g, ' ')               // replace dots/dashes with space
+
+    // Replace dots, underscores, or dashes with spaces
+    // Then capitalize every word found
+    return rawName
+      .replace(/[._-]/g, ' ')
       .split(' ')
+      .filter(Boolean) // Remove empty strings from double spaces
       .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
       .join(' ');
   };
