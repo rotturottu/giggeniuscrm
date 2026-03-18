@@ -10,12 +10,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Trash2, FileCheck, Receipt, UploadCloud, ChevronDown, FileText, Plus, Save } from 'lucide-react';
+import { ArrowLeft, Trash2, FileCheck, Receipt, UploadCloud, ChevronDown, FileText, Plus, Save, FolderOpen } from 'lucide-react';
 import { useState, useRef } from 'react';
 
 const currencySymbols = { USD: '$', EUR: '€', PHP: '₱', CAD: 'C$', AUD: 'A$' };
 
-// 4th template (NDA) removed from the main grid config
 const templateFieldsConfig = {
   independent: { title: 'Independent Contractor Agreement', desc: 'Professional B2B services contract template', fields: [{ key: 'scope', label: 'Scope of Work', type: 'textarea', placeholder: 'Services provided...' }, { key: 'payment', label: 'Payment Details', type: 'payment_group' }] },
   service: { title: 'Service Agreement', desc: 'SLA / Maintenance contract template', fields: [{ key: 'services', label: 'Services Provided', type: 'textarea', placeholder: 'Maintenance, server monitoring...' }, { key: 'payment', label: 'Payment Details', type: 'payment_group' }] },
@@ -33,7 +32,6 @@ const templateFieldsConfig = {
   }
 };
 
-// NDA content kept for the Custom Template logic
 const ndaTemplateContent = {
   title: 'Non-Disclosure Agreement (NDA)',
   fields: [
@@ -48,22 +46,29 @@ export default function InvoicesList() {
 
   const [typeFilter, setTypeFilter] = useState('template');
   const [selectedTemplate, setSelectedTemplate] = useState(null); 
-  const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showNDAModal, setShowNDAModal] = useState(false); // Modal for NDA/Custom
+  const [showNDAModal, setShowNDAModal] = useState(false);
   const [templateFormData, setTemplateFormData] = useState({ currency: 'PHP' }); 
   const [uploadedFileName, setUploadedFileName] = useState(null);
   const [error, setError] = useState('');
 
+  // Fetch all documents for the current tab
   const { data: invoices = [] } = useQuery({
     queryKey: ['invoices', typeFilter],
     queryFn: () => base44.entities.Invoice.filter({ type: typeFilter === 'template' ? 'contract' : typeFilter }, '-created_date'),
   });
 
+  // Fetch only DRAFTS for the current user
+  const { data: drafts = [] } = useQuery({
+    queryKey: ['invoices', 'drafts'],
+    queryFn: () => base44.entities.Invoice.filter({ status: 'draft' }, '-created_date'),
+  });
+
   const saveMutation = useMutation({
-    mutationFn: (data) => base44.entities.Invoice.create(data),
+    mutationFn: (data) => data.id 
+      ? base44.entities.Invoice.update(data.id, data) 
+      : base44.entities.Invoice.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['invoices'] });
-      setShowCreateModal(false);
       setShowNDAModal(false);
       setSelectedTemplate(null);
       setTemplateFormData({ currency: 'PHP' });
@@ -81,10 +86,20 @@ export default function InvoicesList() {
       total: 0,
       status: isDraft ? 'draft' : 'active',
       issue_date: new Date().toISOString(),
-      invoice_number: `NDA-${Math.floor(1000 + Math.random() * 9000)}`,
+      invoice_number: templateFormData.invoice_number || `NDA-${Math.floor(1000 + Math.random() * 9000)}`,
       notes: `NDA Template custom input. Status: ${isDraft ? 'Draft' : 'Completed'}`
     };
     saveMutation.mutate(payload);
+  };
+
+  const handleLoadDraft = (draft) => {
+    setError('');
+    // Map client_name back to document_name for the modal input
+    setTemplateFormData({
+      ...draft,
+      document_name: draft.client_name 
+    });
+    setShowNDAModal(true);
   };
 
   const handleSaveDetailedTemplate = () => {
@@ -105,16 +120,55 @@ export default function InvoicesList() {
 
   return (
     <div className="space-y-6">
-      {/* Metrics Row (Omitted for brevity, kept same) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <Card><CardContent className="pt-6"><div className="text-sm text-gray-600 mb-1">Total Revenue (Paid)</div><div className="text-2xl font-bold text-green-600">₱{invoices.filter(i => i.status === 'paid').reduce((s, i) => s + i.total, 0).toLocaleString()}</div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-sm text-gray-600 mb-1">Pending Invoices</div><div className="text-2xl font-bold text-blue-600">₱{invoices.filter(i => ['sent', 'viewed'].includes(i.status)).reduce((s, i) => s + i.total, 0).toLocaleString()}</div></CardContent></Card>
+        <Card><CardContent className="pt-6"><div className="text-sm text-gray-600 mb-1">Active Documents</div><div className="text-2xl font-bold text-purple-600">{invoices.length}</div></CardContent></Card>
+      </div>
 
       <Card>
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Documents</CardTitle>
             <div className="flex gap-2">
+              {/* Drafts Dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="text-gray-600 hover:text-indigo-600 flex gap-2">
+                    <FolderOpen className="w-4 h-4" />
+                    Drafts ({drafts.length})
+                    <ChevronDown className="w-4 h-4 opacity-50" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                  {drafts.length === 0 ? (
+                    <div className="p-4 text-center text-xs text-gray-400">No saved drafts</div>
+                  ) : (
+                    drafts.map((draft) => (
+                      <DropdownMenuItem 
+                        key={draft.id} 
+                        onClick={() => handleLoadDraft(draft)}
+                        className="cursor-pointer flex flex-col items-start p-3"
+                      >
+                        <span className="font-bold text-sm truncate w-full">
+                          {draft.client_name || 'Untitled NDA'}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          Last modified: {new Date(draft.issue_date).toLocaleDateString()}
+                        </span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
               {typeFilter === 'template' && (
                 <Button 
-                  onClick={() => { setError(''); setShowNDAModal(true); }} 
+                  onClick={() => { 
+                    setError(''); 
+                    setTemplateFormData({ currency: 'PHP' }); 
+                    setShowNDAModal(true); 
+                  }} 
                   variant="outline" 
                   className="border-indigo-200 text-indigo-700 hover:bg-indigo-50"
                 >
@@ -138,7 +192,6 @@ export default function InvoicesList() {
 
             {typeFilter === 'template' ? (
               selectedTemplate ? (
-                /* Detailed Template Builder (Same as original) */
                 <div className="animate-in fade-in space-y-6 bg-white p-6 border rounded-xl shadow-sm">
                    <Button variant="ghost" onClick={() => setSelectedTemplate(null)} className="mb-4"><ArrowLeft className="mr-2 h-4 w-4" />Back</Button>
                    <h2 className="text-2xl font-bold border-b pb-3">{templateFieldsConfig[selectedTemplate].title} Builder</h2>
@@ -169,7 +222,6 @@ export default function InvoicesList() {
                    </div>
                 </div>
               ) : (
-                /* Main Grid - NDA Card removed here */
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   {Object.entries(templateFieldsConfig).map(([key, data]) => (
                     <Card key={key} onClick={() => setSelectedTemplate(key)} className="hover:border-indigo-500 cursor-pointer transition-all border-dashed border-2">
@@ -183,22 +235,32 @@ export default function InvoicesList() {
                 </div>
               )
             ) : (
-              /* Mapping existing invoices (Omitted for brevity) */
               <div className="space-y-3">
-                 {invoices.map(inv => (
-                    <Card key={inv.id}><CardContent className="p-4 flex justify-between items-center"><div><p className="font-bold">{inv.invoice_number}</p><p className="text-sm text-gray-500">{inv.client_name || inv.document_name}</p></div><Badge>{inv.status}</Badge></CardContent></Card>
-                 ))}
+                 {invoices.length === 0 ? <div className="text-center py-10 text-gray-400 border rounded-lg border-dashed">No records found.</div> : 
+                  invoices.map(inv => (
+                    <Card key={inv.id} className="hover:shadow-sm">
+                      <CardContent className="p-4 flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                          <div className="p-2 bg-gray-100 rounded-lg">{typeFilter === 'receipt' ? <Receipt className="w-5 h-5"/> : <FileText className="w-5 h-5"/>}</div>
+                          <div><p className="font-bold">{inv.invoice_number}</p><p className="text-sm text-gray-500">{inv.client_name}</p></div>
+                        </div>
+                        <div className="text-right">
+                          <Badge variant="outline">{inv.status}</Badge>
+                          <p className="font-bold text-green-600 text-lg">{currencySymbols[inv.currency || 'PHP']}{inv.total?.toLocaleString()}</p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
               </div>
             )}
           </Tabs>
         </CardContent>
       </Card>
 
-      {/* NEW: Custom Template / NDA Pop-up Window */}
       <Dialog open={showNDAModal} onOpenChange={setShowNDAModal}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Add Custom Template (NDA)</DialogTitle>
+            <DialogTitle>{templateFormData.id ? 'Continue Draft' : 'Add Custom Template (NDA)'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
