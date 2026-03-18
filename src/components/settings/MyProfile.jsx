@@ -60,7 +60,7 @@ export default function MyProfile() {
       }
 
       try {
-        const response = await axios.post('http://72.61.114.146:5000/api/auth/check-email', { 
+        const response = await axios.post('http://crm.gig-genius.io:5000/api/auth/check-email', { 
           email: email,
           exclude_current: user?.email 
         });

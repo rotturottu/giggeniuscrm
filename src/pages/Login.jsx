@@ -13,7 +13,7 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Define the base URL to match your base44Client
-  const API_URL = 'http://72.61.114.146';
+  const API_URL = 'http://crm.gig-genius.io';
 
   const handleNativeLogin = async (e) => {
     e.preventDefault();
