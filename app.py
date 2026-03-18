@@ -200,7 +200,6 @@ def handle_base44_entities(entity_name):
     conn.row_factory = sqlite3.Row 
     c = conn.cursor()
     if request.method == 'GET':
-        # Check if table has user_email to filter personal data
         c.execute(f"PRAGMA table_info({table_name})")
         cols = [col[1] for col in c.fetchall()]
         query = f"SELECT * FROM {table_name}"
@@ -209,7 +208,6 @@ def handle_base44_entities(entity_name):
             query += " WHERE user_email = ?"
             params.append(user_email)
         
-        # Support for query params like ?status=draft
         for key, value in request.args.items():
             if key in cols:
                 prefix = " AND " if "WHERE" in query else " WHERE "
@@ -220,15 +218,19 @@ def handle_base44_entities(entity_name):
         data = [dict(row) for row in c.fetchall()]
         conn.close()
         return jsonify(data), 200
+
     if request.method == 'POST':
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         cols_in_db = [col[1] for col in c.fetchall()]
         if 'user_email' in cols_in_db and user_email:
             data['user_email'] = user_email
-        # Map document_name to client_name if necessary for custom templates
         if 'document_name' in data and 'client_name' in cols_in_db:
             data['client_name'] = data.pop('document_name')
+        
+        # Remove ID if present to let SQLite autoincrement
+        data.pop('id', None)
+        
         columns = ', '.join(data.keys())
         placeholders = ', '.join(['?'] * len(data))
         c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(data.values()))
@@ -256,6 +258,9 @@ def handle_base44_single_item(entity_name, entity_id):
         return jsonify({"success": True}), 200
     if request.method == 'PUT':
         data = request.json
+        if 'document_name' in data:
+            data['client_name'] = data.pop('document_name')
+            
         set_clause = ', '.join([f"{k} = ?" for k in data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(data.values()) + (entity_id,))
         conn.commit()
