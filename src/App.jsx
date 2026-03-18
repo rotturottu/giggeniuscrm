@@ -40,14 +40,8 @@ const AuthenticatedApp = () => {
       <Route path="/register" element={<Register />} />
       <Route path="/Register" element={<Register />} />
 
-      {/* Root Path */}
-      <Route path="/" element={
-        <ProtectedRoute>
-          <LayoutWrapper currentPageName={mainPageKey}>
-            <MainPage />
-          </LayoutWrapper>
-        </ProtectedRoute>
-      } />
+      {/* Root Path - Redirects immediately to your Dashboard/Overview page */}
+      <Route path="/" element={<Navigate to={`/${mainPageKey}`} replace />} />
       
       {/* Dynamic Page Routes */}
       {Object.entries(Pages).map(([path, PageComponent]) => (
