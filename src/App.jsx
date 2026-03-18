@@ -41,7 +41,7 @@ const AuthenticatedApp = () => {
       <Route path="/Register" element={<Register />} />
 
       {/* Root Path - Redirects immediately to your Dashboard/Overview page */}
-      <Route path="/" element={<Navigate to={`/${mainPageKey}`} replace />} />
+      <Route path="/" element={<Navigate to={`/${mainPageKey}`} replace />} />
       
       {/* Dynamic Page Routes */}
       {Object.entries(Pages).map(([path, PageComponent]) => (
