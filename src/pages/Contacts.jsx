@@ -2,6 +2,8 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FileText, Upload, UserPlus, Users } from 'lucide-react';
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { base44 } from '@/api/base44Client';
 import ContactForm from '../components/contacts/ContactForm';
 import ContactImport from '../components/contacts/ContactImport';
 import ContactList from '../components/contacts/ContactList';
@@ -13,6 +15,17 @@ export default function Contacts() {
   const [editingContact, setEditingContact] = useState(null);
   const [tab, setTab] = useState('list');
   const [selectedSmartList, setSelectedSmartList] = useState(null);
+  const queryClient = useQueryClient();
+
+  const saveContactMutation = useMutation({
+    mutationFn: (data) => data.id 
+      ? base44.entities.Contact.update(data.id, data)
+      : base44.entities.Contact.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['contacts'] });
+      setFormOpen(false);
+    }
+  });
 
   const openAdd = () => { setEditingContact(null); setFormOpen(true); };
   const openEdit = (c) => { setEditingContact(c); setFormOpen(true); };
@@ -20,7 +33,6 @@ export default function Contacts() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4 sm:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
@@ -57,7 +69,6 @@ export default function Contacts() {
           <TabsContent value="import" className="mt-4">
             <div className="bg-white rounded-xl border p-6">
               <h2 className="text-base font-semibold mb-1">Bulk Import Contacts</h2>
-              <p className="text-sm text-gray-500 mb-4">Upload a CSV, Excel, or JSON file to import multiple contacts at once.</p>
               <ContactImport onDone={() => setTab('list')} />
             </div>
           </TabsContent>
@@ -74,6 +85,7 @@ export default function Contacts() {
         open={formOpen}
         onClose={() => { setFormOpen(false); setEditingContact(null); }}
         contact={editingContact}
+        onSubmit={(data) => saveContactMutation.mutate(data)}
       />
     </div>
   );
