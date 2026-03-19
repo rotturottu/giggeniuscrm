@@ -12,8 +12,9 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // Define the base URL to match your base44Client
-  const API_URL = 'https://crm.gig-genius.io';
+  // BETTER: Use a relative path. 
+  // This tells the browser: "Use the current domain and current protocol (HTTPS)"
+  const API_URL = import.meta.env.VITE_API_URL || '/api';
 
   const handleNativeLogin = async (e) => {
     e.preventDefault();
@@ -27,8 +28,8 @@ export default function Login() {
     setError('');
 
     try {
-      // Use the absolute URL to prevent Nginx from returning HTML 
-      const response = await fetch(`${API_URL}/api/auth/login`, {
+      // Clean fetch call using the relative path
+      const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
@@ -40,7 +41,6 @@ export default function Login() {
         throw new Error(data.error || 'Invalid email or password');
       }
 
-      // CRITICAL FIX: Save using the key that base44Client.js expects
       localStorage.setItem('gigGeniusAuth', 'true');
       localStorage.setItem('userEmail', email);
 
