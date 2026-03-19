@@ -7,8 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MessageSquare, Search, Plus, Send, Paperclip, X } from 'lucide-react';
-import { useState } from 'react';
+import { MessageSquare, Search, Plus, Send, Paperclip, X, FileIcon } from 'lucide-react';
+import { useState, useRef } from 'react';
 import ConversationDetail from '../components/conversations/ConversationDetail';
 import ConversationList from '../components/conversations/ConversationList';
 
@@ -18,15 +18,17 @@ export default function Conversations() {
   const [platformFilter, setPlatformFilter] = useState('all');
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeData, setComposeData] = useState({ to: '', subject: '', message: '' });
+  const [attachedFile, setAttachedFile] = useState(null);
+  const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
 
-  // Fetch Conversations with a safety default
+  // Fetch Conversations
   const { data: conversations = [] } = useQuery({
     queryKey: ['conversations', platformFilter],
     queryFn: () => base44.entities.Conversation.list().catch(() => []),
   });
 
-  // Fetch Contacts for the Compose dropdown
+  // Fetch Contacts for dropdown
   const { data: contacts = [] } = useQuery({
     queryKey: ['contacts'],
     queryFn: () => base44.entities.Contact.list().catch(() => []),
@@ -38,16 +40,18 @@ export default function Conversations() {
       contact_email: msg.to.includes('<') ? msg.to.split('<')[1].replace('>', '') : msg.to,
       subject: msg.subject,
       last_message: msg.message,
+      platform: 'gmail',
       status: 'active'
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setComposeOpen(false);
       setComposeData({ to: '', subject: '', message: '' });
+      setAttachedFile(null);
     }
   });
 
-  // SAFETY FIX: Check if contact and contact.name exists before reading [0]
+  // Safe Contact Grouping
   const groupedContacts = (contacts || []).filter(c => c && c.name).sort((a,b) => a.name.localeCompare(b.name)).reduce((acc, c) => {
     const firstChar = c.name.trim().charAt(0).toUpperCase();
     const letter = /^[A-Z]$/.test(firstChar) ? firstChar : '#';
@@ -56,10 +60,19 @@ export default function Conversations() {
     return acc;
   }, {});
 
-  const filteredConversations = (conversations || []).filter(conv =>
-    conv?.contact_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conv?.contact_email?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Restoring Filter Logic (Email, Name, etc.)
+  const filteredConversations = (conversations || []).filter(conv => {
+    const matchesSearch = conv?.contact_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         conv?.contact_email?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    if (platformFilter === 'all') return matchesSearch;
+    if (platformFilter === 'gmail') return matchesSearch && conv.platform === 'gmail';
+    if (platformFilter === 'social') return matchesSearch && (conv.platform === 'facebook' || conv.platform === 'instagram');
+    // 'name' filter logic (searching specifically by name field)
+    if (platformFilter === 'name') return conv?.contact_name?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesSearch;
+  });
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-3 sm:p-6">
@@ -79,6 +92,17 @@ export default function Conversations() {
                   <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                   <Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 border-gray-200" />
                 </div>
+
+                {/* RESTORED: Filter options below search */}
+                <Tabs value={platformFilter} onValueChange={setPlatformFilter} className="w-full">
+                  <TabsList className="grid grid-cols-4 w-full h-9">
+                    <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
+                    <TabsTrigger value="gmail" className="text-xs">Email</TabsTrigger>
+                    <TabsTrigger value="name" className="text-xs">Name</TabsTrigger>
+                    <TabsTrigger value="social" className="text-xs">Social</TabsTrigger>
+                  </TabsList>
+                </Tabs>
+
                 <ConversationList conversations={filteredConversations} selectedId={selectedConversation?.id} onSelect={setSelectedConversation} />
               </div>
             </Card>
@@ -115,12 +139,36 @@ export default function Conversations() {
               </select>
             </div>
             <Input placeholder="Subject" className="border-none shadow-none focus-visible:ring-0 text-sm border-b border-gray-100 rounded-none p-0 h-10" value={composeData.subject} onChange={(e) => setComposeData({...composeData, subject: e.target.value})} />
-            <Textarea placeholder="Message..." className="border-none shadow-none focus-visible:ring-0 min-h-[250px] p-0 pt-2 text-sm resize-none" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
+            <Textarea placeholder="Message..." className="border-none shadow-none focus-visible:ring-0 min-h-[200px] p-0 pt-2 text-sm resize-none" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
+            
+            {/* Show Attached File */}
+            {attachedFile && (
+              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-100 text-xs text-indigo-600">
+                <FileIcon className="w-3 h-3" />
+                <span className="flex-1 truncate">{attachedFile.name}</span>
+                <X className="w-3 h-3 cursor-pointer" onClick={() => setAttachedFile(null)} />
+              </div>
+            )}
           </div>
           <DialogFooter className="p-4 bg-gray-50 flex items-center justify-between border-t border-gray-100">
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center">
               <Button onClick={() => sendMutation.mutate(composeData)} className="bg-blue-600 hover:bg-blue-700 px-8 rounded-full font-bold transition-all shadow-md active:scale-95">Send <Send className="w-4 h-4 ml-2" /></Button>
-              <Button variant="ghost" size="icon" className="hover:bg-gray-200 rounded-full"><Paperclip className="w-5 h-5 text-gray-500" /></Button>
+              
+              {/* WORKING ATTACH FILE BUTTON */}
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                onChange={(e) => setAttachedFile(e.target.files[0])} 
+              />
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                className="hover:bg-gray-200 rounded-full"
+                onClick={() => fileInputRef.current.click()}
+              >
+                <Paperclip className="w-5 h-5 text-gray-500" />
+              </Button>
             </div>
           </DialogFooter>
         </DialogContent>
