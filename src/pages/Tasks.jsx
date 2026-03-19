@@ -14,6 +14,7 @@ export default function Tasks() {
           <p className="text-gray-600">Organize projects and manage team tasks</p>
         </div>
 
+        {/* Note: defaultValue "tasks" matches the lowercase values below exactly */}
         <Tabs defaultValue="tasks" className="space-y-6">
           <TabsList>
             <TabsTrigger value="tasks">
