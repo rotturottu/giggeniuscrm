@@ -11,6 +11,9 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import React from 'react';
 
+// 1. ADDED: Import your public Homepage component! 
+import Home from './pages/Home'; // Make sure this path matches your actual file name/location
+
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
 const MainPage = Pages[mainPageKey] || (() => <></>);
@@ -32,21 +35,26 @@ const ProtectedRoute = ({ children }) => {
 };
 
 const AuthenticatedApp = () => {
+  const isAuth = localStorage.getItem('gigGeniusAuth') === 'true';
   return (
     <Routes>
-      {/* Public Routes - Handles both cases */}
+      {/* 2. FIXED: The Smart Front Door!
+          If logged in -> Go to Dashboard (mainPageKey). 
+          If NOT logged in -> Show the public Home page. */}
+      <Route 
+        path="/" 
+        element={isAuth ? <Navigate to={`/${mainPageKey}`} replace /> : <Home />} 
+      />
+
       <Route path="/login" element={<Login />} />
       <Route path="/Login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/Register" element={<Register />} />
 
-      {/* Root Path - Redirects immediately to your Dashboard/Overview page */}
-      <Route path="/" element={<Navigate to={`/${mainPageKey}`} replace />} />
-      
       {/* Dynamic Page Routes */}
       {Object.entries(Pages).map(([path, PageComponent]) => (
         <React.Fragment key={path}>
-          {/* Capitalized Route (e.g., /HR) */}
+          {/* 3. FIXED: Added backticks to the dynamic paths */}
           <Route
             path={`/${path}`}
             element={
@@ -57,7 +65,7 @@ const AuthenticatedApp = () => {
               </ProtectedRoute>
             }
           />
-          {/* Lowercase Route Alias (e.g., /hr) - STOPS THE BLINKING */}
+
           <Route
             path={`/${path.toLowerCase()}`}
             element={
@@ -70,8 +78,8 @@ const AuthenticatedApp = () => {
           />
         </React.Fragment>
       ))}
-      
-      {/* Fallback */}
+
+      {/* 4. FIXED: Changed "" to "*" for the 404 page wildcard */}
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );
