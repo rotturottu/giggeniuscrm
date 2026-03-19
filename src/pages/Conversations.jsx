@@ -6,8 +6,9 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MessageSquare, Search, Plus, Send, Paperclip, X, FileIcon } from 'lucide-react';
+import { MessageSquare, Search, Plus, Send, Paperclip, X, FileIcon, FolderOpen, Save, Trash2 } from 'lucide-react';
 import { useState, useRef } from 'react';
 import ConversationDetail from '../components/conversations/ConversationDetail';
 import ConversationList from '../components/conversations/ConversationList';
@@ -17,60 +18,91 @@ export default function Conversations() {
   const [searchTerm, setSearchTerm] = useState('');
   const [platformFilter, setPlatformFilter] = useState('all');
   const [composeOpen, setComposeOpen] = useState(false);
-  const [composeData, setComposeData] = useState({ to: '', subject: '', message: '' });
+  const [composeData, setComposeData] = useState({ to: '', subject: '', message: '', id: null });
   const [attachedFile, setAttachedFile] = useState(null);
   const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
 
-  // Fetch Conversations
+  // 1. Fetch Active Conversations
   const { data: conversations = [] } = useQuery({
     queryKey: ['conversations', platformFilter],
-    queryFn: () => base44.entities.Conversation.list().catch(() => []),
+    queryFn: () => base44.entities.Conversation.filter({ status: 'active' }, '-last_message_at').catch(() => []),
   });
 
-  // Fetch Contacts for dropdown
+  // 2. Fetch Drafts
+  const { data: drafts = [] } = useQuery({
+    queryKey: ['conversations', 'drafts'],
+    queryFn: () => base44.entities.Conversation.filter({ status: 'draft' }, '-last_message_at').catch(() => []),
+  });
+
+  // 3. Fetch Contacts from Contacts.jsx database
   const { data: contacts = [] } = useQuery({
     queryKey: ['contacts'],
     queryFn: () => base44.entities.Contact.list().catch(() => []),
   });
 
-  const sendMutation = useMutation({
-    mutationFn: (msg) => base44.entities.Conversation.create({
-      contact_name: msg.to.split('<')[0].trim(),
-      contact_email: msg.to.includes('<') ? msg.to.split('<')[1].replace('>', '') : msg.to,
-      subject: msg.subject,
-      last_message: msg.message,
-      platform: 'gmail',
-      status: 'active'
-    }),
+  // Mutation for Send or Save Draft
+  const saveMutation = useMutation({
+    mutationFn: (msg) => msg.id 
+      ? base44.entities.Conversation.update(msg.id, msg)
+      : base44.entities.Conversation.create(msg),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setComposeOpen(false);
-      setComposeData({ to: '', subject: '', message: '' });
-      setAttachedFile(null);
+      resetCompose();
     }
   });
 
-  // Safe Contact Grouping
+  const deleteMutation = useMutation({
+    mutationFn: (id) => base44.entities.Conversation.delete(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['conversations'] })
+  });
+
+  const resetCompose = () => {
+    setComposeData({ to: '', subject: '', message: '', id: null });
+    setAttachedFile(null);
+  };
+
+  const handleAction = (status = 'active') => {
+    const payload = {
+      ...composeData,
+      contact_name: composeData.to.split('<')[0].trim(),
+      contact_email: composeData.to.includes('<') ? composeData.to.split('<')[1].replace('>', '') : composeData.to,
+      status: status,
+      platform: 'gmail',
+      last_message: composeData.message,
+      last_message_at: new Date().toISOString()
+    };
+    saveMutation.mutate(payload);
+  };
+
+  const loadDraft = (draft) => {
+    setComposeData({
+      id: draft.id,
+      to: `${draft.contact_name} <${draft.contact_email}>`,
+      subject: draft.subject,
+      message: draft.last_message
+    });
+    setComposeOpen(true);
+  };
+
+  // grouping logic for contact dropdown
   const groupedContacts = (contacts || []).filter(c => c && c.name).sort((a,b) => a.name.localeCompare(b.name)).reduce((acc, c) => {
-    const firstChar = c.name.trim().charAt(0).toUpperCase();
-    const letter = /^[A-Z]$/.test(firstChar) ? firstChar : '#';
-    if (!acc[letter]) acc[letter] = [];
-    acc[letter].push(c);
+    const letter = c.name.trim().charAt(0).toUpperCase();
+    const key = /^[A-Z]$/.test(letter) ? letter : '#';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(c);
     return acc;
   }, {});
 
-  // Restoring Filter Logic (Email, Name, etc.)
   const filteredConversations = (conversations || []).filter(conv => {
-    const matchesSearch = conv?.contact_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         conv?.contact_email?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = (conv?.contact_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (conv?.contact_email || '').toLowerCase().includes(searchTerm.toLowerCase());
     
     if (platformFilter === 'all') return matchesSearch;
     if (platformFilter === 'gmail') return matchesSearch && conv.platform === 'gmail';
     if (platformFilter === 'social') return matchesSearch && (conv.platform === 'facebook' || conv.platform === 'instagram');
-    // 'name' filter logic (searching specifically by name field)
-    if (platformFilter === 'name') return conv?.contact_name?.toLowerCase().includes(searchTerm.toLowerCase());
-    
+    if (platformFilter === 'name') return (conv?.contact_name || '').toLowerCase().includes(searchTerm.toLowerCase());
     return matchesSearch;
   });
 
@@ -79,9 +111,32 @@ export default function Conversations() {
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Conversations</h1>
-          <Button onClick={() => setComposeOpen(true)} className="gap-2 bg-indigo-600 px-6 shadow-md hover:bg-indigo-700">
-            <Plus className="w-5 h-5" /> <MessageSquare className="w-4 h-4 mr-1" /> Compose
-          </Button>
+          <div className="flex gap-2">
+            {/* Drafts Dropdown */}
+            <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                    <Button variant="outline" className="gap-2 border-gray-200">
+                        <FolderOpen className="w-4 h-4 text-amber-500" /> Drafts ({drafts.length})
+                    </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-64">
+                    {drafts.length === 0 ? <p className="p-4 text-center text-xs text-gray-400">No drafts</p> : 
+                      drafts.map(d => (
+                        <div key={d.id} className="flex items-center hover:bg-gray-50 px-2">
+                            <DropdownMenuItem className="flex-1 cursor-pointer" onClick={() => loadDraft(d)}>
+                                <div className="flex flex-col"><span className="text-sm font-bold truncate">{d.subject || '(No Subject)'}</span><span className="text-[10px] text-gray-400">{d.contact_name}</span></div>
+                            </DropdownMenuItem>
+                            <Trash2 className="w-3 h-3 text-gray-300 hover:text-red-500 cursor-pointer" onClick={() => deleteMutation.mutate(d.id)} />
+                        </div>
+                      ))
+                    }
+                </DropdownMenuContent>
+            </DropdownMenu>
+
+            <Button onClick={() => { resetCompose(); setComposeOpen(true); }} className="gap-2 bg-indigo-600 px-6 shadow-md hover:bg-indigo-700">
+              <Plus className="w-5 h-5" /> <MessageSquare className="w-4 h-4 mr-1" /> Compose
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -93,13 +148,13 @@ export default function Conversations() {
                   <Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 border-gray-200" />
                 </div>
 
-                {/* RESTORED: Filter options below search */}
+                {/* RESTORED: All, Email, Name, Social Tabs */}
                 <Tabs value={platformFilter} onValueChange={setPlatformFilter} className="w-full">
-                  <TabsList className="grid grid-cols-4 w-full h-9">
-                    <TabsTrigger value="all" className="text-xs">All</TabsTrigger>
-                    <TabsTrigger value="gmail" className="text-xs">Email</TabsTrigger>
-                    <TabsTrigger value="name" className="text-xs">Name</TabsTrigger>
-                    <TabsTrigger value="social" className="text-xs">Social</TabsTrigger>
+                  <TabsList className="grid grid-cols-4 w-full h-9 bg-gray-100/50">
+                    <TabsTrigger value="all" className="text-[10px] sm:text-xs">All</TabsTrigger>
+                    <TabsTrigger value="gmail" className="text-[10px] sm:text-xs">Email</TabsTrigger>
+                    <TabsTrigger value="name" className="text-[10px] sm:text-xs">Name</TabsTrigger>
+                    <TabsTrigger value="social" className="text-[10px] sm:text-xs">Social</TabsTrigger>
                   </TabsList>
                 </Tabs>
 
@@ -110,9 +165,9 @@ export default function Conversations() {
           <div className="lg:col-span-8">
             {selectedConversation ? <ConversationDetail conversation={selectedConversation} /> : (
               <Card className="h-full min-h-[500px] flex items-center justify-center bg-white shadow-sm border-gray-100">
-                <div className="text-center">
-                  <MessageSquare className="w-16 h-16 mx-auto mb-4 text-indigo-100" />
-                  <p className="text-gray-400 font-medium">Select a conversation to view history</p>
+                <div className="text-center text-gray-400">
+                  <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-20" />
+                  <p>Select a conversation to view history</p>
                 </div>
               </Card>
             )}
@@ -120,16 +175,17 @@ export default function Conversations() {
         </div>
       </div>
 
+      {/* Compose Dialog */}
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
         <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
           <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
-            <span className="text-sm font-bold tracking-tight">New Message</span>
+            <span className="text-sm font-bold">New Message</span>
             <X className="w-4 h-4 cursor-pointer opacity-70 hover:opacity-100" onClick={() => setComposeOpen(false)} />
           </div>
           <div className="p-4 space-y-3 bg-white">
             <div className="flex border-b border-gray-100 pb-2">
               <span className="text-gray-400 text-sm w-12 pt-2">To:</span>
-              <select className="flex-1 text-sm outline-none bg-transparent py-2 cursor-pointer" value={composeData.to} onChange={(e) => setComposeData({...composeData, to: e.target.value})}>
+              <select className="flex-1 text-sm outline-none bg-transparent py-2" value={composeData.to} onChange={(e) => setComposeData({...composeData, to: e.target.value})}>
                 <option value="">Select a contact...</option>
                 {Object.keys(groupedContacts).sort().map(letter => (
                   <optgroup key={letter} label={`--- ${letter} ---`}>
@@ -139,11 +195,10 @@ export default function Conversations() {
               </select>
             </div>
             <Input placeholder="Subject" className="border-none shadow-none focus-visible:ring-0 text-sm border-b border-gray-100 rounded-none p-0 h-10" value={composeData.subject} onChange={(e) => setComposeData({...composeData, subject: e.target.value})} />
-            <Textarea placeholder="Message..." className="border-none shadow-none focus-visible:ring-0 min-h-[200px] p-0 pt-2 text-sm resize-none" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
+            <Textarea placeholder="Message..." className="border-none shadow-none focus-visible:ring-0 min-h-[250px] p-0 pt-2 text-sm resize-none" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
             
-            {/* Show Attached File */}
             {attachedFile && (
-              <div className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-100 text-xs text-indigo-600">
+              <div className="flex items-center gap-2 p-2 bg-indigo-50 rounded border border-indigo-100 text-xs text-indigo-700">
                 <FileIcon className="w-3 h-3" />
                 <span className="flex-1 truncate">{attachedFile.name}</span>
                 <X className="w-3 h-3 cursor-pointer" onClick={() => setAttachedFile(null)} />
@@ -151,22 +206,12 @@ export default function Conversations() {
             )}
           </div>
           <DialogFooter className="p-4 bg-gray-50 flex items-center justify-between border-t border-gray-100">
-            <div className="flex gap-3 items-center">
-              <Button onClick={() => sendMutation.mutate(composeData)} className="bg-blue-600 hover:bg-blue-700 px-8 rounded-full font-bold transition-all shadow-md active:scale-95">Send <Send className="w-4 h-4 ml-2" /></Button>
+            <div className="flex gap-2 w-full">
+              <Button onClick={() => handleAction('active')} className="bg-blue-600 hover:bg-blue-700 px-6 font-bold shadow-md">Send <Send className="w-4 h-4 ml-2" /></Button>
+              <Button variant="outline" onClick={() => handleAction('draft')} className="gap-2 border-gray-200"><Save className="w-4 h-4" /> Save as Draft</Button>
               
-              {/* WORKING ATTACH FILE BUTTON */}
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                onChange={(e) => setAttachedFile(e.target.files[0])} 
-              />
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="hover:bg-gray-200 rounded-full"
-                onClick={() => fileInputRef.current.click()}
-              >
+              <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setAttachedFile(e.target.files[0])} />
+              <Button variant="ghost" size="icon" className="ml-auto hover:bg-gray-200" onClick={() => fileInputRef.current.click()}>
                 <Paperclip className="w-5 h-5 text-gray-500" />
               </Button>
             </div>
