@@ -13,11 +13,11 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Define the base URL to match your base44Client
-  const API_URL = 'http://crm.gig-genius.io';
+  const API_URL = 'https://crm.gig-genius.io';
 
   const handleNativeLogin = async (e) => {
     e.preventDefault();
-    
+
     if (!email || !password) {
       setError('Please enter both email and password.');
       return;
@@ -25,7 +25,7 @@ export default function Login() {
 
     setIsLoading(true);
     setError('');
-    
+
     try {
       // Use the absolute URL to prevent Nginx from returning HTML 
       const response = await fetch(`${API_URL}/api/auth/login`, {
@@ -39,11 +39,11 @@ export default function Login() {
       if (!response.ok) {
         throw new Error(data.error || 'Invalid email or password');
       }
-      
+
       // CRITICAL FIX: Save using the key that base44Client.js expects
       localStorage.setItem('gigGeniusAuth', 'true');
-      localStorage.setItem('userEmail', email); 
-      
+      localStorage.setItem('userEmail', email);
+
       navigate('/Overview');
     } catch (err) {
       console.error("Login Error:", err);
@@ -57,7 +57,7 @@ export default function Login() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="max-w-md w-full space-y-8 p-10 bg-white rounded-2xl shadow-xl border border-gray-100">
         <div className="text-center">
-          <img 
+          <img
             src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/6949094a978d5bae592b599f/645b25c34_GigGeniusLogo.png"
             alt="GigGenius"
             className="w-16 h-16 mx-auto rounded-xl mb-4"
@@ -69,25 +69,25 @@ export default function Login() {
         <form className="mt-8 space-y-5" onSubmit={handleNativeLogin}>
           <div className="space-y-1">
             <Label htmlFor="email">Email address</Label>
-            <Input 
-              id="email" 
-              name="email" 
-              type="email" 
-              placeholder="name@company.com" 
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              placeholder="name@company.com"
               value={email}
-              onChange={(e) => { setEmail(e.target.value); if(error) setError(''); }}
+              onChange={(e) => { setEmail(e.target.value); if (error) setError(''); }}
             />
           </div>
-          
+
           <div className="space-y-1">
             <Label htmlFor="password">Password</Label>
-            <Input 
-              id="password" 
-              name="password" 
-              type="password" 
-              placeholder="••••••••" 
+            <Input
+              id="password"
+              name="password"
+              type="password"
+              placeholder="••••••••"
               value={password}
-              onChange={(e) => { setPassword(e.target.value); if(error) setError(''); }}
+              onChange={(e) => { setPassword(e.target.value); if (error) setError(''); }}
             />
           </div>
 
@@ -97,10 +97,10 @@ export default function Login() {
             </div>
           )}
 
-          <Button 
+          <Button
             type="submit"
             disabled={isLoading}
-            className="w-full py-6 text-lg bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all" 
+            className="w-full py-6 text-lg bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md transition-all"
           >
             {isLoading ? 'Signing in...' : 'Sign In'}
           </Button>

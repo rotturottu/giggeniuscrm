@@ -16,11 +16,11 @@ export default function MyProfile() {
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [isEmailAvailable, setIsEmailAvailable] = useState(true);
-  
+
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  
+
   const [avatarPreview, setAvatarPreview] = useState(null);
   const fileInputRef = useRef(null);
 
@@ -60,11 +60,11 @@ export default function MyProfile() {
       }
 
       try {
-        const response = await axios.post('http://crm.gig-genius.io:5000/api/auth/check-email', { 
+        const response = await axios.post('https://crm.gig-genius.io:5000/api/auth/check-email', {
           email: email,
-          exclude_current: user?.email 
+          exclude_current: user?.email
         });
-        
+
         if (!response.data.available) {
           setIsEmailAvailable(false);
           setEmailError('This email is already taken by another account.');
@@ -77,7 +77,7 @@ export default function MyProfile() {
       }
     };
 
-    const timeoutId = setTimeout(checkEmailDatabase, 500); 
+    const timeoutId = setTimeout(checkEmailDatabase, 500);
     return () => clearTimeout(timeoutId);
   }, [email, user?.email]);
 
@@ -99,7 +99,7 @@ export default function MyProfile() {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setAvatarPreview(reader.result); 
+        setAvatarPreview(reader.result);
       };
       reader.readAsDataURL(file);
     }
@@ -116,11 +116,11 @@ export default function MyProfile() {
       return;
     }
 
-    const payload = { 
+    const payload = {
       firstName: firstName,
       lastName: lastName,
       email: email,
-      profilePicture: avatarPreview 
+      profilePicture: avatarPreview
     };
 
     updateProfileMutation.mutate(payload);
@@ -143,7 +143,7 @@ export default function MyProfile() {
           <CardDescription>Update your personal details and how others see you.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          
+
           <div className="flex items-center gap-4">
             <Avatar className="w-20 h-20 border-2 border-gray-100 shadow-sm overflow-hidden">
               {avatarPreview ? (
@@ -156,12 +156,12 @@ export default function MyProfile() {
             </Avatar>
             <div>
               <p className="text-sm font-medium text-gray-700 mb-2">Profile Picture</p>
-              <input 
-                type="file" 
-                ref={fileInputRef} 
-                className="hidden" 
-                accept="image/*" 
-                onChange={handleAvatarChange} 
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleAvatarChange}
               />
               <Button variant="outline" size="sm" onClick={() => fileInputRef.current.click()}>
                 Change Avatar
@@ -233,7 +233,7 @@ export default function MyProfile() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4">
-             <div className="space-y-2">
+            <div className="space-y-2">
               <Label>Current Password</Label>
               <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} placeholder="••••••••" />
             </div>
