@@ -2,11 +2,7 @@
 import { createClient } from '@base44/sdk';
 
 // CRITICAL: Ensure this DOES NOT have :5000 so it goes through the Nginx proxy
-<<<<<<< HEAD
 const SERVER_URL = 'http://crm.gig-genius.io';
-=======
-const SERVER_URL = 'https://crm.gig-genius.io';
->>>>>>> 8656a261c5cd6006868e0576f5fe68bb54ce05a8
 
 export const base44 = createClient({
   appId: 'giggenius-crm',
