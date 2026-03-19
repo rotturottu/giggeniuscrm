@@ -6,7 +6,7 @@ const COLUMNS = [
   { id: 'To Do', title: 'To Do' },
   { id: 'In-Progress', title: 'In Progress' },
   { id: 'Review', title: 'Review' },
-  { id: 'Approval', title: 'For Approval' }
+  { id: 'pproval', title: 'For Approval' }
 ];
 
 export default function TaskBoard() {
