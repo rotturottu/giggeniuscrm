@@ -46,15 +46,23 @@ base44.auth = {
       });
 
       if (!response.ok) {
+        // THE CLEANUP CREW: If backend says unauthorized, wipe the ghost session
+        if (response.status === 401) {
+          localStorage.removeItem('gigGeniusAuth');
+          localStorage.removeItem('userEmail');
+          window.location.href = '/login';
+        }
+
         const errorData = await response.json();
         console.error("Backend error:", errorData.error);
         return null;
       }
 
       const data = await response.json();
-      // data will now contain { firstName, lastName, email, profilePicture }
       return data;
+
     } catch (error) {
+      // RESTORED: The catch block to prevent the app from crashing on network errors
       console.error("Auth Me API Error (Network or CORS):", error);
       return null;
     }
