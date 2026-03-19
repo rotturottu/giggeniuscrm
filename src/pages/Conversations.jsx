@@ -20,14 +20,16 @@ export default function Conversations() {
   const [composeData, setComposeData] = useState({ to: '', subject: '', message: '' });
   const queryClient = useQueryClient();
 
+  // Fetch Conversations with a safety default
   const { data: conversations = [] } = useQuery({
     queryKey: ['conversations', platformFilter],
-    queryFn: () => base44.entities.Conversation.list(),
+    queryFn: () => base44.entities.Conversation.list().catch(() => []),
   });
 
+  // Fetch Contacts for the Compose dropdown
   const { data: contacts = [] } = useQuery({
     queryKey: ['contacts'],
-    queryFn: () => base44.entities.Contact.list(),
+    queryFn: () => base44.entities.Contact.list().catch(() => []),
   });
 
   const sendMutation = useMutation({
@@ -45,16 +47,18 @@ export default function Conversations() {
     }
   });
 
-  const groupedContacts = (contacts || []).sort((a,b) => a.name.localeCompare(b.name)).reduce((acc, c) => {
-    const letter = c.name[0].toUpperCase();
+  // SAFETY FIX: Check if contact and contact.name exists before reading [0]
+  const groupedContacts = (contacts || []).filter(c => c && c.name).sort((a,b) => a.name.localeCompare(b.name)).reduce((acc, c) => {
+    const firstChar = c.name.trim().charAt(0).toUpperCase();
+    const letter = /^[A-Z]$/.test(firstChar) ? firstChar : '#';
     if (!acc[letter]) acc[letter] = [];
     acc[letter].push(c);
     return acc;
   }, {});
 
   const filteredConversations = (conversations || []).filter(conv =>
-    conv.contact_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    conv.contact_email?.toLowerCase().includes(searchTerm.toLowerCase())
+    conv?.contact_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    conv?.contact_email?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -69,11 +73,11 @@ export default function Conversations() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-4">
-            <Card className="p-4 shadow-sm">
+            <Card className="p-4 shadow-sm border-gray-100">
               <div className="space-y-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" />
+                  <Input placeholder="Search..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 border-gray-200" />
                 </div>
                 <ConversationList conversations={filteredConversations} selectedId={selectedConversation?.id} onSelect={setSelectedConversation} />
               </div>
@@ -81,8 +85,11 @@ export default function Conversations() {
           </div>
           <div className="lg:col-span-8">
             {selectedConversation ? <ConversationDetail conversation={selectedConversation} /> : (
-              <Card className="h-full flex items-center justify-center p-12 bg-white/50 border-dashed border-2 text-gray-400">
-                <div className="text-center"><MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-20" /><p>Select a contact to view history</p></div>
+              <Card className="h-full min-h-[500px] flex items-center justify-center bg-white shadow-sm border-gray-100">
+                <div className="text-center">
+                  <MessageSquare className="w-16 h-16 mx-auto mb-4 text-indigo-100" />
+                  <p className="text-gray-400 font-medium">Select a conversation to view history</p>
+                </div>
               </Card>
             )}
           </div>
@@ -90,30 +97,30 @@ export default function Conversations() {
       </div>
 
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden rounded-t-xl">
-          <div className="bg-gray-800 text-white p-3 flex justify-between items-center">
-            <span className="text-sm font-medium">New Message</span>
-            <X className="w-4 h-4 cursor-pointer" onClick={() => setComposeOpen(false)} />
+        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
+          <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
+            <span className="text-sm font-bold tracking-tight">New Message</span>
+            <X className="w-4 h-4 cursor-pointer opacity-70 hover:opacity-100" onClick={() => setComposeOpen(false)} />
           </div>
-          <div className="p-4 space-y-2 bg-white">
-            <div className="flex border-b pb-1">
-              <span className="text-gray-400 text-sm w-12 pt-1">To:</span>
-              <select className="flex-1 text-sm outline-none" value={composeData.to} onChange={(e) => setComposeData({...composeData, to: e.target.value})}>
+          <div className="p-4 space-y-3 bg-white">
+            <div className="flex border-b border-gray-100 pb-2">
+              <span className="text-gray-400 text-sm w-12 pt-2">To:</span>
+              <select className="flex-1 text-sm outline-none bg-transparent py-2 cursor-pointer" value={composeData.to} onChange={(e) => setComposeData({...composeData, to: e.target.value})}>
                 <option value="">Select a contact...</option>
-                {Object.keys(groupedContacts).map(letter => (
+                {Object.keys(groupedContacts).sort().map(letter => (
                   <optgroup key={letter} label={`--- ${letter} ---`}>
                     {groupedContacts[letter].map(c => <option key={c.id} value={`${c.name} <${c.email}>`}>{c.name} ({c.email})</option>)}
                   </optgroup>
                 ))}
               </select>
             </div>
-            <Input placeholder="Subject" className="border-none shadow-none focus-visible:ring-0 text-sm border-b rounded-none" value={composeData.subject} onChange={(e) => setComposeData({...composeData, subject: e.target.value})} />
-            <Textarea placeholder="Message..." className="border-none shadow-none focus-visible:ring-0 min-h-[200px] p-0 text-sm" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
+            <Input placeholder="Subject" className="border-none shadow-none focus-visible:ring-0 text-sm border-b border-gray-100 rounded-none p-0 h-10" value={composeData.subject} onChange={(e) => setComposeData({...composeData, subject: e.target.value})} />
+            <Textarea placeholder="Message..." className="border-none shadow-none focus-visible:ring-0 min-h-[250px] p-0 pt-2 text-sm resize-none" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
           </div>
-          <DialogFooter className="p-3 bg-gray-50 flex items-center justify-between border-t">
-            <div className="flex gap-2">
-              <Button onClick={() => sendMutation.mutate(composeData)} className="bg-blue-600 hover:bg-blue-700 px-6 gap-2">Send <Send className="w-3 h-3" /></Button>
-              <Button variant="ghost" size="icon"><Paperclip className="w-4 h-4 text-gray-500" /></Button>
+          <DialogFooter className="p-4 bg-gray-50 flex items-center justify-between border-t border-gray-100">
+            <div className="flex gap-3">
+              <Button onClick={() => sendMutation.mutate(composeData)} className="bg-blue-600 hover:bg-blue-700 px-8 rounded-full font-bold transition-all shadow-md active:scale-95">Send <Send className="w-4 h-4 ml-2" /></Button>
+              <Button variant="ghost" size="icon" className="hover:bg-gray-200 rounded-full"><Paperclip className="w-5 h-5 text-gray-500" /></Button>
             </div>
           </DialogFooter>
         </DialogContent>
