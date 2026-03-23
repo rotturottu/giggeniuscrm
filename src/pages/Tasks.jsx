@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, Folder, Calendar, User, DollarSign, FileText, UploadCloud, Search, Trash2 } from 'lucide-react';
+import { Plus, Folder, Calendar, User, DollarSign, UploadCloud, Search, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 
 const currencies = ['PHP', 'USD', 'EUR', 'GBP', 'CAD', 'AUD'];
@@ -33,6 +33,7 @@ export default function ProjectsList() {
     queryFn: () => base44.entities.Project.list(),
   });
 
+  // Handle Creating New Project
   const createMutation = useMutation({
     mutationFn: (data) => base44.entities.Project.create(data),
     onSuccess: () => {
@@ -42,6 +43,7 @@ export default function ProjectsList() {
     }
   });
 
+  // Handle Deleting Project
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Project.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] })
@@ -53,7 +55,7 @@ export default function ProjectsList() {
   };
 
   const filteredProjects = projects.filter(p => 
-    p.name?.toLowerCase().includes(searchTerm.toLowerCase())
+    (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -79,7 +81,7 @@ export default function ProjectsList() {
         {filteredProjects.length === 0 ? (
           <div className="text-center py-20">
             <Folder className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-            <p className="text-gray-500">No projects found. Create your first one!</p>
+            <p className="text-gray-500">No projects yet. Create your first project!</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -93,9 +95,11 @@ export default function ProjectsList() {
                     </Button>
                   </div>
                   <div className="space-y-2 text-sm text-gray-600">
-                    <div className="flex items-center gap-2"><User className="w-3 h-3"/> {project.assigned_person || 'Unassigned'}</div>
-                    <div className="flex items-center gap-2"><Calendar className="w-3 h-3"/> {project.start_date} - {project.end_date}</div>
-                    <div className="flex items-center gap-2"><DollarSign className="w-3 h-3"/> {project.currency} {project.budget}</div>
+                    <div className="flex items-center gap-2"><User className="w-3 h-3 text-indigo-500"/> {project.assigned_person || 'Unassigned'}</div>
+                    <div className="flex items-center gap-2"><Calendar className="w-3 h-3 text-indigo-500"/> {project.start_date || 'N/A'} - {project.end_date || 'N/A'}</div>
+                    <div className="flex items-center gap-2 font-bold text-indigo-700">
+                        <DollarSign className="w-3 h-3"/> {project.currency} {parseFloat(project.budget || 0).toLocaleString()}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -117,7 +121,7 @@ export default function ProjectsList() {
               <div className="space-y-2">
                 <Label className="font-semibold">Project Title *</Label>
                 <Input 
-                  placeholder="e.g. Website Redesign" 
+                  placeholder="e.g. Website Development" 
                   value={formData.name}
                   onChange={e => setFormData({...formData, name: e.target.value})}
                 />
@@ -186,7 +190,7 @@ export default function ProjectsList() {
                   />
                   <label htmlFor="file-upload" className="cursor-pointer">
                     <UploadCloud className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
-                    <span className="text-sm text-gray-600 block">{fileName || 'Upload actual copy (PDF/IMG)'}</span>
+                    <span className="text-sm text-gray-600 block truncate">{fileName || 'Upload actual copy (PDF/IMG)'}</span>
                   </label>
                 </div>
               </div>
@@ -198,9 +202,9 @@ export default function ProjectsList() {
             <Button 
               className="bg-indigo-600 hover:bg-indigo-700 px-8"
               onClick={() => createMutation.mutate(formData)}
-              disabled={!formData.name}
+              disabled={!formData.name || createMutation.isPending}
             >
-              Initialize Project
+              {createMutation.isPending ? 'Saving...' : 'Initialize Project'}
             </Button>
           </DialogFooter>
         </DialogContent>
