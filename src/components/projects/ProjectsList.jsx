@@ -1,12 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react'; // <-- Added useState
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, FolderKanban } from 'lucide-react';
+import NewProjectModal from './NewProjectModal'; // <-- Added import for the modal
 
 export default function ProjectsList() {
+  // --- ADDED STATE to control the modal ---
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: () => base44.entities.Project.list('-created_date'),
@@ -29,14 +33,17 @@ export default function ProjectsList() {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Projects</CardTitle>
-            <Button className="bg-gradient-to-r from-blue-600 to-purple-600">
+            {/* --- UPDATED BUTTON with onClick handler --- */}
+            <Button 
+              className="bg-gradient-to-r from-blue-600 to-purple-600"
+              onClick={() => setIsModalOpen(true)}
+            >
               <Plus className="w-4 h-4 mr-2" />
               New Project
             </Button>
           </div>
         </CardHeader>
         <CardContent>
-          {/* UPDATED: safeProjects instead of projects */}
           {safeProjects.length === 0 ? (
             <div className="text-center py-12">
               <FolderKanban className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -44,14 +51,14 @@ export default function ProjectsList() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* UPDATED: safeProjects instead of projects */}
               {safeProjects.map(project => (
                 <Card key={project.id} className="hover:shadow-md transition-all">
                   <CardContent className="pt-6">
                     <div className="flex justify-between items-start mb-3">
                       <h3 className="font-semibold text-lg">{project.name}</h3>
-                      <Badge className={statusColors[project.status]}>
-                        {project.status.replace('_', ' ')}
+                      {/* Added fallback to 'bg-gray-100' in case status is unexpected */}
+                      <Badge className={statusColors[project.status] || 'bg-gray-100'}>
+                        {project.status ? project.status.replace('_', ' ') : 'Unknown'}
                       </Badge>
                     </div>
                     {project.description && (
@@ -69,6 +76,13 @@ export default function ProjectsList() {
           )}
         </CardContent>
       </Card>
+
+      {/* --- ADDED THE MODAL COMPONENT --- */}
+      <NewProjectModal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+      />
+
     </div>
   );
 }
