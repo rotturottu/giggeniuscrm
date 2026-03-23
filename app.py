@@ -51,11 +51,26 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS contacts
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   name TEXT, email TEXT, phone TEXT, company TEXT, status TEXT,
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   title TEXT, list_name TEXT, status TEXT, parent_task_id INTEGER,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    # NEW: CONVERSATIONS TABLE (Added to support the bridge between Contacts and Conversations)
+    c.execute('''CREATE TABLE IF NOT EXISTS conversations
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  contact_name TEXT,
+                  contact_email TEXT,
+                  subject TEXT,
+                  last_message TEXT,
+                  platform TEXT DEFAULT 'gmail',
+                  status TEXT DEFAULT 'active',
+                  unread_count INTEGER DEFAULT 0,
+                  user_email TEXT,
+                  last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
@@ -118,6 +133,13 @@ def handle_me():
                 "role": "user"
             }), 200
         return jsonify({"error": "User not found"}), 404
+    if request.method == 'PUT':
+        data = request.json
+        c.execute("""UPDATE users SET first_name=?, last_name=?, email=?, profile_picture=? 
+                     WHERE email=?""", (data.get('firstName'), data.get('lastName'), data.get('email'), data.get('profilePicture'), user_email))
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "Profile updated successfully"}), 200
 
 # --- GENERIC ENTITY HANDLERS ---
 
@@ -125,7 +147,7 @@ def handle_me():
 def handle_base44_entities(entity_name):
     table_map = {
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
-        'Task': 'project_tasks', 'Invoice': 'invoices'
+        'Task': 'project_tasks', 'Invoice': 'invoices', 'Conversation': 'conversations'
     }
     table_name = table_map.get(entity_name)
     if not table_name:
@@ -167,7 +189,7 @@ def handle_base44_entities(entity_name):
         if 'user_email' in db_cols:
             data['user_email'] = user_email
 
-        # CRITICAL FIX: Bundle extra fields like 'confidential_info' into notes
+        # Bundle extra fields into notes for flexibility
         extra_fields = {}
         cleaned_data = {}
         for k, v in data.items():
@@ -176,7 +198,7 @@ def handle_base44_entities(entity_name):
             else:
                 extra_fields[k] = v
         
-        if extra_fields:
+        if extra_fields and 'notes' in db_cols:
             existing_notes = cleaned_data.get('notes', '')
             cleaned_data['notes'] = f"{existing_notes} | Custom Fields: {json.dumps(extra_fields)}".strip(' | ')
 
@@ -194,7 +216,7 @@ def handle_base44_entities(entity_name):
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE'])
 def handle_base44_single_item(entity_name, entity_id):
-    table_map = {'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks'}
+    table_map = {'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 'Conversation': 'conversations'}
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
@@ -213,14 +235,13 @@ def handle_base44_single_item(entity_name, entity_id):
         if 'document_name' in data:
             data['client_name'] = data.pop('document_name')
             
-        # Bundle logic for PUT
         extra_fields = {}
         cleaned_data = {}
         for k, v in data.items():
             if k in db_cols: cleaned_data[k] = v
             else: extra_fields[k] = v
         
-        if extra_fields:
+        if extra_fields and 'notes' in db_cols:
             cleaned_data['notes'] = f"{cleaned_data.get('notes', '')} | Updated: {json.dumps(extra_fields)}".strip(' | ')
 
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])

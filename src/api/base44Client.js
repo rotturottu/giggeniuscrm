@@ -2,15 +2,17 @@
 import { createClient } from '@base44/sdk';
 
 // CRITICAL: Ensure this DOES NOT have :5000 so it goes through the Nginx proxy
-const SERVER_URL = 'http://crm.gig-genius.io';
+const SERVER_URL = 'https://crm.gig-genius.io';
 
 export const base44 = createClient({
   appId: 'giggenius-crm',
   serverUrl: SERVER_URL,
-  token: '', 
+  token: '',
   functionsVersion: 'v1',
   requiresAuth: false,
-  
+
+  // This ensures standard SDK calls (like fetching contacts/tasks) 
+  // always include Gabrielle's email in the headers for Nginx to see
   headers: () => {
     const savedEmail = localStorage.getItem('userEmail');
     return {
@@ -25,7 +27,7 @@ export const base44 = createClient({
  */
 base44.auth = {
   ...base44.auth,
-  
+
   me: async () => {
     const savedEmail = localStorage.getItem('userEmail');
     if (!savedEmail) {
@@ -42,21 +44,20 @@ base44.auth = {
           'Content-Type': 'application/json'
         }
       });
-      
+
       if (!response.ok) {
         // THE CLEANUP CREW: If backend says unauthorized, wipe the ghost session
         if (response.status === 401) {
           localStorage.removeItem('gigGeniusAuth');
           localStorage.removeItem('userEmail');
-          window.location.href = '/login'; 
+          window.location.href = '/login';
         }
 
         const errorData = await response.json();
         console.error("Backend error:", errorData.error);
         return null;
       }
-      
-      // RESTORED: The code to actually return your profile data if successful!
+
       const data = await response.json();
       return data;
 
@@ -87,7 +88,7 @@ base44.auth = {
     }
 
     const result = await response.json();
-    
+
     // If the email was changed, update localStorage so the next refresh still works
     if (data.email && data.email !== savedEmail) {
       localStorage.setItem('userEmail', data.email);
