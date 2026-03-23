@@ -1,74 +1,97 @@
-import React, { useState } from 'react'; // <-- Added useState
+import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { base44 } from '@/api/base44Client';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, FolderKanban } from 'lucide-react';
-import NewProjectModal from './NewProjectModal'; // <-- Added import for the modal
+import { Plus, FolderKanban, Search, Calendar, User, DollarSign } from 'lucide-react';
+import NewProjectModal from './NewProjectModal';
+
+const currencySymbols = { USD: '$', EUR: '€', PHP: '₱', CAD: 'C$', AUD: 'A$' };
 
 export default function ProjectsList() {
-  // --- ADDED STATE to control the modal ---
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const { data: projects = [] } = useQuery({
     queryKey: ['projects'],
     queryFn: () => base44.entities.Project.list('-created_date'),
   });
 
-  // --- SAFETY NET ---
   const safeProjects = Array.isArray(projects) ? projects : [];
+
+  const filteredProjects = safeProjects.filter(p => 
+    (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   const statusColors = {
     planning: 'bg-gray-100 text-gray-700',
     in_progress: 'bg-blue-100 text-blue-700',
-    on_hold: 'bg-yellow-100 text-yellow-700',
     completed: 'bg-green-100 text-green-700',
-    cancelled: 'bg-red-100 text-red-700',
   };
 
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <div className="flex justify-between items-center">
-            <CardTitle>Projects</CardTitle>
-            {/* --- UPDATED BUTTON with onClick handler --- */}
+      <Card className="border-none shadow-sm bg-white/80 backdrop-blur">
+        <CardHeader className="border-b pb-6">
+          <div className="flex justify-between items-center mb-4">
+            <CardTitle className="text-2xl font-bold">Project Management</CardTitle>
             <Button 
-              className="bg-gradient-to-r from-blue-600 to-purple-600"
+              className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-md hover:opacity-90"
               onClick={() => setIsModalOpen(true)}
             >
               <Plus className="w-4 h-4 mr-2" />
               New Project
             </Button>
           </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+            <Input 
+              placeholder="Search by project title..." 
+              className="pl-10 h-11 bg-gray-50/50 border-gray-200" 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </CardHeader>
-        <CardContent>
-          {safeProjects.length === 0 ? (
-            <div className="text-center py-12">
-              <FolderKanban className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-              <p className="text-gray-500">No projects yet. Create your first project!</p>
+        <CardContent className="pt-8">
+          {filteredProjects.length === 0 ? (
+            <div className="text-center py-16 bg-gray-50/30 rounded-xl border-2 border-dashed border-gray-100">
+              <FolderKanban className="w-16 h-16 text-gray-200 mx-auto mb-4" />
+              <p className="text-gray-400 font-medium italic">No projects found. Start by creating a new initiation.</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {safeProjects.map(project => (
-                <Card key={project.id} className="hover:shadow-md transition-all">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredProjects.map(project => (
+                <Card key={project.id} className="hover:shadow-lg transition-all border-gray-100 group">
                   <CardContent className="pt-6">
-                    <div className="flex justify-between items-start mb-3">
-                      <h3 className="font-semibold text-lg">{project.name}</h3>
-                      {/* Added fallback to 'bg-gray-100' in case status is unexpected */}
-                      <Badge className={statusColors[project.status] || 'bg-gray-100'}>
-                        {project.status ? project.status.replace('_', ' ') : 'Unknown'}
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="font-extrabold text-lg text-gray-800 group-hover:text-blue-600 transition-colors">{project.name}</h3>
+                      <Badge className={`${statusColors[project.status] || 'bg-indigo-50 text-indigo-600'} border-none px-3`}>
+                        {project.status || 'Active'}
                       </Badge>
                     </div>
-                    {project.description && (
-                      <p className="text-sm text-gray-600 mb-3">{project.description}</p>
-                    )}
-                    {project.budget && (
-                      <p className="text-sm font-semibold text-green-600">
-                        Budget: ${project.budget.toLocaleString()}
-                      </p>
-                    )}
+                    
+                    <div className="space-y-2 mb-4 border-l-2 border-indigo-100 pl-3">
+                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                        <User className="w-3.5 h-3.5" /> 
+                        <span className="font-medium text-gray-700">{project.assigned_person || 'No lead assigned'}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs text-gray-400">
+                        <Calendar className="w-3.5 h-3.5" /> 
+                        {project.start_date ? `${project.start_date} to ${project.end_date}` : 'Timeline not set'}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-between items-center pt-3 border-t border-gray-50">
+                      <div className="flex items-center text-green-600 font-bold">
+                        {currencySymbols[project.currency || 'PHP']} {parseFloat(project.budget || 0).toLocaleString()}
+                      </div>
+                      {project.signed_contract && (
+                        <Badge variant="outline" className="text-[10px] uppercase text-blue-500 border-blue-200">Contract Attached</Badge>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               ))}
@@ -77,12 +100,10 @@ export default function ProjectsList() {
         </CardContent>
       </Card>
 
-      {/* --- ADDED THE MODAL COMPONENT --- */}
       <NewProjectModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
       />
-
     </div>
   );
 }
