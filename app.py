@@ -63,7 +63,7 @@ def init_db():
                   budget REAL,
                   currency TEXT,
                   signed_contract TEXT,
-                  status TEXT DEFAULT 'planning',
+                  status TEXT DEFAULT 'active',
                   user_email TEXT, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
@@ -136,7 +136,6 @@ def handle_me():
         conn.close()
         return jsonify({"message": "Profile updated successfully"}), 200
 
-# --- ANALYTICS ROUTE ---
 @app.route('/api/apps/giggenius-crm/analytics/track/batch', methods=['POST', 'OPTIONS'])
 def handle_analytics():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
@@ -151,7 +150,7 @@ def handle_base44_entities(entity_name):
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
-        'Project': 'projects'  # ADDED MAPPING
+        'Project': 'projects'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -163,13 +162,24 @@ def handle_base44_entities(entity_name):
 
     if request.method == 'GET':
         c.execute(f"PRAGMA table_info({table_name})")
-        cols = [col[1] for col in c.fetchall()]
+        db_cols = [col[1] for col in c.fetchall()]
+        
         query = f"SELECT * FROM {table_name}"
         params = []
-        if 'user_email' in cols and user_email:
-            query += " WHERE user_email = ?"
+        
+        where_clauses = []
+        if 'user_email' in db_cols and user_email:
+            where_clauses.append("user_email = ?")
             params.append(user_email)
         
+        for key, value in request.args.items():
+            if key in db_cols:
+                where_clauses.append(f"{key} = ?")
+                params.append(value)
+
+        if where_clauses:
+            query += " WHERE " + " AND ".join(where_clauses)
+
         c.execute(query + " ORDER BY id DESC", tuple(params))
         data = [dict(row) for row in c.fetchall()]
         conn.close()
@@ -180,9 +190,20 @@ def handle_base44_entities(entity_name):
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
+        if 'document_name' in data: data['client_name'] = data.pop('document_name')
         if 'user_email' in db_cols: data['user_email'] = user_email
+
+        # Elastic Bundling: Only insert into columns that actually exist
+        cleaned_data = {}
+        extra_fields = {}
+        for k, v in data.items():
+            if k in db_cols: cleaned_data[k] = v
+            else: extra_fields[k] = v
         
-        cleaned_data = {k: v for k, v in data.items() if k in db_cols}
+        if extra_fields and 'notes' in db_cols:
+            existing = cleaned_data.get('notes', '')
+            cleaned_data['notes'] = f"{existing} | Extra: {json.dumps(extra_fields)}".strip(' | ')
+
         columns = ', '.join(cleaned_data.keys())
         placeholders = ', '.join(['?'] * len(cleaned_data))
         
@@ -202,9 +223,8 @@ def handle_base44_single_item(entity_name, entity_id):
     
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
-        'ProjectTask': 'project_tasks', 
-        'Conversation': 'conversations', 'Campaign': 'campaigns',
-        'Project': 'projects'  # ADDED MAPPING
+        'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
+        'Campaign': 'campaigns', 'Project': 'projects'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
@@ -220,8 +240,18 @@ def handle_base44_single_item(entity_name, entity_id):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        cleaned_data = {k: v for k, v in data.items() if k in db_cols}
         
+        if 'document_name' in data: data['client_name'] = data.pop('document_name')
+
+        cleaned_data = {}
+        extra_fields = {}
+        for k, v in data.items():
+            if k in db_cols: cleaned_data[k] = v
+            else: extra_fields[k] = v
+            
+        if extra_fields and 'notes' in db_cols:
+            cleaned_data['notes'] = f"{cleaned_data.get('notes', '')} | Extra: {json.dumps(extra_fields)}".strip(' | ')
+
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()

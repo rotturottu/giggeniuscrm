@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
-import { X, User, Upload, Save, Calendar } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { X, User, Upload, Save, Calendar, FileText } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
 
-export default function NewProjectModal({ isOpen, onClose }) {
+export default function NewProjectModal({ isOpen, onClose, project }) {
   const qc = useQueryClient();
   
-  // 1. STATE TRACKING FOR INPUTS
+  // Initial state matches your database columns exactly
   const [formData, setFormData] = useState({
     name: '',
     assigned_person: '',
@@ -18,27 +18,47 @@ export default function NewProjectModal({ isOpen, onClose }) {
   });
   const [file, setFile] = useState(null);
 
-  // 2. DATABASE SAVE LOGIC
+  // THIS FIXES MODIFIABILITY: 
+  // When 'project' changes (you click a card), fill the form.
+  // When 'project' is null (you click New Project), clear the form.
+  useEffect(() => {
+    if (project) {
+      setFormData({ ...project });
+    } else {
+      setFormData({ 
+        name: '', 
+        assigned_person: '', 
+        start_date: '', 
+        end_date: '', 
+        description: '', 
+        budget: '', 
+        currency: 'PHP' 
+      });
+    }
+    setFile(null);
+  }, [project, isOpen]);
+
   const mutation = useMutation({
-    mutationFn: (data) => base44.entities.Project.create(data),
+    mutationFn: (data) => data.id 
+      ? base44.entities.Project.update(data.id, data) // Updates if it has an ID
+      : base44.entities.Project.create(data),        // Creates if new
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] });
       onClose();
-      // Reset form
-      setFormData({ name: '', assigned_person: '', start_date: '', end_date: '', description: '', budget: '', currency: 'PHP' });
-      setFile(null);
     },
     onError: (err) => alert("Save failed: " + err.message)
   });
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
+  // Handle both "Initialize" (active) and "Save Draft" (draft)
+  const handleAction = (status = 'active') => {
     if (!formData.name) return alert("Project Title is required");
-    // Send to backend
+    
     mutation.mutate({
       ...formData,
-      signed_contract: file ? file.name : ''
+      status: status, // This sets it as 'active' or 'draft'
+      signed_contract: file ? file.name : formData.signed_contract || ''
     });
   };
 
@@ -48,16 +68,18 @@ export default function NewProjectModal({ isOpen, onClose }) {
         
         <div className="flex justify-between items-center p-6 border-b border-gray-100">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">Project Initiation</h2>
-            <p className="text-xs text-gray-500">Fill out details to start a new project record</p>
+            <h2 className="text-xl font-bold text-gray-900">
+              {formData.id ? 'Edit Project' : 'Project Initiation'}
+            </h2>
+            <p className="text-xs text-gray-500">Fill out details to manage your project record</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full">
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 space-y-6 flex-1">
-          <div className="space-y-1.5">
+        <div className="p-6 space-y-6 flex-1 text-left">
+          <div className="space-y-1.5 text-left">
             <Label text="Project Title" required />
             <input 
               type="text" 
@@ -152,23 +174,26 @@ export default function NewProjectModal({ isOpen, onClose }) {
               >
                 <Upload className="w-8 h-8 text-purple-500 mb-2" />
                 <span className="text-sm font-medium text-gray-700">
-                  {file ? file.name : "Upload formal signed copy"}
+                  {file ? file.name : (formData.signed_contract || "Upload formal signed copy")}
                 </span>
               </label>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-gray-100 p-6 flex justify-end gap-3 bg-white rounded-b-xl">
-          <button onClick={onClose} className="px-5 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50">
-            Cancel
+        <div className="border-t border-gray-100 p-6 flex justify-end gap-3 bg-gray-50/50 rounded-b-xl">
+          <button 
+            onClick={() => handleAction('draft')} 
+            className="px-5 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+          >
+            <Save className="w-4 h-4" /> Save as Draft
           </button>
           <button 
-            onClick={handleSave}
+            onClick={() => handleAction('active')}
             disabled={mutation.isPending}
             className="px-6 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg shadow-md flex items-center gap-2"
           >
-            <Save className="w-4 h-4" /> {mutation.isPending ? "Saving..." : "Initialize Project"}
+            <FileText className="w-4 h-4" /> {mutation.isPending ? "Saving..." : "Initialize Project"}
           </button>
         </div>
       </div>
