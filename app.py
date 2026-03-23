@@ -59,7 +59,7 @@ def init_db():
                   title TEXT, list_name TEXT, status TEXT, parent_task_id INTEGER,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # NEW: CONVERSATIONS TABLE (Added to support the bridge between Contacts and Conversations)
+    # CONVERSATIONS TABLE 
     c.execute('''CREATE TABLE IF NOT EXISTS conversations
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   contact_name TEXT,
@@ -71,6 +71,16 @@ def init_db():
                   unread_count INTEGER DEFAULT 0,
                   user_email TEXT,
                   last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    # --- NEW: CAMPAIGNS TABLE ---
+    c.execute('''CREATE TABLE IF NOT EXISTS campaigns
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  name TEXT,
+                  status TEXT DEFAULT 'Draft',
+                  leads INTEGER DEFAULT 0,
+                  conversion TEXT DEFAULT '0%',
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
@@ -143,11 +153,15 @@ def handle_me():
 
 # --- GENERIC ENTITY HANDLERS ---
 
-@app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST'])
+@app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_entities(entity_name):
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
+        
     table_map = {
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
-        'Task': 'project_tasks', 'Invoice': 'invoices', 'Conversation': 'conversations'
+        'Task': 'project_tasks', 'Invoice': 'invoices', 'Conversation': 'conversations',
+        'Campaign': 'campaigns' # --- NEW: ADDED CAMPAIGN TO MAP ---
     }
     table_name = table_map.get(entity_name)
     if not table_name:
@@ -214,9 +228,15 @@ def handle_base44_entities(entity_name):
         finally:
             conn.close()
 
-@app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE'])
+@app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item(entity_name, entity_id):
-    table_map = {'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 'Conversation': 'conversations'}
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
+        
+    table_map = {
+        'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
+        'Conversation': 'conversations', 'Campaign': 'campaigns' # --- NEW: ADDED CAMPAIGN TO MAP ---
+    }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
