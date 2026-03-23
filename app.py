@@ -151,12 +151,13 @@ def handle_me():
         conn.close()
         return jsonify({"message": "Profile updated successfully"}), 200
 
-# --- GENERIC ENTITY HANDLERS ---
-
-@app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
-def handle_base44_entities(entity_name):
+# --- ANALYTICS ROUTE (To silence the frontend tracker 404 errors) ---
+@app.route('/api/apps/giggenius-crm/analytics/track/batch', methods=['POST', 'OPTIONS'])
+def handle_analytics():
     if request.method == 'OPTIONS':
         return jsonify({"status": "ok"}), 200
+    # Politely accept the tracking data and return success so the frontend stops yelling
+    return jsonify({"success": True}), 200
         
     table_map = {
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
