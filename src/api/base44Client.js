@@ -11,8 +11,6 @@ export const base44 = createClient({
   functionsVersion: 'v1',
   requiresAuth: false,
   
-  // This ensures standard SDK calls (like fetching contacts/tasks) 
-  // always include Gabrielle's email in the headers for Nginx to see
   headers: () => {
     const savedEmail = localStorage.getItem('userEmail');
     return {
