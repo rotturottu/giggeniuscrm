@@ -134,8 +134,8 @@ def handle_base44_entities(entity_name):
 
     table_map = {
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
-        'Task': 'project_tasks', 'Invoice': 'invoices', 'Conversation': 'conversations',
-        'Campaign': 'campaigns'
+        'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
+        'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -186,6 +186,7 @@ def handle_base44_single_item(entity_name, entity_id):
     
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
+        'ProjectTask': 'project_tasks', 
         'Conversation': 'conversations', 'Campaign': 'campaigns'
     }
     table_name = table_map.get(entity_name)
