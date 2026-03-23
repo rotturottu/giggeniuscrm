@@ -52,7 +52,7 @@ def init_db():
                   user_email TEXT, last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # NEW: PROJECTS TABLE
+    # PROJECTS TABLE (Integrated properly)
     c.execute('''CREATE TABLE IF NOT EXISTS projects
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   name TEXT, 
@@ -136,6 +136,7 @@ def handle_me():
         conn.close()
         return jsonify({"message": "Profile updated successfully"}), 200
 
+# --- ANALYTICS ROUTE ---
 @app.route('/api/apps/giggenius-crm/analytics/track/batch', methods=['POST', 'OPTIONS'])
 def handle_analytics():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
@@ -163,23 +164,18 @@ def handle_base44_entities(entity_name):
     if request.method == 'GET':
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        
         query = f"SELECT * FROM {table_name}"
         params = []
-        
         where_clauses = []
         if 'user_email' in db_cols and user_email:
             where_clauses.append("user_email = ?")
             params.append(user_email)
-        
         for key, value in request.args.items():
             if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
-
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
-
         c.execute(query + " ORDER BY id DESC", tuple(params))
         data = [dict(row) for row in c.fetchall()]
         conn.close()
@@ -190,10 +186,11 @@ def handle_base44_entities(entity_name):
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
+        # RESTORED: Specific field mappings
         if 'document_name' in data: data['client_name'] = data.pop('document_name')
         if 'user_email' in db_cols: data['user_email'] = user_email
 
-        # Elastic Bundling: Only insert into columns that actually exist
+        # RESTORED: Elastic Bundling Logic
         cleaned_data = {}
         extra_fields = {}
         for k, v in data.items():
@@ -206,7 +203,6 @@ def handle_base44_entities(entity_name):
 
         columns = ', '.join(cleaned_data.keys())
         placeholders = ', '.join(['?'] * len(cleaned_data))
-        
         try:
             c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
             conn.commit()
@@ -243,6 +239,7 @@ def handle_base44_single_item(entity_name, entity_id):
         
         if 'document_name' in data: data['client_name'] = data.pop('document_name')
 
+        # RESTORED: Elastic Bundling for PUT
         cleaned_data = {}
         extra_fields = {}
         for k, v in data.items():

@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Upload, Save, Calendar, FileText } from 'lucide-react';
+import { 
+  X, User, Upload, Save, Calendar, FileText, 
+  ChevronDown, DollarSign, Info, Briefcase
+} from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { base44 } from '@/api/base44Client';
+import { Button } from '@/components/ui/button';
 
 export default function NewProjectModal({ isOpen, onClose, project }) {
   const qc = useQueryClient();
   
-  // Initial state matches your database columns exactly
+  // 1. STATE MANAGEMENT
   const [formData, setFormData] = useState({
     name: '',
     assigned_person: '',
@@ -14,104 +18,133 @@ export default function NewProjectModal({ isOpen, onClose, project }) {
     end_date: '',
     description: '',
     budget: '',
-    currency: 'PHP'
+    currency: 'PHP',
+    status: 'active'
   });
   const [file, setFile] = useState(null);
 
-  // THIS FIXES MODIFIABILITY: 
-  // When 'project' changes (you click a card), fill the form.
-  // When 'project' is null (you click New Project), clear the form.
+  // 2. MODIFIABILITY LOGIC
   useEffect(() => {
     if (project) {
-      setFormData({ ...project });
+      // If editing, populate with existing data
+      setFormData({
+        id: project.id,
+        name: project.name || '',
+        assigned_person: project.assigned_person || '',
+        start_date: project.start_date || '',
+        end_date: project.end_date || '',
+        description: project.description || '',
+        budget: project.budget || '',
+        currency: project.currency || 'PHP',
+        status: project.status || 'active'
+      });
     } else {
-      setFormData({ 
-        name: '', 
-        assigned_person: '', 
-        start_date: '', 
-        end_date: '', 
-        description: '', 
-        budget: '', 
-        currency: 'PHP' 
+      // If new project, reset to empty
+      setFormData({
+        name: '',
+        assigned_person: '',
+        start_date: '',
+        end_date: '',
+        description: '',
+        budget: '',
+        currency: 'PHP',
+        status: 'active'
       });
     }
     setFile(null);
   }, [project, isOpen]);
 
+  // 3. DATABASE MUTATION
   const mutation = useMutation({
     mutationFn: (data) => data.id 
-      ? base44.entities.Project.update(data.id, data) // Updates if it has an ID
-      : base44.entities.Project.create(data),        // Creates if new
+      ? base44.entities.Project.update(data.id, data) 
+      : base44.entities.Project.create(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['projects'] });
       onClose();
     },
-    onError: (err) => alert("Save failed: " + err.message)
+    onError: (err) => alert("Database Error: " + err.message)
   });
 
   if (!isOpen) return null;
 
-  // Handle both "Initialize" (active) and "Save Draft" (draft)
-  const handleAction = (status = 'active') => {
-    if (!formData.name) return alert("Project Title is required");
+  // 4. ACTION HANDLERS
+  const handleAction = (targetStatus) => {
+    if (!formData.name) return alert("Please enter a Project Title");
     
-    mutation.mutate({
-      ...formData,
-      status: status, // This sets it as 'active' or 'draft'
-      signed_contract: file ? file.name : formData.signed_contract || ''
+    mutation.mutate({ 
+      ...formData, 
+      status: targetStatus,
+      signed_contract: file ? file.name : formData.signed_contract 
     });
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 transition-all animate-in fade-in duration-300">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[92vh] overflow-y-auto flex flex-col border border-gray-100">
         
-        <div className="flex justify-between items-center p-6 border-b border-gray-100">
-          <div>
-            <h2 className="text-xl font-bold text-gray-900">
-              {formData.id ? 'Edit Project' : 'Project Initiation'}
-            </h2>
-            <p className="text-xs text-gray-500">Fill out details to manage your project record</p>
+        {/* Header Section */}
+        <div className="flex justify-between items-center p-6 border-b border-gray-50 bg-gray-50/30">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <Briefcase className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <h2 className="text-xl font-extrabold text-gray-900 tracking-tight">
+                {formData.id ? 'Modify Project Record' : 'Initialize New Project'}
+              </h2>
+              <p className="text-xs text-gray-500 font-medium">Internal Project Initiation Phase</p>
+            </div>
           </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 p-1 hover:bg-gray-100 rounded-full">
+          <button 
+            onClick={onClose} 
+            className="text-gray-400 hover:text-gray-600 p-2 hover:bg-white rounded-full transition-all border border-transparent hover:border-gray-100"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="p-6 space-y-6 flex-1 text-left">
-          <div className="space-y-1.5 text-left">
+        {/* Scrollable Body */}
+        <div className="p-8 space-y-8 flex-1 text-left">
+          
+          {/* Project Title Field */}
+          <div className="space-y-2 text-left">
             <Label text="Project Title" required />
             <input 
               type="text" 
-              value={formData.name}
-              onChange={e => setFormData({...formData, name: e.target.value})}
-              placeholder="e.g. Website Development" 
-              className="w-full border border-gray-200 rounded-lg p-2.5 focus:border-purple-600 outline-none"
+              value={formData.name} 
+              onChange={e => setFormData({...formData, name: e.target.value})} 
+              className="w-full border-2 border-gray-100 rounded-xl p-3 text-base font-medium focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all placeholder:text-gray-300" 
+              placeholder="e.g. Enterprise CRM Development"
             />
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label text="Assigned Person" />
-              <div className="relative">
-                <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Assigned Lead Field */}
+            <div className="space-y-2 text-left">
+              <Label text="Assigned Project Lead" />
+              <div className="relative group">
+                <div className="absolute left-3 top-3.5 p-0.5 rounded transition-colors group-focus-within:text-purple-600 text-gray-400">
+                  <User className="w-4 h-4" />
+                </div>
                 <input 
                   type="text" 
-                  value={formData.assigned_person}
-                  onChange={e => setFormData({...formData, assigned_person: e.target.value})}
-                  placeholder="Lead name..." 
-                  className="w-full border border-gray-200 rounded-lg py-2.5 pl-10 pr-3 focus:border-purple-500 outline-none"
+                  value={formData.assigned_person} 
+                  onChange={e => setFormData({...formData, assigned_person: e.target.value})} 
+                  className="w-full border-2 border-gray-100 rounded-xl py-3 pl-10 pr-4 text-sm font-semibold focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all" 
+                  placeholder="Full Name"
                 />
               </div>
             </div>
 
-            <div className="space-y-1.5">
-              <Label text="Initial Budget" />
-              <div className="flex">
+            {/* Budget & Currency Field */}
+            <div className="space-y-2 text-left">
+              <Label text="Estimated Initial Budget" />
+              <div className="flex group">
                 <select 
-                  value={formData.currency}
-                  onChange={e => setFormData({...formData, currency: e.target.value})}
-                  className="border border-gray-200 border-r-0 rounded-l-lg bg-gray-50 px-3 text-sm outline-none"
+                  value={formData.currency} 
+                  onChange={e => setFormData({...formData, currency: e.target.value})} 
+                  className="border-2 border-gray-100 border-r-0 rounded-l-xl bg-gray-50 px-3 text-xs font-bold text-gray-600 outline-none focus:border-purple-500 transition-all cursor-pointer"
                 >
                   <option value="PHP">PHP (₱)</option>
                   <option value="USD">USD ($)</option>
@@ -119,82 +152,93 @@ export default function NewProjectModal({ isOpen, onClose, project }) {
                 </select>
                 <input 
                   type="number" 
-                  value={formData.budget}
-                  onChange={e => setFormData({...formData, budget: e.target.value})}
-                  placeholder="0.00" 
-                  className="w-full border border-gray-200 rounded-r-lg p-2.5 focus:border-purple-500 outline-none"
+                  value={formData.budget} 
+                  onChange={e => setFormData({...formData, budget: e.target.value})} 
+                  className="w-full border-2 border-gray-100 rounded-r-xl p-3 text-sm font-bold focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all" 
+                  placeholder="0.00"
                 />
               </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1.5">
+          {/* Timeline Section */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2 text-left">
               <Label text="Start Date" />
-              <input 
-                type="date" 
-                value={formData.start_date}
-                onChange={e => setFormData({...formData, start_date: e.target.value})}
-                className="w-full border border-gray-200 rounded-lg p-2.5 text-sm outline-none" 
-              />
+              <div className="relative">
+                <Calendar className="absolute right-3 top-3 w-4 h-4 text-gray-300 pointer-events-none" />
+                <input 
+                  type="date" 
+                  value={formData.start_date} 
+                  onChange={e => setFormData({...formData, start_date: e.target.value})} 
+                  className="w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-medium focus:border-purple-500 outline-none appearance-none" 
+                />
+              </div>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-2 text-left">
               <Label text="Target Completion" />
-              <input 
-                type="date" 
-                value={formData.end_date}
-                onChange={e => setFormData({...formData, end_date: e.target.value})}
-                className="w-full border border-gray-200 rounded-lg p-2.5 text-sm outline-none" 
-              />
+              <div className="relative">
+                <Calendar className="absolute right-3 top-3 w-4 h-4 text-gray-300 pointer-events-none" />
+                <input 
+                  type="date" 
+                  value={formData.end_date} 
+                  onChange={e => setFormData({...formData, end_date: e.target.value})} 
+                  className="w-full border-2 border-gray-100 rounded-xl p-3 text-sm font-medium focus:border-purple-500 outline-none appearance-none" 
+                />
+              </div>
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label text="Project Details / Scope of Work" />
+          {/* Description Section */}
+          <div className="space-y-2 text-left">
+            <Label text="Project Scope & Objectives" />
             <textarea 
-              value={formData.description}
-              onChange={e => setFormData({...formData, description: e.target.value})}
-              placeholder="Outline objectives..." 
-              className="w-full border border-gray-200 rounded-lg p-3 min-h-[120px] resize-none text-sm outline-none"
-            ></textarea>
+              value={formData.description} 
+              onChange={e => setFormData({...formData, description: e.target.value})} 
+              className="w-full border-2 border-gray-100 rounded-xl p-4 min-h-[140px] resize-none text-sm font-medium focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 outline-none transition-all" 
+              placeholder="Outline the key deliverables and project scope here..."
+            />
           </div>
 
-          <div className="space-y-2">
-            <Label text="Signed Contract Copy" />
-            <div className="relative">
+          {/* File Upload Section */}
+          <div className="space-y-3">
+            <Label text="Formal Signed Contract" />
+            <div className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center bg-gray-50/50 hover:bg-purple-50/30 hover:border-purple-200 transition-all cursor-pointer group relative">
               <input 
                 type="file" 
-                id="contract-upload"
+                id="file-up" 
                 className="hidden" 
-                onChange={(e) => setFile(e.target.files[0])}
+                onChange={(e) => setFile(e.target.files[0])} 
               />
-              <label 
-                htmlFor="contract-upload"
-                className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-6 bg-gray-50 hover:bg-purple-50 cursor-pointer transition-all"
-              >
-                <Upload className="w-8 h-8 text-purple-500 mb-2" />
-                <span className="text-sm font-medium text-gray-700">
-                  {file ? file.name : (formData.signed_contract || "Upload formal signed copy")}
+              <label htmlFor="file-up" className="cursor-pointer flex flex-col items-center">
+                <div className="p-3 bg-white rounded-full shadow-sm mb-3 group-hover:scale-110 transition-transform">
+                  <Upload className="w-6 h-6 text-purple-500" />
+                </div>
+                <span className="text-sm font-bold text-gray-700 block">
+                  {file ? file.name : (formData.signed_contract || "Upload Signed Contract PDF")}
                 </span>
+                <p className="text-[11px] text-gray-400 mt-1 uppercase tracking-widest font-bold">Max File Size: 20MB</p>
               </label>
             </div>
           </div>
         </div>
 
-        <div className="border-t border-gray-100 p-6 flex justify-end gap-3 bg-gray-50/50 rounded-b-xl">
-          <button 
+        {/* Footer Actions */}
+        <div className="border-t border-gray-100 p-6 flex flex-col sm:flex-row justify-end gap-3 bg-white rounded-b-2xl shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+          <Button 
+            variant="outline" 
             onClick={() => handleAction('draft')} 
-            className="px-5 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 flex items-center gap-2"
+            className="order-2 sm:order-1 gap-2 bg-white text-gray-600 border-gray-200 h-11 px-6 rounded-xl hover:bg-gray-50 font-bold text-sm"
           >
             <Save className="w-4 h-4" /> Save as Draft
-          </button>
-          <button 
-            onClick={() => handleAction('active')}
+          </Button>
+          <Button 
+            onClick={() => handleAction('active')} 
             disabled={mutation.isPending}
-            className="px-6 py-2 text-sm font-semibold text-white bg-gradient-to-r from-purple-600 to-indigo-600 rounded-lg shadow-md flex items-center gap-2"
+            className="order-1 sm:order-2 h-11 px-8 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold text-sm shadow-lg shadow-purple-200 hover:shadow-purple-300 hover:opacity-95 transition-all flex items-center gap-2 active:scale-95"
           >
-            <FileText className="w-4 h-4" /> {mutation.isPending ? "Saving..." : "Initialize Project"}
-          </button>
+            {mutation.isPending ? "Syncing..." : (formData.id ? "Update Project" : "Initialize Project")}
+          </Button>
         </div>
       </div>
     </div>
@@ -203,8 +247,8 @@ export default function NewProjectModal({ isOpen, onClose, project }) {
 
 function Label({ text, required }) {
   return (
-    <label className="text-xs font-bold text-gray-600 uppercase tracking-wider block">
-      {text} {required && <span className="text-red-500">*</span>}
+    <label className="text-[11px] font-black text-gray-400 uppercase tracking-[0.1em] block ml-1">
+      {text} {required && <span className="text-red-500 text-sm">*</span>}
     </label>
   );
 }
