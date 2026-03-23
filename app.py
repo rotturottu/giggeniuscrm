@@ -73,7 +73,7 @@ def init_db():
                   last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # --- NEW: CAMPAIGNS TABLE ---
+    # --- CAMPAIGNS TABLE ---
     c.execute('''CREATE TABLE IF NOT EXISTS campaigns
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   name TEXT,
@@ -151,18 +151,23 @@ def handle_me():
         conn.close()
         return jsonify({"message": "Profile updated successfully"}), 200
 
-# --- ANALYTICS ROUTE (To silence the frontend tracker 404 errors) ---
+# --- ANALYTICS ROUTE ---
 @app.route('/api/apps/giggenius-crm/analytics/track/batch', methods=['POST', 'OPTIONS'])
 def handle_analytics():
     if request.method == 'OPTIONS':
         return jsonify({"status": "ok"}), 200
-    # Politely accept the tracking data and return success so the frontend stops yelling
     return jsonify({"success": True}), 200
-        
+
+# --- GENERIC ENTITY HANDLERS ---
+@app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
+def handle_base44_entities(entity_name):
+    if request.method == 'OPTIONS':
+        return jsonify({"status": "ok"}), 200
+
     table_map = {
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
         'Task': 'project_tasks', 'Invoice': 'invoices', 'Conversation': 'conversations',
-        'Campaign': 'campaigns' # --- NEW: ADDED CAMPAIGN TO MAP ---
+        'Campaign': 'campaigns'
     }
     table_name = table_map.get(entity_name)
     if not table_name:
@@ -198,13 +203,11 @@ def handle_analytics():
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
-        # Mapping frontend names to DB columns
         if 'document_name' in data:
             data['client_name'] = data.pop('document_name')
         if 'user_email' in db_cols:
             data['user_email'] = user_email
 
-        # Bundle extra fields into notes for flexibility
         extra_fields = {}
         cleaned_data = {}
         for k, v in data.items():
@@ -236,7 +239,7 @@ def handle_base44_single_item(entity_name, entity_id):
         
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
-        'Conversation': 'conversations', 'Campaign': 'campaigns' # --- NEW: ADDED CAMPAIGN TO MAP ---
+        'Conversation': 'conversations', 'Campaign': 'campaigns'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
