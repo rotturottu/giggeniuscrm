@@ -15,73 +15,48 @@ def init_db():
     # 1. USERS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  first_name TEXT,
-                  last_name TEXT,
-                  email TEXT UNIQUE,
-                  password TEXT,
-                  profile_picture TEXT)''')
+                  first_name TEXT, last_name TEXT, email TEXT UNIQUE,
+                  password TEXT, profile_picture TEXT)''')
                   
-    # 2. INVOICES / DOCUMENTS TABLE
+    # 2. INVOICES TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS invoices
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  invoice_number TEXT UNIQUE,
-                  client_name TEXT,
-                  type TEXT,
-                  total REAL,
-                  currency TEXT DEFAULT 'PHP',
-                  status TEXT DEFAULT 'draft',
-                  issue_date TEXT,
-                  notes TEXT,
-                  items TEXT,
-                  tax_rate REAL DEFAULT 0,
-                  user_email TEXT,
-                  FOREIGN KEY(user_email) REFERENCES users(email))''')
+                  invoice_number TEXT UNIQUE, client_name TEXT, type TEXT,
+                  total REAL, currency TEXT DEFAULT 'PHP', status TEXT DEFAULT 'draft',
+                  issue_date TEXT, notes TEXT, items TEXT, tax_rate REAL DEFAULT 0,
+                  user_email TEXT, FOREIGN KEY(user_email) REFERENCES users(email))''')
                   
-    # 3. OTHER CRM TABLES
+    # 3. CRM TABLES
     c.execute('''CREATE TABLE IF NOT EXISTS departments
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  name TEXT, head_email TEXT, description TEXT, budget REAL, currency TEXT,
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, head_email TEXT,
+                  description TEXT, budget REAL, currency TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS employees
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  first_name TEXT, last_name TEXT, email TEXT, department TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, first_name TEXT, last_name TEXT,
+                  email TEXT, department TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS contacts
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  name TEXT, email TEXT, phone TEXT, company TEXT, status TEXT,
-                  user_email TEXT,
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT,
+                  phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  title TEXT, list_name TEXT, status TEXT, parent_task_id INTEGER,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, list_name TEXT,
+                  status TEXT, parent_task_id INTEGER, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # CONVERSATIONS TABLE 
     c.execute('''CREATE TABLE IF NOT EXISTS conversations
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  contact_name TEXT,
-                  contact_email TEXT,
-                  subject TEXT,
-                  last_message TEXT,
-                  platform TEXT DEFAULT 'gmail',
-                  status TEXT DEFAULT 'active',
-                  unread_count INTEGER DEFAULT 0,
-                  user_email TEXT,
-                  last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, contact_name TEXT, contact_email TEXT,
+                  subject TEXT, last_message TEXT, platform TEXT DEFAULT 'gmail',
+                  status TEXT DEFAULT 'active', unread_count INTEGER DEFAULT 0,
+                  user_email TEXT, last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # --- CAMPAIGNS TABLE ---
+    # 4. CAMPAIGNS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS campaigns
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  name TEXT,
-                  status TEXT DEFAULT 'Draft',
-                  leads INTEGER DEFAULT 0,
-                  conversion TEXT DEFAULT '0%',
-                  user_email TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, status TEXT DEFAULT 'Draft',
+                  leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%',
+                  user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
     conn.close()
@@ -120,33 +95,28 @@ def login():
 
 @app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
 def handle_me():
-    if request.method == 'OPTIONS':
-        return jsonify({"status": "ok"}), 200
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
-    if not user_email:
-        return jsonify({"error": "No user email provided"}), 401
+    if not user_email: return jsonify({"error": "No user email provided"}), 401
+    
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
+    
     if request.method == 'GET':
         c.execute("SELECT id, first_name, last_name, email, profile_picture FROM users WHERE email=?", (user_email,))
         user_row = c.fetchone()
         conn.close()
         if user_row:
-            user_data = dict(user_row)
-            return jsonify({
-                "id": user_data['id'],
-                "firstName": user_data['first_name'],
-                "lastName": user_data['last_name'],
-                "email": user_data['email'],
-                "profilePicture": user_data['profile_picture'],
-                "role": "user"
-            }), 200
+            u = dict(user_row)
+            return jsonify({"id": u['id'], "firstName": u['first_name'], "lastName": u['last_name'],
+                            "email": u['email'], "profilePicture": u['profile_picture'], "role": "user"}), 200
         return jsonify({"error": "User not found"}), 404
+    
     if request.method == 'PUT':
         data = request.json
-        c.execute("""UPDATE users SET first_name=?, last_name=?, email=?, profile_picture=? 
-                     WHERE email=?""", (data.get('firstName'), data.get('lastName'), data.get('email'), data.get('profilePicture'), user_email))
+        c.execute("UPDATE users SET first_name=?, last_name=?, email=?, profile_picture=? WHERE email=?",
+                  (data.get('firstName'), data.get('lastName'), data.get('email'), data.get('profilePicture'), user_email))
         conn.commit()
         conn.close()
         return jsonify({"message": "Profile updated successfully"}), 200
@@ -154,15 +124,13 @@ def handle_me():
 # --- ANALYTICS ROUTE ---
 @app.route('/api/apps/giggenius-crm/analytics/track/batch', methods=['POST', 'OPTIONS'])
 def handle_analytics():
-    if request.method == 'OPTIONS':
-        return jsonify({"status": "ok"}), 200
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     return jsonify({"success": True}), 200
 
 # --- GENERIC ENTITY HANDLERS ---
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_entities(entity_name):
-    if request.method == 'OPTIONS':
-        return jsonify({"status": "ok"}), 200
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
 
     table_map = {
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
@@ -170,8 +138,7 @@ def handle_base44_entities(entity_name):
         'Campaign': 'campaigns'
     }
     table_name = table_map.get(entity_name)
-    if not table_name:
-        return jsonify({"error": f"Table for {entity_name} not found"}), 404
+    if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
     
     user_email = request.headers.get('User-Email')
     conn = sqlite3.connect('giggenius.db')
@@ -187,12 +154,6 @@ def handle_base44_entities(entity_name):
             query += " WHERE user_email = ?"
             params.append(user_email)
         
-        for key, value in request.args.items():
-            if key in cols:
-                prefix = " AND " if "WHERE" in query else " WHERE "
-                query += f"{prefix}{key} = ?"
-                params.append(value)
-
         c.execute(query + " ORDER BY id DESC", tuple(params))
         data = [dict(row) for row in c.fetchall()]
         conn.close()
@@ -203,25 +164,12 @@ def handle_base44_entities(entity_name):
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
-        if 'document_name' in data:
-            data['client_name'] = data.pop('document_name')
-        if 'user_email' in db_cols:
-            data['user_email'] = user_email
-
-        extra_fields = {}
-        cleaned_data = {}
-        for k, v in data.items():
-            if k in db_cols:
-                cleaned_data[k] = v
-            else:
-                extra_fields[k] = v
+        if 'user_email' in db_cols: data['user_email'] = user_email
         
-        if extra_fields and 'notes' in db_cols:
-            existing_notes = cleaned_data.get('notes', '')
-            cleaned_data['notes'] = f"{existing_notes} | Custom Fields: {json.dumps(extra_fields)}".strip(' | ')
-
+        cleaned_data = {k: v for k, v in data.items() if k in db_cols}
         columns = ', '.join(cleaned_data.keys())
         placeholders = ', '.join(['?'] * len(cleaned_data))
+        
         try:
             c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
             conn.commit()
@@ -234,9 +182,8 @@ def handle_base44_entities(entity_name):
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item(entity_name, entity_id):
-    if request.method == 'OPTIONS':
-        return jsonify({"status": "ok"}), 200
-        
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'Conversation': 'conversations', 'Campaign': 'campaigns'
@@ -255,19 +202,8 @@ def handle_base44_single_item(entity_name, entity_id):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
+        cleaned_data = {k: v for k, v in data.items() if k in db_cols}
         
-        if 'document_name' in data:
-            data['client_name'] = data.pop('document_name')
-            
-        extra_fields = {}
-        cleaned_data = {}
-        for k, v in data.items():
-            if k in db_cols: cleaned_data[k] = v
-            else: extra_fields[k] = v
-        
-        if extra_fields and 'notes' in db_cols:
-            cleaned_data['notes'] = f"{cleaned_data.get('notes', '')} | Updated: {json.dumps(extra_fields)}".strip(' | ')
-
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()
@@ -276,5 +212,3 @@ def handle_base44_single_item(entity_name, entity_id):
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True, port=5000)
-
-#Sample Comment for committing
