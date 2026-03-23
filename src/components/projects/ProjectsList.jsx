@@ -13,17 +13,17 @@ const currencySymbols = { USD: '$', EUR: '€', PHP: '₱', CAD: 'C$', AUD: 'A$'
 
 export default function ProjectsList() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingProject, setEditingProject] = useState(null); // Track project being modified
+  const [editingProject, setEditingProject] = useState(null); 
   const [searchTerm, setSearchTerm] = useState('');
   const qc = useQueryClient();
 
-  // Fetch 'active' projects for the main list
+  // Fetch 'active' projects
   const { data: projects = [] } = useQuery({
     queryKey: ['projects', 'active'],
     queryFn: () => base44.entities.Project.filter({ status: 'active' }, '-created_date'),
   });
 
-  // Fetch 'draft' projects for the dropdown
+  // Fetch 'draft' projects
   const { data: drafts = [] } = useQuery({
     queryKey: ['projects', 'drafts'],
     queryFn: () => base44.entities.Project.filter({ status: 'draft' }, '-created_date'),
@@ -34,27 +34,23 @@ export default function ProjectsList() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] })
   });
 
-  const safeProjects = Array.isArray(projects) ? projects : [];
-
-  const filteredProjects = safeProjects.filter(p => 
+  const filteredProjects = (Array.isArray(projects) ? projects : []).filter(p => 
     (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const statusColors = {
     planning: 'bg-gray-100 text-gray-700',
-    in_progress: 'bg-blue-100 text-blue-700',
+    active: 'bg-blue-100 text-blue-700',
     completed: 'bg-green-100 text-green-700',
   };
 
-  // Open modal for a specific project to edit
   const handleEdit = (project) => {
     setEditingProject(project);
     setIsModalOpen(true);
   };
 
-  // Open modal for a completely new project
   const handleNewProject = () => {
-    setEditingProject(null);
+    setEditingProject(null); // CRITICAL: Reset the edit state
     setIsModalOpen(true);
   };
 
@@ -65,7 +61,6 @@ export default function ProjectsList() {
           <div className="flex justify-between items-center mb-4">
             <CardTitle className="text-2xl font-bold text-gray-800">Project Management</CardTitle>
             <div className="flex gap-2">
-              {/* DRAFTS DROPDOWN */}
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="gap-2 border-gray-200 bg-white text-gray-600">
@@ -98,7 +93,7 @@ export default function ProjectsList() {
               </DropdownMenu>
 
               <Button 
-                className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-md hover:opacity-90"
+                className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-md hover:opacity-95 transition-all"
                 onClick={handleNewProject}
               >
                 <Plus className="w-4 h-4 mr-2" />
@@ -120,20 +115,22 @@ export default function ProjectsList() {
           {filteredProjects.length === 0 ? (
             <div className="text-center py-16 bg-gray-50/30 rounded-xl border-2 border-dashed border-gray-100">
               <FolderKanban className="w-16 h-16 text-gray-200 mx-auto mb-4" />
-              <p className="text-gray-400 font-medium italic">No projects found.</p>
+              <p className="text-gray-400 font-medium italic">No active projects found.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProjects.map(project => (
                 <Card 
                   key={project.id} 
-                  className="hover:shadow-lg transition-all border-gray-100 group cursor-pointer"
-                  onClick={() => handleEdit(project)} // MAKE CARDS MODIFIABLE
+                  className="hover:shadow-lg transition-all border-gray-100 group cursor-pointer active:scale-[0.98]"
+                  onClick={() => handleEdit(project)}
                 >
                   <CardContent className="pt-6">
                     <div className="flex justify-between items-start mb-4">
-                      <h3 className="font-extrabold text-lg text-gray-800 group-hover:text-blue-600 transition-colors">{project.name}</h3>
-                      <Badge className={`${statusColors[project.status] || 'bg-indigo-50 text-indigo-600'} border-none px-3`}>
+                      <h3 className="font-extrabold text-lg text-gray-800 group-hover:text-blue-600 transition-colors truncate pr-2">
+                        {project.name}
+                      </h3>
+                      <Badge className={`${statusColors[project.status] || 'bg-indigo-50 text-indigo-600'} border-none px-3 capitalize shadow-none`}>
                         {project.status || 'Active'}
                       </Badge>
                     </div>
@@ -141,7 +138,9 @@ export default function ProjectsList() {
                     <div className="space-y-2 mb-4 border-l-2 border-indigo-100 pl-3">
                       <div className="flex items-center gap-2 text-sm text-gray-500">
                         <User className="w-3.5 h-3.5 text-indigo-400" /> 
-                        <span className="font-medium text-gray-700">{project.assigned_person || 'No lead assigned'}</span>
+                        <span className="font-medium text-gray-700">
+                          {project.assigned_person || 'No lead assigned'}
+                        </span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-400">
                         <Calendar className="w-3.5 h-3.5 text-indigo-400" /> 
@@ -156,7 +155,7 @@ export default function ProjectsList() {
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50"
                         onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(project.id); }}
                       >
                         <Trash2 className="w-4 h-4"/>
@@ -173,7 +172,7 @@ export default function ProjectsList() {
       <NewProjectModal 
         isOpen={isModalOpen} 
         onClose={() => setIsModalOpen(false)} 
-        project={editingProject} // PASS THE PROJECT DATA TO THE MODAL
+        project={editingProject} 
       />
     </div>
   );
