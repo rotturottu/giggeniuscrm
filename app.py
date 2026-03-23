@@ -52,6 +52,21 @@ def init_db():
                   user_email TEXT, last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # NEW: PROJECTS TABLE
+    c.execute('''CREATE TABLE IF NOT EXISTS projects
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  name TEXT, 
+                  assigned_person TEXT,
+                  start_date TEXT,
+                  end_date TEXT,
+                  description TEXT,
+                  budget REAL,
+                  currency TEXT,
+                  signed_contract TEXT,
+                  status TEXT DEFAULT 'planning',
+                  user_email TEXT, 
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
     # 4. CAMPAIGNS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS campaigns
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, status TEXT DEFAULT 'Draft',
@@ -135,7 +150,8 @@ def handle_base44_entities(entity_name):
     table_map = {
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
-        'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns'
+        'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
+        'Project': 'projects'  # ADDED MAPPING
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -187,7 +203,8 @@ def handle_base44_single_item(entity_name, entity_id):
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 
-        'Conversation': 'conversations', 'Campaign': 'campaigns'
+        'Conversation': 'conversations', 'Campaign': 'campaigns',
+        'Project': 'projects'  # ADDED MAPPING
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
