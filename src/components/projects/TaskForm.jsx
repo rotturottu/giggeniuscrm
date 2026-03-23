@@ -377,7 +377,7 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto z-[9999]">      
         <DialogHeader>
           <DialogTitle className="text-base">{task ? 'Edit Task' : 'New Task'}</DialogTitle>
         </DialogHeader>

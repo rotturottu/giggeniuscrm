@@ -110,7 +110,7 @@ export default function Campaigns() {
 
       {isModalOpen && (
         /* FIXED: Changed z-50 to z-[999] to ensure the blur covers the top navigation bar */
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[999] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center">
               <h2 className="text-lg font-bold text-slate-900">Create New Campaign</h2>
@@ -162,7 +162,6 @@ export default function Campaigns() {
           </div>
         </div>
       )}
-
     </div>
   );
 }
