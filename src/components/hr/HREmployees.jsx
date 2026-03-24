@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { UserPlus, AlertCircle, Trash2, Loader2 } from 'lucide-react';
+import toast from 'react-hot-toast';
 
 const emptyForm = { first_name: '', last_name: '', email: '', department: '' };
 
@@ -37,6 +38,7 @@ export default function HREmployees() {
       setShowForm(false);
       setForm(emptyForm);
       setError('');
+      toast.success('Employee registered successfully');
     },
     onError: (err) => {
       setError(err.message || "Failed to save employee. Check backend logs.");
@@ -45,7 +47,12 @@ export default function HREmployees() {
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Employee.delete(id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['employees'] }),
+    onSuccess: () => {
+      // Refresh both the directory and onboarding lists since data is linked
+      qc.invalidateQueries({ queryKey: ['employees'] });
+      qc.invalidateQueries({ queryKey: ['onboarding_tasks'] });
+      toast.success('Employee removed');
+    },
   });
 
   const handleSave = () => {
@@ -69,7 +76,7 @@ export default function HREmployees() {
   };
 
   return (
-    <div className="bg-white rounded-xl border p-6 shadow-sm">
+    <div className="bg-white rounded-xl border p-6 shadow-sm text-left">
       <div className="flex justify-between items-center mb-6">
         <div>
           <h2 className="text-xl font-bold text-gray-900">Employee Directory</h2>
@@ -121,7 +128,7 @@ export default function HREmployees() {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      onClick={() => { if(confirm('Remove this employee?')) deleteMutation.mutate(emp.id); }} 
+                      onClick={() => { if(confirm('Remove this employee? This will also remove their onboarding status.')) deleteMutation.mutate(emp.id); }} 
                       className="text-gray-300 hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />

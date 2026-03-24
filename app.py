@@ -41,9 +41,19 @@ def init_db():
                   phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # Updated Project Tasks with more columns for the Board fixes
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, list_name TEXT,
-                  status TEXT, parent_task_id INTEGER, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  title TEXT, 
+                  description TEXT,
+                  list_name TEXT,
+                  status TEXT, 
+                  priority TEXT,
+                  assigned_to TEXT,
+                  start_date TEXT,
+                  due_date TEXT,
+                  parent_task_id INTEGER, 
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS conversations
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, contact_name TEXT, contact_email TEXT,
@@ -131,6 +141,7 @@ def init_db():
 init_db()
 
 # --- AUTH ROUTES ---
+
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     data = request.json
@@ -187,6 +198,12 @@ def handle_me():
         conn.close()
         return jsonify({"message": "Profile updated successfully"}), 200
 
+# --- ANALYTICS ROUTE ---
+@app.route('/api/apps/giggenius-crm/analytics/track/batch', methods=['POST', 'OPTIONS'])
+def handle_analytics():
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    return jsonify({"success": True}), 200
+
 # --- GENERIC ENTITY HANDLERS ---
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_entities(entity_name):
@@ -232,9 +249,15 @@ def handle_base44_entities(entity_name):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
+        
+        if 'document_name' in data: data['client_name'] = data.pop('document_name')
         if 'user_email' in db_cols: data['user_email'] = user_email
 
-        cleaned_data = {k: v for k, v in data.items() if k in db_cols}
+        cleaned_data = {}
+        for k, v in data.items():
+            if k in db_cols: 
+                cleaned_data[k] = v
+
         columns = ', '.join(cleaned_data.keys())
         placeholders = ', '.join(['?'] * len(cleaned_data))
         try:
@@ -256,15 +279,15 @@ def handle_base44_single_item(entity_name, entity_id):
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
         'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests',
         'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
-        'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees'
+        'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees',
+        'Department': 'departments'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
 
     if request.method == 'DELETE':
-        # --- CASCADING DELETE START ---
-        # If we are deleting an Employee, we must first delete their tasks/reviews
+        # SPECIAL LOGIC FOR EMPLOYEES: Delete all child records to prevent foreign key errors
         if entity_name == 'Employee':
             c.execute("SELECT email FROM employees WHERE id = ?", (entity_id,))
             row = c.fetchone()
@@ -274,7 +297,6 @@ def handle_base44_single_item(entity_name, entity_id):
                 c.execute("DELETE FROM performance_reviews WHERE employee_email = ?", (emp_email,))
                 c.execute("DELETE FROM payroll_records WHERE employee_email = ?", (emp_email,))
                 c.execute("DELETE FROM leave_requests WHERE employee_email = ?", (emp_email,))
-        # --- CASCADING DELETE END ---
 
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
@@ -285,7 +307,14 @@ def handle_base44_single_item(entity_name, entity_id):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        cleaned_data = {k: v for k, v in data.items() if k in db_cols}
+        
+        if 'document_name' in data: data['client_name'] = data.pop('document_name')
+
+        cleaned_data = {}
+        for k, v in data.items():
+            if k in db_cols:
+                cleaned_data[k] = v
+
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()

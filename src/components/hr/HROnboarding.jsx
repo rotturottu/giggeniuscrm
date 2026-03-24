@@ -101,9 +101,9 @@ export default function HROnboarding() {
       toast.success('Employee registered and onboarding started!');
     },
     onError: (err) => {
-      // Logic for actual error reflection
+      // Improved logic: Error window stays open so user can see what's wrong
+      setError('Registration failed. Check if the email is already in use.');
       console.error(err);
-      toast.error('Could not complete registration. Check console.');
     }
   });
 
