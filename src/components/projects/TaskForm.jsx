@@ -25,7 +25,6 @@ const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'
 const MINUTES = ['00', '15', '30', '45'];
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
 
-// 1. FIXED STATUS OPTIONS: Values now match STATUS_COLS keys perfectly
 const STATUS_OPTIONS = [
   { value: 'todo', label: 'To Do' },
   { value: 'in_progress', label: 'In Progress' },
@@ -39,14 +38,12 @@ const PRIORITY_COLORS = {
   high: 'bg-orange-100 text-orange-700', urgent: 'bg-red-100 text-red-700'
 };
 
-// Helper to fix the "Start/End date not working" issue
 const safeParseDate = (dateStr) => {
   if (!dateStr) return null;
   const d = parseISO(dateStr);
   return isValid(d) ? d : null;
 };
 
-// ── Time picker inline ────────────────────────────────────────────────────────
 function TimeInline({ value, onChange }) {
   const parse = (v) => {
     if (!v) return { hour: '09', minute: '00', ampm: 'AM' };
@@ -88,7 +85,6 @@ function TimeInline({ value, onChange }) {
   );
 }
 
-// ── Date pill button (date + optional time inside popover) ───────────────────
 function DateButton({ label, dateValue, timeValue, onDateChange, onTimeChange }) {
   return (
     <Popover>
@@ -120,7 +116,6 @@ function DateButton({ label, dateValue, timeValue, onDateChange, onTimeChange })
   );
 }
 
-// ── Subtask detail ───────────────────────────────────────────────────────────
 function SubtaskDetail({ sub, onChange, employees }) {
   const update = (field, val) => onChange({ ...sub, [field]: val });
   return (
@@ -140,7 +135,6 @@ function SubtaskDetail({ sub, onChange, employees }) {
   );
 }
 
-// ── Subtask row ──────────────────────────────────────────────────────────────
 function SubtaskRow({ sub, onChange, onRemove, onToggle, employees }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -175,7 +169,6 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
   const [uploading, setUploading] = useState(false);
   const queryClient = useQueryClient();
 
-  // 2. FIXED ASSIGNEE: Fetching employed personnels from HR module
   const { data: employees = [] } = useQuery({
     queryKey: ['employees'],
     queryFn: () => base44.entities.Employee.list(),
@@ -184,11 +177,14 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
   const set = (field, val) => setForm(prev => ({ ...prev, [field]: val }));
 
   useEffect(() => {
-    if (task) {
+    if (task && open) {
       setForm({
-        title: task.title || '', description: task.description || '',
-        status: task.status || 'todo', priority: task.priority || 'medium',
-        assignedTo: task.assigned_to || '', projectName: task.list_name || '',
+        title: task.title || '',
+        description: task.description || '',
+        status: task.status || 'todo',
+        priority: task.priority || 'medium',
+        assignedTo: task.assigned_to || '',
+        projectName: task.list_name || '',
         startDate: safeParseDate(task.start_date),
         startTime: task.start_time || '09:00',
         dueDate: safeParseDate(task.due_date),
@@ -198,11 +194,12 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
         recurrenceDates: task.recurrence_dates || [],
         notificationBefore: task.notification_before || '30min',
         notificationTypes: task.notification_types || ['in_app'],
-        subtasks: task.subtasks || [], attachments: task.attachments || [],
+        subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
+        attachments: Array.isArray(task.attachments) ? task.attachments : [],
       });
       setShowNotif(!!task.notification_before);
       setShowRecurring(task.is_recurring || false);
-    } else {
+    } else if (!task && open) {
       setForm(defaultState());
       setShowNotif(false);
       setShowRecurring(false);
@@ -222,13 +219,21 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
     const file = e.target.files[0];
     if (!file) return;
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    set('attachments', [...form.attachments, file_url]);
-    setUploading(false);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      set('attachments', [...form.attachments, file_url]);
+    } catch (err) {
+      toast.error("Upload failed");
+    } finally {
+      setUploading(false);
+    }
   };
 
   const saveMutation = useMutation({
-    mutationFn: (data) => task ? base44.entities.ProjectTask.update(task.id, data) : base44.entities.ProjectTask.create(data),
+    mutationFn: (data) => 
+      task 
+        ? base44.entities.ProjectTask.update(task.id, data) 
+        : base44.entities.ProjectTask.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-tasks'] });
       toast.success(`Task saved`);
@@ -237,42 +242,65 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
   });
 
   const handleSave = () => {
-    if (!form.title) return toast.error('Title required');
+    if (!form.title) {
+      toast.error('Title required');
+      return;
+    }
+
     saveMutation.mutate({
-      title: form.title, description: form.description, status: form.status, priority: form.priority,
-      assigned_to: form.assignedTo, list_name: form.projectName,
+      title: form.title,
+      description: form.description,
+      status: form.status,
+      priority: form.priority,
+      assigned_to: form.assignedTo,
+      list_name: form.projectName,
       start_date: form.startDate ? format(form.startDate, 'yyyy-MM-dd') : null,
       start_time: form.startDate ? form.startTime : null,
       due_date: form.dueDate ? format(form.dueDate, 'yyyy-MM-dd') : null,
       due_time: form.dueDate ? form.dueTime : null,
-      is_recurring: form.isRecurring, subtasks: form.subtasks, attachments: form.attachments,
+      is_recurring: form.isRecurring,
+      subtasks: form.subtasks,
+      attachments: form.attachments,
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto text-left">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto text-left z-[9999]">
         <DialogHeader>
           <DialogTitle>{task ? 'Edit Task' : 'New Task'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          <Input value={form.title} onChange={e => set('title', e.target.value)} placeholder="Task title..." className="text-lg font-bold border-0 border-b rounded-none px-0 focus-visible:ring-0" />
-          <Textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="Add description..." rows={2} className="text-sm resize-none" />
+          <Input 
+            value={form.title} 
+            onChange={e => set('title', e.target.value)} 
+            placeholder="Task title..." 
+            className="text-lg font-bold border-0 border-b rounded-none px-0 focus-visible:ring-0" 
+          />
+          <Textarea 
+            value={form.description} 
+            onChange={e => set('description', e.target.value)} 
+            placeholder="Add description..." 
+            rows={2} 
+            className="text-sm resize-none" 
+          />
 
           <div className="flex flex-wrap gap-2 items-center">
-            {/* DROP DOWN STATUS: Fixed to move tasks between columns */}
             <Select value={form.status} onValueChange={v => set('status', v)}>
               <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>{STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+              </SelectContent>
             </Select>
 
             <Select value={form.priority} onValueChange={v => set('priority', v)}>
               <SelectTrigger className={`h-8 w-26 text-xs ${PRIORITY_COLORS[form.priority]}`}><SelectValue /></SelectTrigger>
-              <SelectContent>{PRIORITY_OPTIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+              <SelectContent>
+                {PRIORITY_OPTIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+              </SelectContent>
             </Select>
 
-            {/* DROP DOWN ASSIGNEE: Fetched from HR Employees */}
             <Select value={form.assignedTo} onValueChange={v => set('assignedTo', v)}>
               <SelectTrigger className="h-8 w-44 text-xs">
                 <div className="flex items-center gap-2">
@@ -285,13 +313,29 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
               </SelectContent>
             </Select>
 
-            <Input value={form.projectName} onChange={e => set('projectName', e.target.value)} placeholder="Project..." className="h-8 text-xs w-32" />
+            <Input 
+              value={form.projectName} 
+              onChange={e => set('projectName', e.target.value)} 
+              placeholder="Project..." 
+              className="h-8 text-xs w-32" 
+            />
           </div>
 
-          {/* DATES: Logic updated to persist and reflect saved values */}
           <div className="flex flex-wrap gap-2 items-center">
-            <DateButton label="+ Start date" dateValue={form.startDate} timeValue={form.startTime} onDateChange={d => set('startDate', d)} onTimeChange={v => set('startTime', v)} />
-            <DateButton label="+ Due date" dateValue={form.dueDate} timeValue={form.dueTime} onDateChange={d => set('dueDate', d)} onTimeChange={v => set('dueTime', v)} />
+            <DateButton 
+              label="+ Start date" 
+              dateValue={form.startDate} 
+              timeValue={form.startTime} 
+              onDateChange={d => set('startDate', d)} 
+              onTimeChange={v => set('startTime', v)} 
+            />
+            <DateButton 
+              label="+ Due date" 
+              dateValue={form.dueDate} 
+              timeValue={form.dueTime} 
+              onDateChange={d => set('dueDate', d)} 
+              onTimeChange={v => set('dueTime', v)} 
+            />
           </div>
 
           <div className="flex gap-2">
@@ -301,8 +345,26 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
 
           <div className="space-y-1">
             <p className="text-xs font-bold text-gray-400 uppercase">Subtasks</p>
-            {form.subtasks.map(s => <SubtaskRow key={s.id} sub={s} onChange={updated => set('subtasks', form.subtasks.map(x => x.id === updated.id ? updated : x))} onRemove={id => set('subtasks', form.subtasks.filter(x => x.id !== id))} onToggle={id => set('subtasks', form.subtasks.map(x => x.id === id ? { ...x, completed: !x.completed } : x))} employees={employees} />)}
-            <div className="flex gap-2 mt-2"><Input value={newSubtask} onChange={e => setNewSubtask(e.target.value)} placeholder="Add a subtask..." className="h-8 text-sm" onKeyDown={e => e.key === 'Enter' && addSubtask()} /><Button variant="outline" size="sm" onClick={addSubtask} className="h-8 px-2"><Plus className="w-4 h-4" /></Button></div>
+            {form.subtasks.map(s => (
+              <SubtaskRow 
+                key={s.id} 
+                sub={s} 
+                onChange={updated => set('subtasks', form.subtasks.map(x => x.id === updated.id ? updated : x))} 
+                onRemove={id => set('subtasks', form.subtasks.filter(x => x.id !== id))} 
+                onToggle={id => set('subtasks', form.subtasks.map(x => x.id === id ? { ...x, completed: !x.completed } : x))} 
+                employees={employees} 
+              />
+            ))}
+            <div className="flex gap-2 mt-2">
+              <Input 
+                value={newSubtask} 
+                onChange={e => setNewSubtask(e.target.value)} 
+                placeholder="Add a subtask..." 
+                className="h-8 text-sm" 
+                onKeyDown={e => e.key === 'Enter' && addSubtask()} 
+              />
+              <Button variant="outline" size="sm" onClick={addSubtask} className="h-8 px-2"><Plus className="w-4 h-4" /></Button>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -312,14 +374,21 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
               <span className="text-xs text-gray-500">{uploading ? 'Uploading...' : 'Attach a file'}</span>
               <input type="file" className="hidden" onChange={handleFileUpload} />
             </label>
-            {form.attachments.map((url, i) => <div key={i} className="flex items-center justify-between bg-gray-50 rounded px-2 py-1"><a href={url} target="_blank" className="text-xs text-blue-600 truncate underline">File {i+1}</a><button onClick={() => set('attachments', form.attachments.filter((_, idx) => idx !== i))}><X className="w-3 h-3" /></button></div>)}
+            {form.attachments.map((url, i) => (
+              <div key={i} className="flex items-center justify-between bg-gray-50 rounded px-2 py-1">
+                <a href={url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 truncate underline">File {i+1}</a>
+                <button onClick={() => set('attachments', form.attachments.filter((_, idx) => idx !== i))}><X className="w-3 h-3" /></button>
+              </div>
+            ))}
           </div>
 
           {!isPaidUser && <div className="bg-amber-50 p-2 rounded text-[10px] text-amber-700 flex items-center gap-2 border border-amber-100"><Lock className="w-3 h-3" /> Pro: Time tracking & automations require a paid plan.</div>}
 
           <div className="flex justify-end gap-2 pt-4 border-t">
             <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 min-w-[100px]">{saveMutation.isPending ? 'Syncing...' : (task ? 'Update' : 'Create')}</Button>
+            <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 min-w-[100px]">
+              {saveMutation.isPending ? 'Syncing...' : (task ? 'Update' : 'Create')}
+            </Button>
           </div>
         </div>
       </DialogContent>
