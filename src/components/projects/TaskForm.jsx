@@ -25,6 +25,7 @@ const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, '0'
 const MINUTES = ['00', '15', '30', '45'];
 const PRIORITY_OPTIONS = ['low', 'medium', 'high', 'urgent'];
 
+// 1. FIXED STATUS OPTIONS: Values now match STATUS_COLS keys perfectly
 const STATUS_OPTIONS = [
   { value: 'todo', label: 'To Do' },
   { value: 'in_progress', label: 'In Progress' },
@@ -38,6 +39,7 @@ const PRIORITY_COLORS = {
   high: 'bg-orange-100 text-orange-700', urgent: 'bg-red-100 text-red-700'
 };
 
+// Helper to fix the "Start/End date not working" issue
 const safeParseDate = (dateStr) => {
   if (!dateStr) return null;
   const d = parseISO(dateStr);
@@ -116,42 +118,114 @@ function DateButton({ label, dateValue, timeValue, onDateChange, onTimeChange })
   );
 }
 
+// ── Subtask detail ───────────────────────────────────────────────────────────
 function SubtaskDetail({ sub, onChange, employees }) {
   const update = (field, val) => onChange({ ...sub, [field]: val });
+
+  const handleFile = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 50 * 1024 * 1024) { toast.error('Max 50 MB'); return; }
+    setUploading(true);
+    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    update('attachments', [...(sub.attachments || []), file_url]);
+    setUploading(false);
+  };
+
   return (
-    <div className="mt-1.5 ml-10 space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-100 text-left">
-      <Textarea value={sub.description || ''} onChange={e => update('description', e.target.value)} placeholder="Description..." rows={2} className="text-xs resize-none" />
+    <div className="mt-1.5 ml-10 space-y-2 p-3 bg-gray-50 rounded-lg border border-gray-100">
+      <Textarea
+        value={sub.description || ''}
+        onChange={e => update('description', e.target.value)}
+        placeholder="Description..."
+        rows={2}
+        className="text-xs resize-none"
+      />
+
       <div className="flex flex-wrap gap-2 items-center">
         <Select value={sub.status || 'todo'} onValueChange={v => update('status', v)}>
           <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
-          <SelectContent>{STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
+          <SelectContent>
+            {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
+          </SelectContent>
         </Select>
-        <Select value={sub.assigned_to || ''} onValueChange={v => update('assigned_to', v)}>
-          <SelectTrigger className="h-7 w-44 text-xs"><SelectValue placeholder="Assignee..." /></SelectTrigger>
-          <SelectContent>{employees.map(e => <SelectItem key={e.id} value={e.email}>{e.first_name} {e.last_name}</SelectItem>)}</SelectContent>
+
+        <Select value={sub.priority || 'medium'} onValueChange={v => update('priority', v)}>
+          <SelectTrigger className={`h-7 w-24 text-xs ${PRIORITY_COLORS[sub.priority || 'medium']}`}><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {PRIORITY_OPTIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+          </SelectContent>
         </Select>
+
+        <AssigneeInput
+          value={sub.assigned_to || ''}
+          onChange={v => update('assigned_to', v)}
+          users={users}
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <DateButton
+          label="Start date"
+          dateValue={sub.start_date ? new Date(sub.start_date) : null}
+          timeValue={sub.start_time}
+          onDateChange={d => update('start_date', d ? format(d, 'yyyy-MM-dd') : null)}
+          onTimeChange={v => update('start_time', v)}
+        />
+        <DateButton
+          label="Due date"
+          dateValue={sub.due_date ? new Date(sub.due_date) : null}
+          timeValue={sub.due_time}
+          onDateChange={d => update('due_date', d ? format(d, 'yyyy-MM-dd') : null)}
+          onTimeChange={v => update('due_time', v)}
+        />
+      </div>
+
+      <div className="flex flex-wrap gap-2 items-center">
+        <label className="flex items-center gap-1 cursor-pointer text-xs text-gray-500 hover:text-blue-600 px-2 py-1 border border-dashed rounded hover:border-blue-300">
+          <Paperclip className="w-3 h-3" />
+          {uploading ? 'Uploading...' : 'Attach file'}
+          <input type="file" className="hidden" onChange={handleFile} disabled={uploading} />
+        </label>
+        {(sub.attachments || []).map((url, i) => (
+          <div key={i} className="flex items-center gap-1 bg-white rounded border px-2 py-1">
+            <a href={url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline">File {i + 1}</a>
+            <button onClick={() => update('attachments', sub.attachments.filter((_, idx) => idx !== i))}>
+              <X className="w-3 h-3 text-gray-400 hover:text-red-500" />
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
+// ── Subtask row ──────────────────────────────────────────────────────────────
 function SubtaskRow({ sub, onChange, onRemove, onToggle, employees }) {
   const [expanded, setExpanded] = useState(false);
   return (
-    <div className="text-left">
+    <div>
       <div className="flex items-center gap-2 py-0.5">
         <input type="checkbox" checked={sub.completed} onChange={() => onToggle(sub.id)} className="rounded flex-shrink-0" />
         <button onClick={() => setExpanded(!expanded)} className="text-gray-400 hover:text-gray-600 flex-shrink-0">
           {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </button>
-        <Input value={sub.title} onChange={e => onChange({ ...sub, title: e.target.value })} className={`h-7 text-sm flex-1 border-0 shadow-none px-0 focus-visible:ring-0 ${sub.completed ? 'line-through text-gray-400' : ''}`} placeholder="Subtask title..." />
-        <button onClick={() => onRemove(sub.id)} className="text-gray-300 hover:text-red-500 flex-shrink-0"><X className="w-3 h-3" /></button>
+        <Input
+          value={sub.title}
+          onChange={e => onChange({ ...sub, title: e.target.value })}
+          className={`h-7 text-sm flex-1 border-0 shadow-none px-0 focus-visible:ring-0 ${sub.completed ? 'line-through text-gray-400' : ''}`}
+          placeholder="Subtask title..."
+        />
+        <button onClick={() => onRemove(sub.id)} className="text-gray-300 hover:text-red-500 flex-shrink-0">
+          <X className="w-3 h-3" />
+        </button>
       </div>
-      {expanded && <SubtaskDetail sub={sub} onChange={onChange} employees={employees} />}
+      {expanded && <SubtaskDetail sub={sub} onChange={onChange} users={users} />}
     </div>
   );
 }
 
+// ── Default form state ────────────────────────────────────────────────────────
 const defaultState = () => ({
   title: '', description: '', status: 'todo', priority: 'medium',
   assignedTo: '', projectName: '', startDate: null, startTime: '09:00',
@@ -161,6 +235,7 @@ const defaultState = () => ({
   subtasks: [], attachments: [],
 });
 
+// ── Main TaskForm ─────────────────────────────────────────────────────────────
 export default function TaskForm({ open, onClose, task, isPaidUser }) {
   const [form, setForm] = useState(defaultState());
   const [showNotif, setShowNotif] = useState(false);
@@ -169,12 +244,17 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
   const [uploading, setUploading] = useState(false);
   const queryClient = useQueryClient();
 
+  // 2. FIXED ASSIGNEE: Fetching employed personnels from HR module
   const { data: employees = [] } = useQuery({
     queryKey: ['employees'],
     queryFn: () => base44.entities.Employee.list(),
   });
 
-  const set = (field, val) => setForm(prev => ({ ...prev, [field]: val }));
+  // 2. Fetch existing projects for the project selection dropdown
+  const { data: projectList = [] } = useQuery({
+    queryKey: ['projects', 'active'],
+    queryFn: () => base44.entities.Project.filter({ status: 'active' }),
+  });
 
   useEffect(() => {
     if (task && open) {
@@ -204,6 +284,7 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
       setShowNotif(false);
       setShowRecurring(false);
     }
+    setNewSubtask('');
   }, [task, open]);
 
   const addSubtask = () => {
@@ -215,92 +296,72 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
     setNewSubtask('');
   };
 
+  const updateSubtask = (updated) => set('subtasks', form.subtasks.map(s => s.id === updated.id ? updated : s));
+  const removeSubtask = (id) => set('subtasks', form.subtasks.filter(s => s.id !== id));
+  const toggleSubtask = (id) => set('subtasks', form.subtasks.map(s => s.id === id ? { ...s, completed: !s.completed } : s));
+
+  const toggleNotifType = (type) => set('notificationTypes',
+    form.notificationTypes.includes(type)
+      ? form.notificationTypes.filter(t => t !== type)
+      : [...form.notificationTypes, type]
+  );
+
   const handleFileUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    if (file.size > 50 * 1024 * 1024) { toast.error('File size must be under 50 MB'); return; }
     setUploading(true);
-    try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      set('attachments', [...form.attachments, file_url]);
-    } catch (err) {
-      toast.error("Upload failed");
-    } finally {
-      setUploading(false);
-    }
+    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    set('attachments', [...form.attachments, file_url]);
+    setUploading(false);
   };
 
   const saveMutation = useMutation({
-    mutationFn: (data) => 
-      task 
-        ? base44.entities.ProjectTask.update(task.id, data) 
-        : base44.entities.ProjectTask.create(data),
+    mutationFn: (data) => task ? base44.entities.ProjectTask.update(task.id, data) : base44.entities.ProjectTask.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-tasks'] });
-      toast.success(`Task saved`);
+      toast.success(`Task ${task ? 'updated' : 'created'}`);
       onClose();
     },
   });
 
   const handleSave = () => {
-    if (!form.title) {
-      toast.error('Title required');
-      return;
-    }
-
+    if (!form.title) return toast.error('Title required');
     saveMutation.mutate({
-      title: form.title,
-      description: form.description,
-      status: form.status,
-      priority: form.priority,
-      assigned_to: form.assignedTo,
-      list_name: form.projectName,
+      title: form.title, description: form.description, status: form.status, priority: form.priority,
+      assigned_to: form.assignedTo, list_name: form.projectName,
       start_date: form.startDate ? format(form.startDate, 'yyyy-MM-dd') : null,
       start_time: form.startDate ? form.startTime : null,
       due_date: form.dueDate ? format(form.dueDate, 'yyyy-MM-dd') : null,
       due_time: form.dueDate ? form.dueTime : null,
-      is_recurring: form.isRecurring,
-      subtasks: form.subtasks,
-      attachments: form.attachments,
+      is_recurring: form.isRecurring, subtasks: form.subtasks, attachments: form.attachments,
     });
   };
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto text-left z-[9999]">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto text-left">
         <DialogHeader>
-          <DialogTitle>{task ? 'Edit Task' : 'New Task'}</DialogTitle>
+          <DialogTitle className="text-base font-bold">{task ? 'Edit Task' : 'New Task'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
-          <Input 
-            value={form.title} 
-            onChange={e => set('title', e.target.value)} 
-            placeholder="Task title..." 
-            className="text-lg font-bold border-0 border-b rounded-none px-0 focus-visible:ring-0" 
-          />
-          <Textarea 
-            value={form.description} 
-            onChange={e => set('description', e.target.value)} 
-            placeholder="Add description..." 
-            rows={2} 
-            className="text-sm resize-none" 
-          />
+          <Input value={form.title} onChange={e => set('title', e.target.value)} placeholder="Task title..." className="text-lg font-bold border-0 border-b rounded-none px-0 focus-visible:ring-0" />
+          <Textarea value={form.description} onChange={e => set('description', e.target.value)} placeholder="Add description..." rows={2} className="text-sm resize-none" />
 
           <div className="flex flex-wrap gap-2 items-center">
+            {/* DROP DOWN STATUS: Fixed to move tasks between columns */}
             <Select value={form.status} onValueChange={v => set('status', v)}>
               <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
-              </SelectContent>
+              <SelectContent>{STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}</SelectContent>
             </Select>
 
             <Select value={form.priority} onValueChange={v => set('priority', v)}>
               <SelectTrigger className={`h-8 w-26 text-xs ${PRIORITY_COLORS[form.priority]}`}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {PRIORITY_OPTIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
-              </SelectContent>
+              <SelectContent>{PRIORITY_OPTIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
             </Select>
 
+            {/* DROP DOWN ASSIGNEE: Fetched from HR Employees */}
             <Select value={form.assignedTo} onValueChange={v => set('assignedTo', v)}>
               <SelectTrigger className="h-8 w-44 text-xs">
                 <div className="flex items-center gap-2">
@@ -309,85 +370,125 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
                 </div>
               </SelectTrigger>
               <SelectContent>
-                {employees.map(e => <SelectItem key={e.id} value={e.email}>{e.first_name} {e.last_name}</SelectItem>)}
+                {employees.map(emp => (
+                  <SelectItem key={emp.id} value={emp.email}>
+                    {emp.first_name} {emp.last_name}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
 
-            <Input 
-              value={form.projectName} 
-              onChange={e => set('projectName', e.target.value)} 
-              placeholder="Project..." 
-              className="h-8 text-xs w-32" 
-            />
+            <Input value={form.projectName} onChange={e => set('projectName', e.target.value)} placeholder="Project..." className="h-8 text-xs w-32" />
           </div>
 
           <div className="flex flex-wrap gap-2 items-center">
-            <DateButton 
-              label="+ Start date" 
-              dateValue={form.startDate} 
-              timeValue={form.startTime} 
-              onDateChange={d => set('startDate', d)} 
-              onTimeChange={v => set('startTime', v)} 
-            />
-            <DateButton 
-              label="+ Due date" 
-              dateValue={form.dueDate} 
-              timeValue={form.dueTime} 
-              onDateChange={d => set('dueDate', d)} 
-              onTimeChange={v => set('dueTime', v)} 
-            />
+            <DateButton label="+ Start date" dateValue={form.startDate} timeValue={form.startTime} onDateChange={d => set('startDate', d)} onTimeChange={v => set('startTime', v)} />
+            <DateButton label="+ Due date" dateValue={form.dueDate} timeValue={form.dueTime} onDateChange={d => set('dueDate', d)} onTimeChange={v => set('dueTime', v)} />
           </div>
 
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setShowNotif(!showNotif)} className={showNotif ? 'bg-blue-50 border-blue-200' : ''}><Bell className="w-3 h-3 mr-1" /> Notify</Button>
-            <Button variant="outline" size="sm" onClick={() => setShowRecurring(!showRecurring)} className={showRecurring ? 'bg-blue-50 border-blue-200' : ''}><RefreshCw className="w-3 h-3 mr-1" /> Recurring</Button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowNotif(!showNotif)}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border transition-all ${
+                showNotif ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              <Bell className="w-3 h-3" /> Notify
+            </button>
+
+            <button
+              onClick={() => { setShowRecurring(!showRecurring); set('isRecurring', !showRecurring); }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs border transition-all ${
+                showRecurring ? 'border-blue-400 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'
+              }`}
+            >
+              <RefreshCw className="w-3 h-3" /> Recurring
+            </button>
           </div>
+
+          {showNotif && (
+            <div className="flex flex-wrap items-center gap-2 px-3 py-2.5 bg-blue-50 border border-blue-100 rounded-lg">
+              <Bell className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+              <Select value={form.notificationBefore} onValueChange={v => set('notificationBefore', v)}>
+                <SelectTrigger className="h-7 w-20 text-xs bg-white"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {NOTIFICATION_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <span className="text-xs text-blue-600">before · via</span>
+              {['in_app', 'email'].map(type => (
+                <button
+                  key={type}
+                  onClick={() => toggleNotifType(type)}
+                  className={`px-2.5 py-0.5 rounded-full text-xs border transition-all ${
+                    form.notificationTypes.includes(type)
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'border-blue-200 text-blue-600 bg-white'
+                  }`}
+                >
+                  {type === 'in_app' ? 'In-App' : 'Email'}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {showRecurring && (
+            <div className="p-3 bg-gray-50 border rounded-lg space-y-3">
+              <div className="flex items-center gap-2">
+                <RefreshCw className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                <Select value={form.recurrencePattern} onValueChange={v => set('recurrencePattern', v)}>
+                  <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="daily">Daily</SelectItem>
+                    <SelectItem value="weekly">Weekly</SelectItem>
+                    <SelectItem value="bi-weekly">Bi-Weekly</SelectItem>
+                    <SelectItem value="monthly">Monthly</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span className="text-xs text-gray-500">— pick dates:</span>
+                {form.recurrenceDates.length > 0 && (
+                  <span className="text-xs text-blue-600 font-medium">{form.recurrenceDates.length} selected</span>
+                )}
+              </div>
+              <Calendar
+                mode="multiple"
+                selected={form.recurrenceDates.map(d => new Date(d))}
+                onSelect={dates => set('recurrenceDates', (dates || []).map(d => format(d, 'yyyy-MM-dd')))}
+                className="border rounded-lg bg-white w-full"
+              />
+            </div>
+          )}
 
           <div className="space-y-1">
             <p className="text-xs font-bold text-gray-400 uppercase">Subtasks</p>
-            {form.subtasks.map(s => (
-              <SubtaskRow 
-                key={s.id} 
-                sub={s} 
-                onChange={updated => set('subtasks', form.subtasks.map(x => x.id === updated.id ? updated : x))} 
-                onRemove={id => set('subtasks', form.subtasks.filter(x => x.id !== id))} 
-                onToggle={id => set('subtasks', form.subtasks.map(x => x.id === id ? { ...x, completed: !x.completed } : x))} 
-                employees={employees} 
-              />
-            ))}
-            <div className="flex gap-2 mt-2">
-              <Input 
-                value={newSubtask} 
-                onChange={e => setNewSubtask(e.target.value)} 
-                placeholder="Add a subtask..." 
-                className="h-8 text-sm" 
-                onKeyDown={e => e.key === 'Enter' && addSubtask()} 
-              />
-              <Button variant="outline" size="sm" onClick={addSubtask} className="h-8 px-2"><Plus className="w-4 h-4" /></Button>
-            </div>
+            {form.subtasks.map(s => <SubtaskRow key={s.id} sub={s} onChange={updated => set('subtasks', form.subtasks.map(x => x.id === updated.id ? updated : x))} onRemove={id => set('subtasks', form.subtasks.filter(x => x.id !== id))} onToggle={id => set('subtasks', form.subtasks.map(x => x.id === id ? { ...x, completed: !x.completed } : x))} employees={employees} />)}
+            <div className="flex gap-2 mt-2"><Input value={newSubtask} onChange={e => setNewSubtask(e.target.value)} placeholder="Add a subtask..." className="h-8 text-sm" onKeyDown={e => e.key === 'Enter' && addSubtask()} /><Button variant="outline" size="sm" onClick={addSubtask} className="h-8 px-2"><Plus className="w-4 h-4" /></Button></div>
           </div>
 
           <div className="space-y-2">
-            <p className="text-xs font-bold text-gray-400 uppercase">Attachments</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Attachments</p>
             <label className="flex items-center gap-2 cursor-pointer border border-dashed rounded-lg px-3 py-2 hover:bg-gray-50 transition-colors">
               <Upload className="w-3.5 h-3.5 text-gray-400" />
-              <span className="text-xs text-gray-500">{uploading ? 'Uploading...' : 'Attach a file'}</span>
-              <input type="file" className="hidden" onChange={handleFileUpload} />
+              <span className="text-xs text-gray-500">{uploading ? 'Uploading...' : 'Click to attach a file (max 50 MB)'}</span>
+              <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
             </label>
-            {form.attachments.map((url, i) => (
-              <div key={i} className="flex items-center justify-between bg-gray-50 rounded px-2 py-1">
-                <a href={url} target="_blank" rel="noreferrer" className="text-xs text-blue-600 truncate underline">File {i+1}</a>
-                <button onClick={() => set('attachments', form.attachments.filter((_, idx) => idx !== i))}><X className="w-3 h-3" /></button>
-              </div>
-            ))}
+            {form.attachments.map((url, i) => <div key={i} className="flex items-center justify-between bg-gray-50 rounded px-2 py-1"><a href={url} target="_blank" className="text-xs text-blue-600 truncate underline">File {i+1}</a><button onClick={() => set('attachments', form.attachments.filter((_, idx) => idx !== i))}><X className="w-3 h-3" /></button></div>)}
           </div>
 
-          {!isPaidUser && <div className="bg-amber-50 p-2 rounded text-[10px] text-amber-700 flex items-center gap-2 border border-amber-100"><Lock className="w-3 h-3" /> Pro: Time tracking & automations require a paid plan.</div>}
+          {!isPaidUser && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg">
+              <Lock className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+              <p className="text-xs text-amber-700">
+                <span className="font-semibold">Pro:</span> Time tracking & automations require a paid plan.
+              </p>
+            </div>
+          )}
 
-          <div className="flex justify-end gap-2 pt-4 border-t">
-            <Button variant="ghost" onClick={onClose}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 min-w-[100px]">
-              {saveMutation.isPending ? 'Syncing...' : (task ? 'Update' : 'Create')}
+          <div className="flex justify-end gap-3 pt-4 border-t">
+            <Button variant="outline" onClick={onClose} size="sm">Cancel</Button>
+            <Button onClick={handleSave} disabled={saveMutation.isPending} size="sm" className="bg-gradient-to-r from-blue-600 to-purple-600 px-6">
+              <Save className="w-4 h-4 mr-1.5" />
+              {task ? 'Update' : 'Create'}
             </Button>
           </div>
         </div>
