@@ -56,12 +56,14 @@ export default function HROnboarding() {
     queryFn: () => base44.entities.OnboardingTask.list('-created_date', 200),
   });
 
+  // FIX: Added explicit logic to close the window and show toast
   const saveMutation = useMutation({
     mutationFn: (d) => base44.entities.OnboardingTask.create({ ...d, employee_id: d.employee_name }),
     onSuccess: () => { 
       qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); 
-      setShowForm(false); 
+      setShowForm(false); // Closes the "Add Task" window
       setForm(empty); 
+      toast.success('Manual task added to list!');
     },
   });
 
@@ -91,7 +93,7 @@ export default function HROnboarding() {
     onSuccess: () => { 
       qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); 
       qc.invalidateQueries({ queryKey: ['employees'] }); 
-      setShowBulk(false); 
+      setShowBulk(false); // FIX: Ensures "Register & Start" window disappears
       setFirstName('');
       setLastName('');
       setEmployeeEmail('');
@@ -235,7 +237,7 @@ export default function HROnboarding() {
               className="bg-indigo-600 hover:bg-indigo-700 h-10 px-8 shadow-lg shadow-indigo-200 font-bold"
             >
               {bulkCreateMutation.isPending ? <Loader className="w-4 h-4 animate-spin mr-2"/> : null}
-              Start Onboarding
+              Register & Start
             </Button>
           </div>
         </DialogContent>
@@ -246,22 +248,22 @@ export default function HROnboarding() {
         <DialogContent className="max-w-md text-left">
           <DialogHeader><DialogTitle className="font-bold text-indigo-900">Add Custom Task</DialogTitle></DialogHeader>
           <div className="space-y-3 pt-4">
-            <div className="space-y-1">
-              <Label className="text-[10px] uppercase font-bold text-slate-400">Employee Name (Full)</Label>
-              <Input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} placeholder="e.g. John Doe" />
+            <div className="space-y-1 text-left">
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Employee Email (For Linking)</Label>
+              <Input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} placeholder="email@company.com" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 text-left">
               <Label className="text-[10px] uppercase font-bold text-slate-400">Task Details</Label>
               <Input value={form.task_name} onChange={e => setForm(p => ({ ...p, task_name: e.target.value }))} placeholder="e.g. Collect ID badge" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 text-left">
               <Label className="text-[10px] uppercase font-bold text-slate-400">Task Category</Label>
               <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{Object.keys(categoryColors).map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1 text-left">
               <Label className="text-[10px] uppercase font-bold text-slate-400">Deadline</Label>
               <Input type="date" value={form.due_date} onChange={e => setForm(p => ({ ...p, due_date: e.target.value }))} />
             </div>
@@ -272,9 +274,9 @@ export default function HROnboarding() {
             <Button 
               onClick={() => saveMutation.mutate(form)} 
               disabled={saveMutation.isPending || !form.employee_name || !form.task_name} 
-              className="bg-indigo-600 hover:bg-indigo-700 px-8"
+              className="bg-indigo-600 hover:bg-indigo-700 px-8 font-bold"
             >
-              Save Task
+              {saveMutation.isPending ? 'Syncing...' : 'Save Task'}
             </Button>
           </div>
         </DialogContent>
