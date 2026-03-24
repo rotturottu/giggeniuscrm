@@ -55,7 +55,8 @@ export default function HRTeamManagement() {
   const [tab, setTab] = useState('access');
 
   const [showInvite, setShowInvite] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ id: '', name: '', email: '', role: 'Employee' });
+  // Added department state here to match your requested updates
+  const [inviteForm, setInviteForm] = useState({ id: '', name: '', email: '', role: 'Employee', department: 'Employee' });
 
   // 1. Fetch Dynamic Data from Database
   const { data: dbEmployees = [], isLoading: loadingEmployees } = useQuery({
@@ -96,10 +97,31 @@ export default function HRTeamManagement() {
 
   const handleInvite = (e) => {
     e.preventDefault();
+<<<<<<< HEAD
     if (!inviteForm.name) return;
     toast.success(`Access level set for ${inviteForm.name}`);
+=======
+    if (!inviteForm.name || !inviteForm.email) return;
+
+    const newId = members.length ? Math.max(...members.map(m => m.id)) + 1 : 1;
+    const initials = inviteForm.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+
+    const newMember = {
+      id: newId,
+      name: inviteForm.name,
+      email: inviteForm.email,
+      role: inviteForm.role,
+      department: inviteForm.department,
+      status: 'active',
+      lastActive: 'Just now',
+      avatar: initials,
+      calendarAccess: false
+    };
+
+    setMembers([newMember, ...members]); 
+>>>>>>> 21754aec27b58e28173973fac4cdd157f73ffac1
     setShowInvite(false); 
-    setInviteForm({ id: '', name: '', email: '', role: 'Employee' }); 
+    setInviteForm({ id: '', name: '', email: '', role: 'Employee', department: 'Employee' }); 
   };
 
   return (
@@ -274,14 +296,24 @@ export default function HRTeamManagement() {
       {/* Invite/Grant Access Dialog */}
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
         <DialogContent className="max-w-sm">
+<<<<<<< HEAD
           <DialogHeader><DialogTitle className="font-bold text-indigo-900">Grant System Access</DialogTitle></DialogHeader>
           <form onSubmit={handleInvite} className="space-y-4 py-2 text-left">
+=======
+          <DialogHeader>
+            <DialogTitle>Invite New Member</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleInvite} className="space-y-4 py-2">
+            
+            {/* FIX 1: value is now strictly a string using .toString() */}
+>>>>>>> 21754aec27b58e28173973fac4cdd157f73ffac1
             <div className="space-y-1">
               <Label className="text-[10px] uppercase font-bold text-slate-400">Search Employee</Label>
               <Select 
-                value={inviteForm.id} 
+                value={inviteForm.id?.toString()} 
                 onValueChange={(selectedId) => {
-                  const selectedEmp = dbEmployees.find(e => e.id === selectedId);
+                  // FIX 2: Compare string-to-string 
+                  const selectedEmp = dbEmployees.find(e => e.id.toString() === selectedId);
                   setInviteForm(prev => ({ 
                     ...prev, 
                     id: selectedId,
@@ -292,8 +324,60 @@ export default function HRTeamManagement() {
               >
                 <SelectTrigger><SelectValue placeholder="Select existing personnel" /></SelectTrigger>
                 <SelectContent>
+<<<<<<< HEAD
                   {dbEmployees.map(emp => (
                     <SelectItem key={emp.id} value={emp.id}>{emp.first_name} {emp.last_name}</SelectItem>
+=======
+                  {dbEmployees.length === 0 ? (
+                    <div className="p-2 text-sm text-gray-500">No employees found in database.</div>
+                  ) : (
+                    dbEmployees.map(emp => (
+                      // FIX 3: Assign Item value as a string
+                      <SelectItem key={emp.id} value={emp.id.toString()}>
+                        {emp.first_name} {emp.last_name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Email Address</Label>
+              <Input 
+                type="email" 
+                value={inviteForm.email} 
+                readOnly 
+                className="bg-gray-50 text-gray-500" 
+                placeholder="Auto-filled from selection" 
+              />
+            </div>
+
+            {/* Added the Department Dropdown */}
+            <div className="space-y-1">
+              <Label>Assign Department</Label>
+              <Select value={inviteForm.department} onValueChange={v => setInviteForm(p => ({ ...p, department: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Employee">Employee</SelectItem>
+                  <SelectItem value="Admin">Admin</SelectItem>
+                  <SelectItem value="IT">IT</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Assign Role</Label>
+              <Select value={inviteForm.role} onValueChange={v => setInviteForm(p => ({ ...p, role: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map(r => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+>>>>>>> 21754aec27b58e28173973fac4cdd157f73ffac1
                   ))}
                 </SelectContent>
               </Select>
