@@ -56,14 +56,13 @@ export default function HROnboarding() {
     queryFn: () => base44.entities.OnboardingTask.list('-created_date', 200),
   });
 
-  // FIX: Added explicit logic to close the window and show toast
   const saveMutation = useMutation({
     mutationFn: (d) => base44.entities.OnboardingTask.create({ ...d, employee_id: d.employee_name }),
     onSuccess: () => { 
       qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); 
-      setShowForm(false); // Closes the "Add Task" window
+      setShowForm(false); 
       setForm(empty); 
-      toast.success('Manual task added to list!');
+      toast.success('Manual task added successfully!');
     },
   });
 
@@ -93,7 +92,7 @@ export default function HROnboarding() {
     onSuccess: () => { 
       qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); 
       qc.invalidateQueries({ queryKey: ['employees'] }); 
-      setShowBulk(false); // FIX: Ensures "Register & Start" window disappears
+      setShowBulk(false); 
       setFirstName('');
       setLastName('');
       setEmployeeEmail('');
@@ -102,7 +101,9 @@ export default function HROnboarding() {
       toast.success('Employee registered and onboarding started!');
     },
     onError: (err) => {
-      setError('Registration failed. Email might already exist.');
+      // Logic for actual error reflection
+      console.error(err);
+      toast.error('Could not complete registration. Check console.');
     }
   });
 

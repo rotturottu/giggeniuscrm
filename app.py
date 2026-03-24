@@ -34,7 +34,7 @@ def init_db():
 
     c.execute('''CREATE TABLE IF NOT EXISTS employees
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, first_name TEXT, last_name TEXT,
-                  email TEXT, department TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                  email TEXT UNIQUE, department TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS contacts
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT,
@@ -89,7 +89,7 @@ def init_db():
                   status TEXT DEFAULT 'draft', notes TEXT, paid_at TEXT,
                   user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # NEW: PERFORMANCE REVIEWS TABLE
+    # PERFORMANCE REVIEWS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS performance_reviews
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
@@ -106,6 +106,19 @@ def init_db():
                   user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # ONBOARDING TASKS TABLE
+    c.execute('''CREATE TABLE IF NOT EXISTS onboarding_tasks
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT,
+                  employee_id TEXT,
+                  task_name TEXT,
+                  category TEXT,
+                  status TEXT DEFAULT 'pending',
+                  due_date TEXT,
+                  department TEXT,
+                  user_email TEXT,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
     # 4. CAMPAIGNS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS campaigns
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, status TEXT DEFAULT 'Draft',
@@ -118,7 +131,6 @@ def init_db():
 init_db()
 
 # --- AUTH ROUTES ---
-
 @app.route('/api/auth/register', methods=['POST'])
 def register():
     data = request.json
@@ -175,12 +187,6 @@ def handle_me():
         conn.close()
         return jsonify({"message": "Profile updated successfully"}), 200
 
-# --- ANALYTICS ROUTE ---
-@app.route('/api/apps/giggenius-crm/analytics/track/batch', methods=['POST', 'OPTIONS'])
-def handle_analytics():
-    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    return jsonify({"success": True}), 200
-
 # --- GENERIC ENTITY HANDLERS ---
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_entities(entity_name):
@@ -191,7 +197,8 @@ def handle_base44_entities(entity_name):
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
         'Project': 'projects', 'LeaveRequest': 'leave_requests', 
-        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews'
+        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
+        'OnboardingTask': 'onboarding_tasks'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -225,21 +232,9 @@ def handle_base44_entities(entity_name):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        
-        if 'document_name' in data: data['client_name'] = data.pop('document_name')
         if 'user_email' in db_cols: data['user_email'] = user_email
 
-        # Elastic Bundling Logic
-        cleaned_data = {}
-        extra_fields = {}
-        for k, v in data.items():
-            if k in db_cols: cleaned_data[k] = v
-            else: extra_fields[k] = v
-        
-        if extra_fields and 'notes' in db_cols:
-            existing = cleaned_data.get('notes', '')
-            cleaned_data['notes'] = f"{existing} | Extra: {json.dumps(extra_fields)}".strip(' | ')
-
+        cleaned_data = {k: v for k, v in data.items() if k in db_cols}
         columns = ', '.join(cleaned_data.keys())
         placeholders = ', '.join(['?'] * len(cleaned_data))
         try:
@@ -260,13 +255,27 @@ def handle_base44_single_item(entity_name, entity_id):
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
         'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests',
-        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews'
+        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
+        'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
 
     if request.method == 'DELETE':
+        # --- CASCADING DELETE START ---
+        # If we are deleting an Employee, we must first delete their tasks/reviews
+        if entity_name == 'Employee':
+            c.execute("SELECT email FROM employees WHERE id = ?", (entity_id,))
+            row = c.fetchone()
+            if row:
+                emp_email = row[0]
+                c.execute("DELETE FROM onboarding_tasks WHERE employee_id = ?", (emp_email,))
+                c.execute("DELETE FROM performance_reviews WHERE employee_email = ?", (emp_email,))
+                c.execute("DELETE FROM payroll_records WHERE employee_email = ?", (emp_email,))
+                c.execute("DELETE FROM leave_requests WHERE employee_email = ?", (emp_email,))
+        # --- CASCADING DELETE END ---
+
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
@@ -276,18 +285,7 @@ def handle_base44_single_item(entity_name, entity_id):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        
-        if 'document_name' in data: data['client_name'] = data.pop('document_name')
-
-        cleaned_data = {}
-        extra_fields = {}
-        for k, v in data.items():
-            if k in db_cols: cleaned_data[k] = v
-            else: extra_fields[k] = v
-            
-        if extra_fields and 'notes' in db_cols:
-            cleaned_data['notes'] = f"{cleaned_data.get('notes', '')} | Extra: {json.dumps(extra_fields)}".strip(' | ')
-
+        cleaned_data = {k: v for k, v in data.items() if k in db_cols}
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()
