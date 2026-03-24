@@ -44,7 +44,14 @@ export default function HROnboarding() {
 
   const saveMutation = useMutation({
     mutationFn: (d) => base44.entities.OnboardingTask.create({ ...d, employee_id: d.employee_name }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); setShowForm(false); setForm(empty); },
+    onSuccess: () => { 
+      qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); 
+      setShowForm(false); 
+      setForm(empty); 
+    },
+    onError: (error) => {
+      console.error("Failed to save task:", error);
+    }
   });
 
   const bulkCreateMutation = useMutation({
@@ -129,23 +136,37 @@ export default function HROnboarding() {
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Add Onboarding Task</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <div className="space-y-1"><Label>Employee Name</Label><Input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} /></div>
-            <div className="space-y-1"><Label>Task Name</Label><Input value={form.task_name} onChange={e => setForm(p => ({ ...p, task_name: e.target.value }))} /></div>
-            <div className="space-y-1">
-              <Label>Category</Label>
-              <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{Object.keys(categoryColors).map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
-              </Select>
+          
+          <form onSubmit={(e) => {
+            e.preventDefault(); 
+            saveMutation.mutate(form);
+          }}>
+            <div className="space-y-3">
+              <div className="space-y-1"><Label>Employee Name</Label><Input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Task Name</Label><Input value={form.task_name} onChange={e => setForm(p => ({ ...p, task_name: e.target.value }))} /></div>
+              <div className="space-y-1">
+                <Label>Category</Label>
+                <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{Object.keys(categoryColors).map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1"><Label>Assigned To</Label><Input value={form.assigned_to} onChange={e => setForm(p => ({ ...p, assigned_to: e.target.value }))} /></div>
+              <div className="space-y-1"><Label>Due Date</Label><Input type="date" value={form.due_date} onChange={e => setForm(p => ({ ...p, due_date: e.target.value }))} /></div>
             </div>
-            <div className="space-y-1"><Label>Assigned To</Label><Input value={form.assigned_to} onChange={e => setForm(p => ({ ...p, assigned_to: e.target.value }))} /></div>
-            <div className="space-y-1"><Label>Due Date</Label><Input type="date" value={form.due_date} onChange={e => setForm(p => ({ ...p, due_date: e.target.value }))} /></div>
-          </div>
-          <div className="flex justify-end gap-2 mt-2">
-            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">Save</Button>
-          </div>
+            
+            <div className="flex justify-end gap-2 mt-4">
+              <Button type="button" variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+              <Button 
+                type="submit" 
+                disabled={saveMutation.isPending || !form.employee_name.trim() || !form.task_name.trim()} 
+                className="bg-indigo-600 hover:bg-indigo-700"
+              >
+                {saveMutation.isPending ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </form>
+          
         </DialogContent>
       </Dialog>
     </div>
