@@ -1,21 +1,26 @@
+import { base44 } from '@/api/base44Client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useQuery } from '@tanstack/react-query';
 import {
-    Activity,
-    Calendar,
-    CheckCircle,
-    Clock,
-    Lock,
-    Mail,
-    Plus,
-    Search,
-    Shield,
-    Unlock,
-    Users,
-    XCircle
+  Activity,
+  Calendar,
+  CheckCircle,
+  Clock,
+  Lock,
+  Mail,
+  Plus,
+  Search,
+  Shield,
+  Unlock,
+  Users,
+  XCircle
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -39,21 +44,15 @@ const defaultRolePermissions = {
   Viewer: ['view_employees','view_reports'],
 };
 
+// Initial sample data for the table until you wire the table itself to the database
 const sampleMembers = [
   { id: 1, name: 'Alex Rivera', email: 'alex@company.com', role: 'Admin', status: 'active', lastActive: '2 mins ago', avatar: 'AR', calendarAccess: true },
   { id: 2, name: 'Maria Santos', email: 'maria@company.com', role: 'HR Manager', status: 'active', lastActive: '1 hour ago', avatar: 'MS', calendarAccess: true },
-  { id: 3, name: 'James Lee', email: 'james@company.com', role: 'Manager', status: 'active', lastActive: 'Yesterday', avatar: 'JL', calendarAccess: false },
-  { id: 4, name: 'Sofia Park', email: 'sofia@company.com', role: 'Employee', status: 'inactive', lastActive: '3 days ago', avatar: 'SP', calendarAccess: false },
-  { id: 5, name: 'Daniel Cruz', email: 'daniel@company.com', role: 'Viewer', status: 'active', lastActive: '5 mins ago', avatar: 'DC', calendarAccess: false },
 ];
 
 const activityLog = [
   { id: 1, user: 'Alex Rivera', action: 'Approved leave request for Maria Santos', time: '10 mins ago', type: 'approve' },
   { id: 2, user: 'Maria Santos', action: 'Added new employee: Daniel Cruz', time: '1 hour ago', type: 'create' },
-  { id: 3, user: 'James Lee', action: 'Updated payroll record for Q1 2026', time: '3 hours ago', type: 'edit' },
-  { id: 4, user: 'Alex Rivera', action: 'Changed role of Sofia Park to Employee', time: 'Yesterday', type: 'role' },
-  { id: 5, user: 'Maria Santos', action: 'Exported employee report', time: 'Yesterday', type: 'export' },
-  { id: 6, user: 'Daniel Cruz', action: 'Logged in from new device', time: '2 days ago', type: 'login' },
 ];
 
 const activityColor = { approve: 'text-green-600 bg-green-50', create: 'text-blue-600 bg-blue-50', edit: 'text-yellow-600 bg-yellow-50', role: 'text-purple-600 bg-purple-50', export: 'text-gray-600 bg-gray-50', login: 'text-indigo-600 bg-indigo-50' };
@@ -64,6 +63,15 @@ export default function HRTeamManagement() {
   const [search, setSearch] = useState('');
   const [selectedRole, setSelectedRole] = useState('Admin');
   const [tab, setTab] = useState('access');
+
+  const [showInvite, setShowInvite] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ id: '', name: '', email: '', role: 'Employee' });
+
+  // Fetch dynamic employees from the database
+  const { data: dbEmployees = [] } = useQuery({
+    queryKey: ['employees_list'],
+    queryFn: () => base44.entities.Employee.list(), 
+  });
 
   const filtered = members.filter(m =>
     m.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -92,6 +100,29 @@ export default function HRTeamManagement() {
     setMembers(prev => prev.map(m => m.id === id ? { ...m, role } : m));
   };
 
+  const handleInvite = (e) => {
+    e.preventDefault();
+    if (!inviteForm.name || !inviteForm.email) return;
+
+    const newId = members.length ? Math.max(...members.map(m => m.id)) + 1 : 1;
+    const initials = inviteForm.name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+
+    const newMember = {
+      id: newId,
+      name: inviteForm.name,
+      email: inviteForm.email,
+      role: inviteForm.role,
+      status: 'active',
+      lastActive: 'Just now',
+      avatar: initials,
+      calendarAccess: false
+    };
+
+    setMembers([newMember, ...members]); 
+    setShowInvite(false); 
+    setInviteForm({ id: '', name: '', email: '', role: 'Employee' }); 
+  };
+
   return (
     <div className="space-y-6">
       <Tabs value={tab} onValueChange={setTab}>
@@ -111,7 +142,7 @@ export default function HRTeamManagement() {
                   <CardTitle>Staff Access Management</CardTitle>
                   <CardDescription>Manage who has access and their roles in the system.</CardDescription>
                 </div>
-                <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1">
+                <Button onClick={() => setShowInvite(true)} size="sm" className="bg-indigo-600 hover:bg-indigo-700 text-white gap-1">
                   <Plus className="w-4 h-4" /> Invite Member
                 </Button>
               </div>
@@ -152,6 +183,7 @@ export default function HRTeamManagement() {
                     </div>
                   </div>
                 ))}
+                {filtered.length === 0 && <div className="text-center py-6 text-gray-500 text-sm">No members found.</div>}
               </div>
             </CardContent>
           </Card>
@@ -262,6 +294,82 @@ export default function HRTeamManagement() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Invite Dialog */}
+      <Dialog open={showInvite} onOpenChange={setShowInvite}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Invite New Member</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleInvite} className="space-y-4 py-2">
+            
+            {/* Dynamic Employee Dropdown */}
+            <div className="space-y-1">
+              <Label>Select Employee</Label>
+              <Select 
+                value={inviteForm.id} 
+                onValueChange={(selectedId) => {
+                  const selectedEmp = dbEmployees.find(e => e.id === selectedId);
+                  setInviteForm(prev => ({ 
+                    ...prev, 
+                    id: selectedId,
+                    // Format correctly using first_name and last_name from the DB
+                    name: selectedEmp ? `${selectedEmp.first_name} ${selectedEmp.last_name}` : '', 
+                    email: selectedEmp?.email || '' 
+                  }));
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an existing employee" />
+                </SelectTrigger>
+                <SelectContent>
+                  {dbEmployees.length === 0 ? (
+                    <div className="p-2 text-sm text-gray-500">No employees found in database.</div>
+                  ) : (
+                    dbEmployees.map(emp => (
+                      <SelectItem key={emp.id} value={emp.id}>
+                        {emp.first_name} {emp.last_name}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label>Email Address</Label>
+              <Input 
+                type="email" 
+                value={inviteForm.email} 
+                readOnly 
+                className="bg-gray-50 text-gray-500" 
+                placeholder="Auto-filled from selection" 
+              />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Assign Role</Label>
+              <Select value={inviteForm.role} onValueChange={v => setInviteForm(p => ({ ...p, role: v }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a role" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ROLES.map(r => (
+                    <SelectItem key={r} value={r}>{r}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="flex justify-end gap-2 mt-4">
+              <Button type="button" variant="outline" onClick={() => setShowInvite(false)}>Cancel</Button>
+              <Button type="submit" disabled={!inviteForm.name || !inviteForm.email} className="bg-indigo-600 hover:bg-indigo-700">
+                Grant Access
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
