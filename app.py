@@ -80,25 +80,29 @@ def init_db():
                   status TEXT DEFAULT 'pending',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # NEW: PAYROLL RECORDS TABLE
+    # PAYROLL RECORDS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS payroll_records
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT, employee_email TEXT, period_start TEXT, period_end TEXT,
+                  currency TEXT, base_salary REAL, hours_worked REAL, overtime_hours REAL,
+                  overtime_pay REAL, bonuses REAL, deductions REAL, tax REAL, net_pay REAL,
+                  status TEXT DEFAULT 'draft', notes TEXT, paid_at TEXT,
+                  user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    # NEW: PERFORMANCE REVIEWS TABLE
+    c.execute('''CREATE TABLE IF NOT EXISTS performance_reviews
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
                   employee_email TEXT,
-                  period_start TEXT,
-                  period_end TEXT,
-                  currency TEXT,
-                  base_salary REAL,
-                  hours_worked REAL,
-                  overtime_hours REAL,
-                  overtime_pay REAL,
-                  bonuses REAL,
-                  deductions REAL,
-                  tax REAL,
-                  net_pay REAL,
+                  reviewer_email TEXT,
+                  review_period TEXT,
+                  overall_rating INTEGER,
+                  goals_met TEXT,
+                  strengths TEXT,
+                  areas_of_improvement TEXT,
+                  goals_next_period TEXT,
+                  comments TEXT,
                   status TEXT DEFAULT 'draft',
-                  notes TEXT,
-                  paid_at TEXT,
                   user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
@@ -186,7 +190,8 @@ def handle_base44_entities(entity_name):
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
-        'Project': 'projects', 'LeaveRequest': 'leave_requests', 'PayrollRecord': 'payroll_records'
+        'Project': 'projects', 'LeaveRequest': 'leave_requests', 
+        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -221,7 +226,6 @@ def handle_base44_entities(entity_name):
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
-        # Specific field mappings
         if 'document_name' in data: data['client_name'] = data.pop('document_name')
         if 'user_email' in db_cols: data['user_email'] = user_email
 
@@ -256,7 +260,7 @@ def handle_base44_single_item(entity_name, entity_id):
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
         'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests',
-        'PayrollRecord': 'payroll_records'
+        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
@@ -275,7 +279,6 @@ def handle_base44_single_item(entity_name, entity_id):
         
         if 'document_name' in data: data['client_name'] = data.pop('document_name')
 
-        # Elastic Bundling for PUT
         cleaned_data = {}
         extra_fields = {}
         for k, v in data.items():
