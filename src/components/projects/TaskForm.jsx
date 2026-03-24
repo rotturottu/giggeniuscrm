@@ -42,8 +42,8 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState({
     title: '', description: '', status: 'todo', priority: 'medium',
-    assignedTo: '', projectName: '', startDate: null, startTime: '09:00',
-    dueDate: null, dueTime: '17:00', subtasks: [], attachments: []
+    assignedTo: '', projectName: '', startDate: null,
+    dueDate: null, subtasks: [], attachments: []
   });
 
   const { data: employees = [] } = useQuery({
@@ -61,17 +61,15 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
         assignedTo: task.assigned_to || '',
         projectName: task.list_name || '',
         startDate: safeParseDate(task.start_date),
-        startTime: task.start_time || '09:00',
         dueDate: safeParseDate(task.due_date),
-        dueTime: task.due_time || '17:00',
         subtasks: Array.isArray(task.subtasks) ? task.subtasks : [],
         attachments: Array.isArray(task.attachments) ? task.attachments : [],
       });
     } else if (open) {
       setForm({
         title: '', description: '', status: 'todo', priority: 'medium',
-        assignedTo: '', projectName: '', startDate: null, startTime: '09:00',
-        dueDate: null, dueTime: '17:00', subtasks: [], attachments: []
+        assignedTo: '', projectName: '', startDate: null,
+        dueDate: null, subtasks: [], attachments: []
       });
     }
   }, [task, open]);
@@ -80,7 +78,7 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
     mutationFn: (data) => task ? base44.entities.ProjectTask.update(task.id, data) : base44.entities.ProjectTask.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['project-tasks'] });
-      toast.success('Task saved');
+      toast.success('Task saved successfully');
       onClose();
     },
   });
@@ -103,7 +101,6 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      {/* The z-[9999] ensures the modal is on top, but we need to ensure its children are too */}
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto text-left z-[9999]">
         <DialogHeader>
           <DialogTitle>{task ? 'Edit Task' : 'New Task'}</DialogTitle>
@@ -125,54 +122,49 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
           />
 
           <div className="flex flex-wrap gap-2 items-center">
-            {/* Status Dropdown */}
             <Select value={form.status} onValueChange={(v) => setForm({...form, status: v})}>
               <SelectTrigger className="h-8 w-36 text-xs"><SelectValue /></SelectTrigger>
-              <SelectContent className="z-[10000]">
+              <SelectContent className="z-[10001]">
                 {STATUS_OPTIONS.map(s => <SelectItem key={s.value} value={s.value}>{s.label}</SelectItem>)}
               </SelectContent>
             </Select>
 
-            {/* Priority Dropdown */}
             <Select value={form.priority} onValueChange={(v) => setForm({...form, priority: v})}>
               <SelectTrigger className={`h-8 w-26 text-xs ${PRIORITY_COLORS[form.priority]}`}><SelectValue /></SelectTrigger>
-              <SelectContent className="z-[10000]">
+              <SelectContent className="z-[10001]">
                 {PRIORITY_OPTIONS.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
               </SelectContent>
             </Select>
 
-            {/* Assignee Dropdown */}
             <Select value={form.assignedTo} onValueChange={(v) => setForm({...form, assignedTo: v})}>
               <SelectTrigger className="h-8 w-44 text-xs">
                 <div className="flex items-center gap-2"><User className="w-3 h-3" /><SelectValue placeholder="Assignee..." /></div>
               </SelectTrigger>
-              <SelectContent className="z-[10000]">
+              <SelectContent className="z-[10001]">
                 {employees.map(e => <SelectItem key={e.id} value={e.email}>{e.first_name} {e.last_name}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
 
           <div className="flex flex-wrap gap-2">
-            {/* Start Date Popover */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 text-xs gap-2">
                   <CalendarIcon className="w-3 h-3" /> {form.startDate ? format(form.startDate, 'PP') : 'Start Date'}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 z-[10000]" align="start">
+              <PopoverContent className="w-auto p-0 z-[10001]" align="start">
                 <Calendar mode="single" selected={form.startDate} onSelect={(d) => setForm({...form, startDate: d})} />
               </PopoverContent>
             </Popover>
 
-            {/* Due Date Popover */}
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="h-8 text-xs gap-2">
                   <CalendarIcon className="w-3 h-3" /> {form.dueDate ? format(form.dueDate, 'PP') : 'Due Date'}
                 </Button>
               </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 z-[10000]" align="start">
+              <PopoverContent className="w-auto p-0 z-[10001]" align="start">
                 <Calendar mode="single" selected={form.dueDate} onSelect={(d) => setForm({...form, dueDate: d})} />
               </PopoverContent>
             </Popover>
