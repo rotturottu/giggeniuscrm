@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle, Circle, Loader, Plus, AlertCircle, Search, Filter } from 'lucide-react';
-import { useState } from 'react';
+import { CheckCircle, Circle, Loader, Plus, AlertCircle, Search, Filter, User } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import toast from 'react-hot-toast';
 
 const categoryColors = {
@@ -36,6 +36,10 @@ export default function HROnboarding() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty);
   
+  // Search states for the Custom Task Dialog
+  const [empSearch, setEmpSearch] = useState('');
+  const [showResults, setShowResults] = useState(false);
+  
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState('all');
 
@@ -46,15 +50,32 @@ export default function HROnboarding() {
   const [showBulk, setShowBulk] = useState(false);
   const [error, setError] = useState('');
 
+  // Fetch real departments
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
     queryFn: () => base44.entities.Department.list(),
   });
 
+  // Fetch All Employees for the Search Dropdown
+  const { data: allEmployees = [] } = useQuery({
+    queryKey: ['employees'],
+    queryFn: () => base44.entities.Employee.list(),
+  });
+
+  // Fetch Onboarding Tasks
   const { data: tasks = [] } = useQuery({
     queryKey: ['onboarding_tasks'],
     queryFn: () => base44.entities.OnboardingTask.list('-created_date', 200),
   });
+
+  // Filter employees for the custom task search
+  const filteredEmployees = useMemo(() => {
+    if (!empSearch) return [];
+    return allEmployees.filter(emp => 
+      `${emp.first_name} ${emp.last_name}`.toLowerCase().includes(empSearch.toLowerCase()) ||
+      emp.email.toLowerCase().includes(empSearch.toLowerCase())
+    ).slice(0, 10); // Limit results for performance
+  }, [empSearch, allEmployees]);
 
   const saveMutation = useMutation({
     mutationFn: (d) => base44.entities.OnboardingTask.create({ ...d, employee_id: d.employee_name }),
@@ -62,6 +83,7 @@ export default function HROnboarding() {
       qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); 
       setShowForm(false);
       setForm(empty); 
+      setEmpSearch('');
       toast.success('Manual task added successfully!');
     },
   });
@@ -69,8 +91,6 @@ export default function HROnboarding() {
   const bulkCreateMutation = useMutation({
     mutationFn: async ({ fName, lName, email, dept }) => {
       const fullName = `${fName} ${lName}`;
-      
-      // 1. Create the Employee
       await base44.entities.Employee.create({
         first_name: fName,
         last_name: lName,
@@ -78,7 +98,6 @@ export default function HROnboarding() {
         department: dept
       });
 
-      // 2. Create tasks one by one to ensure the backend accepts them
       const promises = defaultTasks.map(t => 
         base44.entities.OnboardingTask.create({ 
           ...t, 
@@ -88,25 +107,18 @@ export default function HROnboarding() {
           department: dept 
         })
       );
-
       return Promise.all(promises);
     },
     onSuccess: () => { 
       qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); 
       qc.invalidateQueries({ queryKey: ['employees'] }); 
       setShowBulk(false); 
-      setFirstName('');
-      setLastName('');
-      setEmployeeEmail('');
-      setNewEmployeeDept('');
-      setError('');
+      setFirstName(''); setLastName(''); setEmployeeEmail(''); setNewEmployeeDept(''); setError('');
       toast.success('Onboarding sequence started!');
     },
     onError: (err) => {
-      // NEW: Show actual server error instead of the hardcoded "Email exist" message
       const serverMsg = err.response?.data?.error || err.message;
       setError(`Onboarding Failed: ${serverMsg}`);
-      console.error("Debug Error:", err);
     }
   });
 
@@ -145,6 +157,7 @@ export default function HROnboarding() {
 
   return (
     <div className="space-y-4 text-left">
+      {/* HEADER CONTROLS */}
       <div className="flex flex-col md:flex-row gap-3 items-end justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
         <div className="flex flex-1 gap-3 w-full">
           <div className="relative flex-1">
@@ -169,12 +182,13 @@ export default function HROnboarding() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => { setError(''); setShowBulk(true); }} className="h-10 font-bold text-indigo-600">🚀 Onboard New</Button>
-          <Button onClick={() => { setForm(empty); setShowForm(true); }} className="bg-indigo-600 hover:bg-indigo-700 h-10 font-bold gap-2">
+          <Button onClick={() => { setForm(empty); setEmpSearch(''); setShowForm(true); }} className="bg-indigo-600 hover:bg-indigo-700 h-10 font-bold gap-2">
             <Plus className="w-4 h-4" />Task
           </Button>
         </div>
       </div>
 
+      {/* RENDER LIST */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {Object.entries(grouped).map(([name, empTasks]) => {
           const done = empTasks.filter(t => t.status === 'completed').length;
@@ -208,13 +222,8 @@ export default function HROnboarding() {
           );
         })}
       </div>
-      
-      {Object.keys(grouped).length === 0 && (
-        <div className="text-center py-20 bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400 font-bold">
-          {searchTerm || deptFilter !== 'all' ? "No personnel matching your filters." : "No onboarding checklists found."}
-        </div>
-      )}
 
+      {/* Onboard Dialog */}
       <Dialog open={showBulk} onOpenChange={setShowBulk}>
         <DialogContent className="max-w-md text-left">
           <DialogHeader><DialogTitle className="font-bold text-xl text-indigo-900">Onboard New Personnel</DialogTitle></DialogHeader>
@@ -242,49 +251,86 @@ export default function HROnboarding() {
                 </SelectContent>
               </Select>
             </div>
-            {error && (
-              <div className="p-3 bg-red-50 text-red-600 text-xs font-bold flex items-center gap-2 rounded-lg border border-red-100">
-                <AlertCircle className="w-4 h-4 shrink-0" /> {error}
-              </div>
-            )}
+            {error && <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100"><AlertCircle className="w-4 h-4 mr-2 inline" /> {error}</div>}
           </div>
           <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
-            <Button variant="outline" onClick={() => setShowBulk(false)} className="h-10 font-bold text-slate-500">Cancel</Button>
-            <Button 
-              onClick={handleBulkSubmit} 
-              disabled={bulkCreateMutation.isPending} 
-              className="bg-indigo-600 hover:bg-indigo-700 h-10 px-8 font-bold text-white shadow-lg shadow-indigo-200"
-            >
-              {bulkCreateMutation.isPending ? <Loader className="w-4 h-4 animate-spin mr-2"/> : null}
-              Start Onboarding
-            </Button>
+            <Button variant="outline" onClick={() => setShowBulk(false)} className="h-10 font-bold">Cancel</Button>
+            <Button onClick={handleBulkSubmit} disabled={bulkCreateMutation.isPending} className="bg-indigo-600 h-10 px-8 font-bold text-white">Start Onboarding</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
-        <DialogContent className="max-w-md text-left">
+      {/* SEARCHABLE Add Custom Task Dialog */}
+      <Dialog open={showForm} onOpenChange={(open) => { setShowForm(open); if(!open) setShowResults(false); }}>
+        <DialogContent className="max-w-md text-left overflow-visible">
           <DialogHeader><DialogTitle className="font-bold text-indigo-900">Add Custom Task</DialogTitle></DialogHeader>
-          <div className="space-y-3 pt-4">
-            <div className="space-y-1 text-left">
-              <Label className="text-[10px] uppercase font-bold text-slate-400">Employee Email</Label>
-              <Input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} placeholder="email@company.com" />
+          <div className="space-y-3 pt-4 relative">
+            
+            {/* Searchable Employee Field */}
+            <div className="space-y-1 text-left relative">
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Employee Personnel</Label>
+              <div className="relative">
+                <Input 
+                  value={empSearch} 
+                  onFocus={() => setShowResults(true)}
+                  onChange={e => {
+                    setEmpSearch(e.target.value);
+                    setForm(p => ({ ...p, employee_name: e.target.value }));
+                    setShowResults(true);
+                  }} 
+                  placeholder="Type name or email..." 
+                  className="h-10 pr-10"
+                />
+                <User className="absolute right-3 top-3 w-4 h-4 text-slate-300" />
+                
+                {/* Search Dropdown Results */}
+                {showResults && filteredEmployees.length > 0 && (
+                  <div className="absolute z-[100] w-full mt-1 bg-white border rounded-md shadow-xl max-h-[160px] overflow-y-auto border-indigo-100 animate-in fade-in zoom-in-95">
+                    {filteredEmployees.map(emp => (
+                      <button
+                        key={emp.id}
+                        className="w-full text-left px-4 py-3 hover:bg-indigo-50 border-b last:border-0 transition-colors flex flex-col"
+                        onClick={() => {
+                          setForm(p => ({ ...p, employee_name: emp.email }));
+                          setEmpSearch(`${emp.first_name} ${emp.last_name}`);
+                          setShowResults(false);
+                        }}
+                      >
+                        <span className="text-sm font-bold text-slate-700">{emp.first_name} {emp.last_name}</span>
+                        <span className="text-[10px] text-slate-400 font-medium">{emp.email}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <p className="text-[9px] text-slate-400 mt-1 italic font-medium">* Task will be linked via email.</p>
             </div>
+
             <div className="space-y-1 text-left">
               <Label className="text-[10px] uppercase font-bold text-slate-400">Task Details</Label>
-              <Input value={form.task_name} onChange={e => setForm(p => ({ ...p, task_name: e.target.value }))} />
+              <Input value={form.task_name} onChange={e => setForm(p => ({ ...p, task_name: e.target.value }))} placeholder="e.g. Schedule safety training" />
             </div>
+
             <div className="space-y-1 text-left">
               <Label className="text-[10px] uppercase font-bold text-slate-400">Category</Label>
               <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{Object.keys(categoryColors).map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {Object.keys(categoryColors).map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
           </div>
+
           <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} className="bg-indigo-600 font-bold px-8">Save Task</Button>
+            <Button 
+              onClick={() => saveMutation.mutate(form)} 
+              disabled={saveMutation.isPending || !form.employee_name || !form.task_name} 
+              className="bg-indigo-600 font-bold px-8"
+            >
+              {saveMutation.isPending ? 'Saving...' : 'Save Task'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
