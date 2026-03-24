@@ -67,7 +67,7 @@ def init_db():
                   user_email TEXT, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # NEW: LEAVE REQUESTS TABLE
+    # LEAVE REQUESTS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS leave_requests
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
@@ -78,6 +78,28 @@ def init_db():
                   days_count INTEGER,
                   reason TEXT,
                   status TEXT DEFAULT 'pending',
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    # NEW: PAYROLL RECORDS TABLE
+    c.execute('''CREATE TABLE IF NOT EXISTS payroll_records
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT,
+                  employee_email TEXT,
+                  period_start TEXT,
+                  period_end TEXT,
+                  currency TEXT,
+                  base_salary REAL,
+                  hours_worked REAL,
+                  overtime_hours REAL,
+                  overtime_pay REAL,
+                  bonuses REAL,
+                  deductions REAL,
+                  tax REAL,
+                  net_pay REAL,
+                  status TEXT DEFAULT 'draft',
+                  notes TEXT,
+                  paid_at TEXT,
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # 4. CAMPAIGNS TABLE
@@ -164,7 +186,7 @@ def handle_base44_entities(entity_name):
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
-        'Project': 'projects', 'LeaveRequest': 'leave_requests'
+        'Project': 'projects', 'LeaveRequest': 'leave_requests', 'PayrollRecord': 'payroll_records'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -233,7 +255,8 @@ def handle_base44_single_item(entity_name, entity_id):
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
-        'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests'
+        'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests',
+        'PayrollRecord': 'payroll_records'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
