@@ -8,7 +8,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   CalendarIcon, Save, X, Bell, RefreshCw,
-  ChevronDown, ChevronRight, Upload, Clock, User
+  ChevronDown, ChevronRight, Upload, Clock, User, Plus
 } from 'lucide-react';
 import { format, parseISO, isValid } from 'date-fns';
 import { base44 } from '@/api/base44Client';
@@ -40,6 +40,9 @@ const safeParseDate = (dateStr) => {
 
 export default function TaskForm({ open, onClose, task, isPaidUser }) {
   const queryClient = useQueryClient();
+  const [newSubtask, setNewSubtask] = useState('');
+  const [uploading, setUploading] = useState(false);
+  
   const [form, setForm] = useState({
     title: '', description: '', status: 'todo', priority: 'medium',
     assignedTo: '', projectName: '', startDate: null,
@@ -97,6 +100,28 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
       subtasks: form.subtasks,
       attachments: form.attachments,
     });
+  };
+
+  const addSubtask = () => {
+    if (!newSubtask.trim()) return;
+    const newTask = { id: Date.now().toString(), title: newSubtask, completed: false };
+    setForm({ ...form, subtasks: [...form.subtasks, newTask] });
+    setNewSubtask('');
+  };
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      setForm({ ...form, attachments: [...form.attachments, file_url] });
+      toast.success('File uploaded');
+    } catch (err) {
+      toast.error('Upload failed');
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -168,6 +193,55 @@ export default function TaskForm({ open, onClose, task, isPaidUser }) {
                 <Calendar mode="single" selected={form.dueDate} onSelect={(d) => setForm({...form, dueDate: d})} />
               </PopoverContent>
             </Popover>
+          </div>
+
+          {/* SUBTASKS SECTION */}
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-gray-400 uppercase">Subtasks</p>
+            {form.subtasks.map((sub, idx) => (
+              <div key={sub.id} className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  checked={sub.completed} 
+                  onChange={() => {
+                    const updated = [...form.subtasks];
+                    updated[idx].completed = !updated[idx].completed;
+                    setForm({...form, subtasks: updated});
+                  }}
+                />
+                <span className={`text-sm ${sub.completed ? 'line-through text-gray-400' : ''}`}>{sub.title}</span>
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <Input 
+                value={newSubtask} 
+                onChange={(e) => setNewSubtask(e.target.value)} 
+                placeholder="New subtask..." 
+                className="h-8 text-sm"
+              />
+              <Button size="sm" onClick={addSubtask} variant="outline"><Plus className="w-4 h-4" /></Button>
+            </div>
+          </div>
+
+          {/* ATTACHMENTS SECTION */}
+          <div className="space-y-2">
+            <p className="text-xs font-bold text-gray-400 uppercase">Attachments</p>
+            <div className="flex flex-wrap gap-2">
+              {form.attachments.map((file, i) => (
+                <div key={i} className="flex items-center gap-2 bg-gray-50 px-2 py-1 rounded border text-xs">
+                  <a href={file} target="_blank" className="text-blue-600 truncate max-w-[150px]">File {i+1}</a>
+                  <X 
+                    className="w-3 h-3 cursor-pointer text-gray-400" 
+                    onClick={() => setForm({...form, attachments: form.attachments.filter((_, idx) => idx !== i)})}
+                  />
+                </div>
+              ))}
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer border border-dashed p-2 rounded hover:bg-gray-50 transition-all">
+              <Upload className="w-4 h-4 text-gray-400" />
+              <span className="text-xs text-gray-500">{uploading ? 'Uploading...' : 'Click to attach file'}</span>
+              <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+            </label>
           </div>
 
           <div className="flex justify-end gap-2 pt-4 border-t">
