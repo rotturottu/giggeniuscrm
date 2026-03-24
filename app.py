@@ -246,25 +246,34 @@ def handle_base44_entities(entity_name):
         return jsonify(data), 200
 
     if request.method == 'POST':
-        data = request.json
+        request_data = request.json
+        # Convert single object to a list so the loop handles both cases
+        items_to_process = request_data if isinstance(request_data, list) else [request_data]
+        
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
-        if 'document_name' in data: data['client_name'] = data.pop('document_name')
-        if 'user_email' in db_cols: data['user_email'] = user_email
-
-        cleaned_data = {}
-        for k, v in data.items():
-            if k in db_cols: 
-                cleaned_data[k] = v
-
-        columns = ', '.join(cleaned_data.keys())
-        placeholders = ', '.join(['?'] * len(cleaned_data))
+        results = []
         try:
-            c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
+            for item in items_to_process:
+                if 'document_name' in item: item['client_name'] = item.pop('document_name')
+                if 'user_email' in db_cols: item['user_email'] = user_email
+
+                cleaned_data = {}
+                for k, v in item.items():
+                    if k in db_cols: 
+                        cleaned_data[k] = v
+
+                columns = ', '.join(cleaned_data.keys())
+                placeholders = ', '.join(['?'] * len(cleaned_data))
+                
+                c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
+                cleaned_data['id'] = c.lastrowid
+                results.append(cleaned_data)
+            
             conn.commit()
-            cleaned_data['id'] = c.lastrowid
-            return jsonify(cleaned_data), 201
+            # Return list if input was a list, otherwise return first item
+            return jsonify(results if isinstance(request_data, list) else results[0]), 201
         except Exception as e:
             return jsonify({"error": str(e)}), 400
         finally:
