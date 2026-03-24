@@ -73,21 +73,24 @@ export default function TaskForm({ open, onClose, task }) {
   const handleSave = () => {
     if (!form.title) return toast.error('Title required');
     
-    // Explicitly mapping the data to ensure Python receives exactly what it expects
-    const payload = {
+    // We create a clean "package" of data to send to the server
+    const dataToSend = {
       title: form.title,
-      description: form.description,
+      description: form.description || "", // Ensures it's never 'null'
       status: form.status,
       priority: form.priority,
       assigned_to: form.assigned_to,
       list_name: form.list_name,
+      // Formatting dates specifically for SQLite (YYYY-MM-DD)
       start_date: form.start_date && isValid(form.start_date) ? format(form.start_date, 'yyyy-MM-dd') : null,
       due_date: form.due_date && isValid(form.due_date) ? format(form.due_date, 'yyyy-MM-dd') : null,
-      subtasks: JSON.stringify(form.subtasks), // Stringify for SQLite storage
-      attachments: JSON.stringify(form.attachments) // Stringify for SQLite storage
+      // Convert arrays to strings so the database can store them
+      subtasks: JSON.stringify(form.subtasks),
+      attachments: JSON.stringify(form.attachments)
     };
 
-    saveMutation.mutate(payload);
+    console.log("Sending to Database:", dataToSend); // Check this in your Browser Console (F12)
+    saveMutation.mutate(dataToSend);
   };
 
   const handleFileUpload = async (e) => {
