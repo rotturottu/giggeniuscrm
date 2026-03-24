@@ -52,7 +52,7 @@ def init_db():
                   user_email TEXT, last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # PROJECTS TABLE (Integrated properly)
+    # PROJECTS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS projects
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   name TEXT, 
@@ -65,6 +65,19 @@ def init_db():
                   signed_contract TEXT,
                   status TEXT DEFAULT 'active',
                   user_email TEXT, 
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    # NEW: LEAVE REQUESTS TABLE
+    c.execute('''CREATE TABLE IF NOT EXISTS leave_requests
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT,
+                  employee_email TEXT,
+                  leave_type TEXT,
+                  start_date TEXT,
+                  end_date TEXT,
+                  days_count INTEGER,
+                  reason TEXT,
+                  status TEXT DEFAULT 'pending',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # 4. CAMPAIGNS TABLE
@@ -151,7 +164,7 @@ def handle_base44_entities(entity_name):
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
-        'Project': 'projects'
+        'Project': 'projects', 'LeaveRequest': 'leave_requests'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -186,11 +199,11 @@ def handle_base44_entities(entity_name):
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
-        # RESTORED: Specific field mappings
+        # Specific field mappings
         if 'document_name' in data: data['client_name'] = data.pop('document_name')
         if 'user_email' in db_cols: data['user_email'] = user_email
 
-        # RESTORED: Elastic Bundling Logic
+        # Elastic Bundling Logic
         cleaned_data = {}
         extra_fields = {}
         for k, v in data.items():
@@ -220,7 +233,7 @@ def handle_base44_single_item(entity_name, entity_id):
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
-        'Campaign': 'campaigns', 'Project': 'projects'
+        'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
@@ -239,7 +252,7 @@ def handle_base44_single_item(entity_name, entity_id):
         
         if 'document_name' in data: data['client_name'] = data.pop('document_name')
 
-        # RESTORED: Elastic Bundling for PUT
+        # Elastic Bundling for PUT
         cleaned_data = {}
         extra_fields = {}
         for k, v in data.items():
