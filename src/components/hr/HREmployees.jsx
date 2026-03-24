@@ -31,10 +31,15 @@ export default function HREmployees() {
     }
   });
 
-  // 2. Fetch Existing Departments for the dropdown
+  // 2. Fetch Existing Departments - Using the same key as HRDepartments.jsx
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
-    queryFn: () => base44.entities.Department.list(),
+    queryFn: async () => {
+        const res = await base44.entities.Department.list();
+        return Array.isArray(res) ? res : [];
+    },
+    // This ensures that when you add a department in the other tab, this list refreshes
+    refetchOnWindowFocus: true 
   });
 
   // 3. Setup the Save tool
@@ -48,7 +53,8 @@ export default function HREmployees() {
       toast.success('Employee registered successfully');
     },
     onError: (err) => {
-      setError(err.message || "Failed to save employee. Check backend logs.");
+      const msg = err.response?.data?.error || "Check backend logs.";
+      setError(`Failed to save: ${msg}`);
     }
   });
 
@@ -63,7 +69,7 @@ export default function HREmployees() {
 
   const handleSave = () => {
     if (!form.first_name || !form.last_name || !form.email || !form.department) {
-      setError("All fields are required.");
+      setError("All fields are required, including Department.");
       return;
     }
     if (!form.email.includes('@')) {
@@ -133,7 +139,7 @@ export default function HREmployees() {
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      onClick={() => { if(confirm('Remove this employee? This will also remove their onboarding status.')) deleteMutation.mutate(emp.id); }} 
+                      onClick={() => { if(confirm('Remove this employee?')) deleteMutation.mutate(emp.id); }} 
                       className="text-gray-300 hover:text-red-600 transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -168,17 +174,22 @@ export default function HREmployees() {
             </div>
             
             <div className="space-y-1.5 text-left">
-              <Label className="text-xs font-bold uppercase text-gray-500">Department</Label>
-              <Select value={form.department} onValueChange={(val) => setForm({ ...form, department: val })}>
+              <Label className="text-xs font-bold uppercase text-gray-500">Assigned Department</Label>
+              <Select 
+                value={form.department} 
+                onValueChange={(val) => setForm({ ...form, department: val })}
+              >
                 <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Choose a department..." />
+                  <SelectValue placeholder={departments.length > 0 ? "Select a department" : "No departments found"} />
                 </SelectTrigger>
                 <SelectContent>
                   {departments.length === 0 ? (
-                    <SelectItem disabled value="none">No departments found</SelectItem>
+                    <SelectItem disabled value="none">Create departments in the 'Departments' tab first</SelectItem>
                   ) : (
                     departments.map(dept => (
-                      <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
+                      <SelectItem key={dept.id} value={dept.name}>
+                        {dept.name}
+                      </SelectItem>
                     ))
                   )}
                 </SelectContent>
@@ -186,8 +197,8 @@ export default function HREmployees() {
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs font-semibold">
-                {error}
+              <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs font-semibold flex items-center gap-2">
+                <AlertCircle className="w-4 h-4" /> {error}
               </div>
             )}
 
@@ -196,7 +207,7 @@ export default function HREmployees() {
               <Button 
                 onClick={handleSave} 
                 disabled={saveMutation.isPending} 
-                className="bg-indigo-600 hover:bg-indigo-700 h-10 px-6"
+                className="bg-indigo-600 hover:bg-indigo-700 h-10 px-6 font-bold"
               >
                 {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : "Save Employee"}
               </Button>
