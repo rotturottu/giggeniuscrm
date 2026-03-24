@@ -36,11 +36,9 @@ export default function HROnboarding() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty);
   
-  // UI States
   const [searchTerm, setSearchTerm] = useState('');
   const [deptFilter, setDeptFilter] = useState('all');
 
-  // Registration States
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [employeeEmail, setEmployeeEmail] = useState('');
@@ -48,13 +46,11 @@ export default function HROnboarding() {
   const [showBulk, setShowBulk] = useState(false);
   const [error, setError] = useState('');
 
-  // 1. Fetch real departments
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
     queryFn: () => base44.entities.Department.list(),
   });
 
-  // 2. Fetch Onboarding Tasks
   const { data: tasks = [] } = useQuery({
     queryKey: ['onboarding_tasks'],
     queryFn: () => base44.entities.OnboardingTask.list('-created_date', 200),
@@ -82,17 +78,18 @@ export default function HROnboarding() {
         department: dept
       });
 
-      // 2. Create the Tasks (Pass the array directly)
-      const taskList = defaultTasks.map(t => ({ 
-        ...t, 
-        employee_name: fullName, 
-        employee_id: email, 
-        status: 'pending',
-        department: dept 
-      }));
+      // 2. Create tasks one by one to ensure the backend accepts them
+      const promises = defaultTasks.map(t => 
+        base44.entities.OnboardingTask.create({ 
+          ...t, 
+          employee_name: fullName, 
+          employee_id: email, 
+          status: 'pending',
+          department: dept 
+        })
+      );
 
-      // NOTE: Ensure your base44 client is configured to send headers
-      return base44.entities.OnboardingTask.create(taskList);
+      return Promise.all(promises);
     },
     onSuccess: () => { 
       qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); 
@@ -106,10 +103,10 @@ export default function HROnboarding() {
       toast.success('Onboarding sequence started!');
     },
     onError: (err) => {
-      // THIS WILL NOW SHOW YOU THE REAL REASON IT FAILED
-      const msg = err.response?.data?.error || err.message;
-      setError(`Server Error: ${msg}`);
-      console.error("Full Error Object:", err);
+      // NEW: Show actual server error instead of the hardcoded "Email exist" message
+      const serverMsg = err.response?.data?.error || err.message;
+      setError(`Onboarding Failed: ${serverMsg}`);
+      console.error("Debug Error:", err);
     }
   });
 
@@ -118,7 +115,6 @@ export default function HROnboarding() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }),
   });
 
-  // FILTER LOGIC
   const filteredTasks = tasks.filter(t => {
     const matchesSearch = t.employee_name?.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           t.task_name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -149,7 +145,6 @@ export default function HROnboarding() {
 
   return (
     <div className="space-y-4 text-left">
-      {/* HEADER CONTROLS */}
       <div className="flex flex-col md:flex-row gap-3 items-end justify-between bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
         <div className="flex flex-1 gap-3 w-full">
           <div className="relative flex-1">
@@ -173,14 +168,13 @@ export default function HROnboarding() {
           </Select>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" onClick={() => { setError(''); setShowBulk(true); }} className="h-10 font-bold">🚀 Onboard New</Button>
+          <Button variant="outline" onClick={() => { setError(''); setShowBulk(true); }} className="h-10 font-bold text-indigo-600">🚀 Onboard New</Button>
           <Button onClick={() => { setForm(empty); setShowForm(true); }} className="bg-indigo-600 hover:bg-indigo-700 h-10 font-bold gap-2">
             <Plus className="w-4 h-4" />Task
           </Button>
         </div>
       </div>
 
-      {/* RENDER LIST */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {Object.entries(grouped).map(([name, empTasks]) => {
           const done = empTasks.filter(t => t.status === 'completed').length;
@@ -221,25 +215,50 @@ export default function HROnboarding() {
         </div>
       )}
 
-      {/* DIALOGS REMAIN THE SAME AS PREVIOUS VERSION */}
       <Dialog open={showBulk} onOpenChange={setShowBulk}>
         <DialogContent className="max-w-md text-left">
           <DialogHeader><DialogTitle className="font-bold text-xl text-indigo-900">Onboard New Personnel</DialogTitle></DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-slate-400">First Name</Label><Input value={firstName} onChange={e => setFirstName(e.target.value)} /></div>
-              <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-slate-400">Last Name</Label><Input value={lastName} onChange={e => setLastName(e.target.value)} /></div>
+            <div className="grid grid-cols-2 gap-3 text-left">
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase font-bold text-slate-400">First Name</Label>
+                <Input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="John" className="h-10" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-[10px] uppercase font-bold text-slate-400">Last Name</Label>
+                <Input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Doe" className="h-10" />
+              </div>
             </div>
-            <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-slate-400">Email Address</Label><Input value={employeeEmail} onChange={e => setEmployeeEmail(e.target.value)} /></div>
-            <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-slate-400">Department</Label>
+            <div className="space-y-1 text-left">
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Email Address</Label>
+              <Input value={employeeEmail} onChange={e => setEmployeeEmail(e.target.value)} placeholder="email@company.com" className="h-10" />
+            </div>
+            <div className="space-y-1 text-left">
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Department</Label>
               <Select value={newEmployeeDept} onValueChange={setNewEmployeeDept}>
                 <SelectTrigger className="h-10"><SelectValue placeholder="Choose a department..." /></SelectTrigger>
-                <SelectContent>{departments.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}</SelectContent>
+                <SelectContent>
+                  {departments.map(d => <SelectItem key={d.id} value={d.name}>{d.name}</SelectItem>)}
+                </SelectContent>
               </Select>
             </div>
-            {error && <div className="p-3 bg-red-50 text-red-600 text-xs font-bold flex items-center gap-2 rounded-lg"><AlertCircle className="w-4 h-4" /> {error}</div>}
+            {error && (
+              <div className="p-3 bg-red-50 text-red-600 text-xs font-bold flex items-center gap-2 rounded-lg border border-red-100">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+              </div>
+            )}
           </div>
-          <div className="flex justify-end gap-2 mt-6 pt-4 border-t"><Button variant="outline" onClick={() => setShowBulk(false)}>Cancel</Button><Button onClick={handleBulkSubmit} disabled={bulkCreateMutation.isPending} className="bg-indigo-600 font-bold px-8">Register & Start</Button></div>
+          <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+            <Button variant="outline" onClick={() => setShowBulk(false)} className="h-10 font-bold text-slate-500">Cancel</Button>
+            <Button 
+              onClick={handleBulkSubmit} 
+              disabled={bulkCreateMutation.isPending} 
+              className="bg-indigo-600 hover:bg-indigo-700 h-10 px-8 font-bold text-white shadow-lg shadow-indigo-200"
+            >
+              {bulkCreateMutation.isPending ? <Loader className="w-4 h-4 animate-spin mr-2"/> : null}
+              Start Onboarding
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -247,16 +266,26 @@ export default function HROnboarding() {
         <DialogContent className="max-w-md text-left">
           <DialogHeader><DialogTitle className="font-bold text-indigo-900">Add Custom Task</DialogTitle></DialogHeader>
           <div className="space-y-3 pt-4">
-            <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-slate-400">Employee Email</Label><Input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} /></div>
-            <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-slate-400">Task Details</Label><Input value={form.task_name} onChange={e => setForm(p => ({ ...p, task_name: e.target.value }))} /></div>
-            <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-slate-400">Category</Label>
+            <div className="space-y-1 text-left">
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Employee Email</Label>
+              <Input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} placeholder="email@company.com" />
+            </div>
+            <div className="space-y-1 text-left">
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Task Details</Label>
+              <Input value={form.task_name} onChange={e => setForm(p => ({ ...p, task_name: e.target.value }))} />
+            </div>
+            <div className="space-y-1 text-left">
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Category</Label>
               <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{Object.keys(categoryColors).map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
           </div>
-          <div className="flex justify-end gap-2 mt-6 pt-4 border-t"><Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button><Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} className="bg-indigo-600 font-bold px-8">Save Task</Button></div>
+          <div className="flex justify-end gap-2 mt-6 pt-4 border-t">
+            <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
+            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} className="bg-indigo-600 font-bold px-8">Save Task</Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

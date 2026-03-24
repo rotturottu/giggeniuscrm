@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { UserPlus, AlertCircle, Trash2, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -16,7 +17,7 @@ export default function HREmployees() {
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
 
-  // 1. Fetch data safely
+  // 1. Fetch Employees
   const { data: employees = [], isLoading, isError } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => {
@@ -30,7 +31,13 @@ export default function HREmployees() {
     }
   });
 
-  // 2. Setup the Save tool with validation
+  // 2. Fetch Existing Departments for the dropdown
+  const { data: departments = [] } = useQuery({
+    queryKey: ['departments'],
+    queryFn: () => base44.entities.Department.list(),
+  });
+
+  // 3. Setup the Save tool
   const saveMutation = useMutation({
     mutationFn: (d) => base44.entities.Employee.create(d),
     onSuccess: () => {
@@ -48,7 +55,6 @@ export default function HREmployees() {
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Employee.delete(id),
     onSuccess: () => {
-      // Refresh both the directory and onboarding lists since data is linked
       qc.invalidateQueries({ queryKey: ['employees'] });
       qc.invalidateQueries({ queryKey: ['onboarding_tasks'] });
       toast.success('Employee removed');
@@ -56,7 +62,6 @@ export default function HREmployees() {
   });
 
   const handleSave = () => {
-    // Basic Validation
     if (!form.first_name || !form.last_name || !form.email || !form.department) {
       setError("All fields are required.");
       return;
@@ -161,9 +166,23 @@ export default function HREmployees() {
               <Label className="text-xs font-bold uppercase text-gray-500">Email Address</Label>
               <Input type="email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="john@company.com" className="h-10" />
             </div>
+            
             <div className="space-y-1.5 text-left">
               <Label className="text-xs font-bold uppercase text-gray-500">Department</Label>
-              <Input value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} placeholder="e.g. Engineering" className="h-10" />
+              <Select value={form.department} onValueChange={(val) => setForm({ ...form, department: val })}>
+                <SelectTrigger className="h-10">
+                  <SelectValue placeholder="Choose a department..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {departments.length === 0 ? (
+                    <SelectItem disabled value="none">No departments found</SelectItem>
+                  ) : (
+                    departments.map(dept => (
+                      <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
             </div>
 
             {error && (
