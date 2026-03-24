@@ -35,6 +35,7 @@ export default function HROnboarding() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty);
   const [newEmployeeName, setNewEmployeeName] = useState('');
+  const [newEmployeeDept, setNewEmployeeDept] = useState(''); // Added department state
   const [showBulk, setShowBulk] = useState(false);
 
   const { data: tasks = [] } = useQuery({
@@ -55,10 +56,16 @@ export default function HROnboarding() {
   });
 
   const bulkCreateMutation = useMutation({
-    mutationFn: (name) => base44.entities.OnboardingTask.bulkCreate(
-      defaultTasks.map(t => ({ ...t, employee_name: name, employee_id: name, status: 'pending' }))
+    // Updated to accept both name and dept
+    mutationFn: ({ name, dept }) => base44.entities.OnboardingTask.bulkCreate(
+      defaultTasks.map(t => ({ ...t, employee_name: name, employee_id: name, department: dept, status: 'pending' }))
     ),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); setShowBulk(false); setNewEmployeeName(''); },
+    onSuccess: () => { 
+      qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); 
+      setShowBulk(false); 
+      setNewEmployeeName(''); 
+      setNewEmployeeDept(''); // Reset department on success
+    },
   });
 
   const updateStatus = useMutation({
@@ -121,13 +128,37 @@ export default function HROnboarding() {
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>Onboard New Employee</DialogTitle></DialogHeader>
           <p className="text-sm text-gray-500">Creates a standard checklist of onboarding tasks for the new employee.</p>
-          <div className="space-y-1">
-            <Label>Employee Name</Label>
-            <Input value={newEmployeeName} onChange={e => setNewEmployeeName(e.target.value)} placeholder="Full name" />
+          
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <Label>Employee Name</Label>
+              <Input value={newEmployeeName} onChange={e => setNewEmployeeName(e.target.value)} placeholder="Full name" />
+            </div>
+
+            <div className="space-y-1">
+              <Label>Department</Label>
+              <Select value={newEmployeeDept} onValueChange={setNewEmployeeDept}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select department" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Employee">Employee</SelectItem>
+                  <SelectItem value="Admin">Admin</SelectItem>
+                  <SelectItem value="IT">IT</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-          <div className="flex justify-end gap-2">
+
+          <div className="flex justify-end gap-2 mt-2">
             <Button variant="outline" onClick={() => setShowBulk(false)}>Cancel</Button>
-            <Button onClick={() => bulkCreateMutation.mutate(newEmployeeName)} disabled={!newEmployeeName || bulkCreateMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700">Create Checklist</Button>
+            <Button 
+              onClick={() => bulkCreateMutation.mutate({ name: newEmployeeName, dept: newEmployeeDept })} 
+              disabled={!newEmployeeName || !newEmployeeDept || bulkCreateMutation.isPending} 
+              className="bg-indigo-600 hover:bg-indigo-700"
+            >
+              {bulkCreateMutation.isPending ? 'Saving...' : 'Save'}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
