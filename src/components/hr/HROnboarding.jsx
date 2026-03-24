@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, Circle, Loader, Plus, AlertCircle } from 'lucide-react';
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 
 const categoryColors = {
   paperwork: 'bg-blue-100 text-blue-700',
@@ -35,7 +36,7 @@ export default function HROnboarding() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(empty);
   
-  // States for New Employee Registration
+  // Registration States
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [employeeEmail, setEmployeeEmail] = useState('');
@@ -43,7 +44,7 @@ export default function HROnboarding() {
   const [showBulk, setShowBulk] = useState(false);
   const [error, setError] = useState('');
 
-  // 1. Fetch real departments from DB
+  // 1. Fetch real departments from DB for the dropdown
   const { data: departments = [] } = useQuery({
     queryKey: ['departments'],
     queryFn: () => base44.entities.Department.list(),
@@ -55,7 +56,6 @@ export default function HROnboarding() {
     queryFn: () => base44.entities.OnboardingTask.list('-created_date', 200),
   });
 
-  // Save single task mutation
   const saveMutation = useMutation({
     mutationFn: (d) => base44.entities.OnboardingTask.create({ ...d, employee_id: d.employee_name }),
     onSuccess: () => { 
@@ -70,7 +70,7 @@ export default function HROnboarding() {
     mutationFn: async ({ fName, lName, email, dept }) => {
       const fullName = `${fName} ${lName}`;
       
-      // Create the Employee record first
+      // 1. Create the Employee record in the Employees Table
       await base44.entities.Employee.create({
         first_name: fName,
         last_name: lName,
@@ -78,7 +78,7 @@ export default function HROnboarding() {
         department: dept
       });
 
-      // Create the default onboarding tasks
+      // 2. Create the default onboarding tasks linked to this name
       return base44.entities.OnboardingTask.bulkCreate(
         defaultTasks.map(t => ({ 
           ...t, 
@@ -97,7 +97,11 @@ export default function HROnboarding() {
       setEmployeeEmail('');
       setNewEmployeeDept('');
       setError('');
+      toast.success('Employee registered and onboarding started!');
     },
+    onError: (err) => {
+      setError('Registration failed. Email might already exist.');
+    }
   });
 
   const updateStatus = useMutation({
@@ -113,19 +117,20 @@ export default function HROnboarding() {
 
   const statusIcon = (status) => ({
     completed: <CheckCircle className="w-4 h-4 text-green-500" />,
-    in_progress: <Loader className="w-4 h-4 text-blue-500" />,
+    in_progress: <Loader className="w-4 h-4 text-blue-500 animate-spin" />,
     pending: <Circle className="w-4 h-4 text-gray-400" />,
   }[status] || <Circle className="w-4 h-4 text-gray-400" />);
 
   const handleBulkSubmit = () => {
-    if (!firstName || !lastName || !employeeEmail || !newEmployeeDept) {
-      setError('Incomplete form! Please fill out all required fields.');
+    if (!firstName.trim() || !lastName.trim() || !employeeEmail.trim() || !newEmployeeDept) {
+      setError('Required Information Missing: Please complete all fields.');
       return;
     }
     if (!employeeEmail.includes('@')) {
-      setError('Please enter a valid email address.');
+      setError('Invalid Format: Please provide a valid email address.');
       return;
     }
+    setError('');
     bulkCreateMutation.mutate({ 
       fName: firstName, 
       lName: lastName, 
@@ -145,24 +150,24 @@ export default function HROnboarding() {
         const done = empTasks.filter(t => t.status === 'completed').length;
         const pct = Math.round((done / empTasks.length) * 100);
         return (
-          <Card key={name} className="border-gray-100">
-            <CardHeader className="pb-2">
+          <Card key={name} className="border-gray-100 shadow-sm overflow-hidden">
+            <CardHeader className="pb-2 bg-slate-50/50">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-base font-bold text-gray-800">{name}</CardTitle>
-                <span className="text-xs font-bold text-gray-500 bg-gray-100 px-2 py-1 rounded-full">{done}/{empTasks.length} Done ({pct}%)</span>
+                <span className="text-xs font-bold text-gray-500 bg-white px-2 py-1 rounded-md border">{done}/{empTasks.length} Completed ({pct}%)</span>
               </div>
-              <div className="w-full bg-gray-100 rounded-full h-1.5 mt-2">
+              <div className="w-full bg-gray-200 rounded-full h-1.5 mt-2">
                 <div className="bg-indigo-600 h-1.5 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
               </div>
             </CardHeader>
-            <CardContent className="space-y-1">
+            <CardContent className="space-y-1 p-4">
               {empTasks.map(task => (
-                <div key={task.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 group">
+                <div key={task.id} className="flex items-center gap-3 p-2 rounded-lg hover:bg-slate-50 transition-colors">
                   <button onClick={() => updateStatus.mutate({ id: task.id, status: task.status === 'completed' ? 'pending' : 'completed' })}>
                     {statusIcon(task.status)}
                   </button>
                   <span className={`flex-1 text-sm ${task.status === 'completed' ? 'line-through text-gray-300' : 'text-gray-600 font-medium'}`}>{task.task_name}</span>
-                  <Badge className={`${categoryColors[task.category] || 'bg-gray-100 text-gray-700'} border-none text-[10px] uppercase font-bold`} >{task.category}</Badge>
+                  <Badge className={`${categoryColors[task.category] || 'bg-gray-100 text-gray-700'} border-none text-[10px] uppercase font-bold px-2`} >{task.category}</Badge>
                 </div>
               ))}
             </CardContent>
@@ -170,87 +175,107 @@ export default function HROnboarding() {
         );
       })}
       
-      {Object.keys(grouped).length === 0 && <div className="text-center py-20 bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400">No onboarding tasks found.</div>}
+      {Object.keys(grouped).length === 0 && <div className="text-center py-20 bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200 text-gray-400">No onboarding checklists found. Click "Onboard New Employee" to begin.</div>}
 
       {/* Bulk Onboard Dialog */}
       <Dialog open={showBulk} onOpenChange={setShowBulk}>
         <DialogContent className="max-w-md text-left">
           <DialogHeader>
-            <DialogTitle className="font-bold text-xl text-gray-900">Registration & Onboarding</DialogTitle>
+            <DialogTitle className="font-bold text-xl text-indigo-900">Onboard New Personnel</DialogTitle>
           </DialogHeader>
-          <p className="text-xs font-medium text-gray-500 mb-4">Registering here will add the user to the Employee Directory and create their setup checklist.</p>
+          <p className="text-xs font-medium text-slate-500 mb-2 italic">This will add the person to the directory and create setup tasks.</p>
           
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-4 pt-2">
+            <div className="grid grid-cols-2 gap-3 text-left">
               <div className="space-y-1">
-                <Label className="text-xs uppercase font-bold text-gray-400">First Name</Label>
-                <Input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="John" className="h-10" />
+                <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">First Name</Label>
+                <Input value={firstName} onChange={e => setFirstName(e.target.value)} placeholder="e.g. John" className="h-10" />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs uppercase font-bold text-gray-400">Last Name</Label>
-                <Input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="Doe" className="h-10" />
+                <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Last Name</Label>
+                <Input value={lastName} onChange={e => setLastName(e.target.value)} placeholder="e.g. Doe" className="h-10" />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs uppercase font-bold text-gray-400">Email Address</Label>
+            <div className="space-y-1 text-left">
+              <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Email Address</Label>
               <Input value={employeeEmail} onChange={e => setEmployeeEmail(e.target.value)} placeholder="john@company.com" className="h-10" />
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs uppercase font-bold text-gray-400">Department</Label>
+            <div className="space-y-1 text-left">
+              <Label className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Assigned Department</Label>
               <Select value={newEmployeeDept} onValueChange={setNewEmployeeDept}>
                 <SelectTrigger className="h-10">
-                  <SelectValue placeholder="Select current department" />
+                  <SelectValue placeholder="Choose a department..." />
                 </SelectTrigger>
                 <SelectContent>
-                  {departments.map(dept => (
-                    <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
-                  ))}
+                  {departments.length === 0 ? (
+                    <SelectItem disabled value="none">No departments found</SelectItem>
+                  ) : (
+                    departments.map(dept => (
+                      <SelectItem key={dept.id} value={dept.name}>{dept.name}</SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
 
             {error && (
-              <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs font-bold flex items-center gap-2 animate-in fade-in">
-                <AlertCircle className="w-4 h-4" /> {error}
+              <div className="p-3 bg-red-50 border border-red-100 rounded-lg text-red-600 text-xs font-bold flex items-center gap-2 animate-in fade-in slide-in-from-top-1">
+                <AlertCircle className="w-4 h-4 shrink-0" /> {error}
               </div>
             )}
           </div>
 
-          <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-50">
-            <Button variant="outline" onClick={() => setShowBulk(false)} className="h-10">Cancel</Button>
+          <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-100">
+            <Button variant="outline" onClick={() => setShowBulk(false)} className="h-10 font-bold text-slate-500">Cancel</Button>
             <Button 
               onClick={handleBulkSubmit} 
               disabled={bulkCreateMutation.isPending} 
-              className="bg-indigo-600 hover:bg-indigo-700 h-10 px-8 shadow-lg shadow-indigo-100"
+              className="bg-indigo-600 hover:bg-indigo-700 h-10 px-8 shadow-lg shadow-indigo-200 font-bold"
             >
-              {bulkCreateMutation.isPending ? 'Processing...' : 'Register & Start'}
+              {bulkCreateMutation.isPending ? <Loader className="w-4 h-4 animate-spin mr-2"/> : null}
+              Start Onboarding
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Single Task Dialog */}
+      {/* Manual Task Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm}>
         <DialogContent className="max-w-md text-left">
-          <DialogHeader><DialogTitle className="font-bold">Add Manual Task</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-bold text-indigo-900">Add Custom Task</DialogTitle></DialogHeader>
           <div className="space-y-3 pt-4">
-            <div className="space-y-1"><Label className="text-xs uppercase font-bold text-gray-400">Employee Email</Label><Input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} /></div>
-            <div className="space-y-1"><Label className="text-xs uppercase font-bold text-gray-400">Task Name</Label><Input value={form.task_name} onChange={e => setForm(p => ({ ...p, task_name: e.target.value }))} /></div>
             <div className="space-y-1">
-              <Label className="text-xs uppercase font-bold text-gray-400">Category</Label>
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Employee Name (Full)</Label>
+              <Input value={form.employee_name} onChange={e => setForm(p => ({ ...p, employee_name: e.target.value }))} placeholder="e.g. John Doe" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Task Details</Label>
+              <Input value={form.task_name} onChange={e => setForm(p => ({ ...p, task_name: e.target.value }))} placeholder="e.g. Collect ID badge" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Task Category</Label>
               <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>{Object.keys(categoryColors).map(c => <SelectItem key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
-            <div className="space-y-1"><Label className="text-xs uppercase font-bold text-gray-400">Due Date</Label><Input type="date" value={form.due_date} onChange={e => setForm(p => ({ ...p, due_date: e.target.value }))} /></div>
+            <div className="space-y-1">
+              <Label className="text-[10px] uppercase font-bold text-slate-400">Deadline</Label>
+              <Input type="date" value={form.due_date} onChange={e => setForm(p => ({ ...p, due_date: e.target.value }))} />
+            </div>
           </div>
           
-          <div className="flex justify-end gap-2 mt-6">
+          <div className="flex justify-end gap-2 mt-6 pt-4 border-t border-slate-100">
             <Button variant="outline" onClick={() => setShowForm(false)}>Cancel</Button>
-            <Button onClick={() => saveMutation.mutate(form)} disabled={saveMutation.isPending} className="bg-indigo-600 hover:bg-indigo-700 px-6">Save Task</Button>
+            <Button 
+              onClick={() => saveMutation.mutate(form)} 
+              disabled={saveMutation.isPending || !form.employee_name || !form.task_name} 
+              className="bg-indigo-600 hover:bg-indigo-700 px-8"
+            >
+              Save Task
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
