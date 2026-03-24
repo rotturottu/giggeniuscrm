@@ -73,32 +73,43 @@ export default function HROnboarding() {
   const bulkCreateMutation = useMutation({
     mutationFn: async ({ fName, lName, email, dept }) => {
       const fullName = `${fName} ${lName}`;
+      
+      // 1. Create the Employee
       await base44.entities.Employee.create({
         first_name: fName,
         last_name: lName,
         email: email,
         department: dept
       });
-      return base44.entities.OnboardingTask.create(
-        defaultTasks.map(t => ({ 
-          ...t, 
-          employee_name: fullName, 
-          employee_id: email, 
-          status: 'pending',
-          department: dept // Store dept on task for filtering
-        }))
-      );
+
+      // 2. Create the Tasks (Pass the array directly)
+      const taskList = defaultTasks.map(t => ({ 
+        ...t, 
+        employee_name: fullName, 
+        employee_id: email, 
+        status: 'pending',
+        department: dept 
+      }));
+
+      // NOTE: Ensure your base44 client is configured to send headers
+      return base44.entities.OnboardingTask.create(taskList);
     },
     onSuccess: () => { 
       qc.invalidateQueries({ queryKey: ['onboarding_tasks'] }); 
       qc.invalidateQueries({ queryKey: ['employees'] }); 
-      setShowBulk(false);
-      setFirstName(''); setLastName(''); setEmployeeEmail(''); setNewEmployeeDept(''); setError('');
-      toast.success('Employee registered and onboarding started!');
+      setShowBulk(false); 
+      setFirstName('');
+      setLastName('');
+      setEmployeeEmail('');
+      setNewEmployeeDept('');
+      setError('');
+      toast.success('Onboarding sequence started!');
     },
     onError: (err) => {
-      setError('Registration failed. Check if the email is already in use.');
-      console.error(err);
+      // THIS WILL NOW SHOW YOU THE REAL REASON IT FAILED
+      const msg = err.response?.data?.error || err.message;
+      setError(`Server Error: ${msg}`);
+      console.error("Full Error Object:", err);
     }
   });
 

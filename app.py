@@ -170,9 +170,12 @@ def login():
         return jsonify({"message": "Login successful!"}), 200
     return jsonify({"error": "Invalid email or password"}), 401
 
-@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
-def handle_me():
-    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+@app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
+def handle_base44_entities(entity_name):
+    if request.method == 'OPTIONS': 
+        return jsonify({"status": "ok"}), 200
+
+    # GET THE EMAIL FROM HEADERS
     user_email = request.headers.get('User-Email')
     if not user_email: return jsonify({"error": "No user email provided"}), 401
     
