@@ -41,7 +41,7 @@ def init_db():
                   phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # Updated Project Tasks with more columns for the Board fixes
+    # Updated Project Tasks
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   title TEXT, 
@@ -170,12 +170,9 @@ def login():
         return jsonify({"message": "Login successful!"}), 200
     return jsonify({"error": "Invalid email or password"}), 401
 
-@app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
-def handle_base44_entities(entity_name):
-    if request.method == 'OPTIONS': 
-        return jsonify({"status": "ok"}), 200
-
-    # GET THE EMAIL FROM HEADERS
+@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
+def handle_me():
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
     if not user_email: return jsonify({"error": "No user email provided"}), 401
     
@@ -209,7 +206,7 @@ def handle_analytics():
 
 # --- GENERIC ENTITY HANDLERS ---
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
-def handle_base44_entities(entity_name):
+def handle_base44_list_create(entity_name):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
 
     table_map = {
@@ -250,7 +247,6 @@ def handle_base44_entities(entity_name):
 
     if request.method == 'POST':
         request_data = request.json
-        # Convert single object to a list so the loop handles both cases
         items_to_process = request_data if isinstance(request_data, list) else [request_data]
         
         c.execute(f"PRAGMA table_info({table_name})")
@@ -259,23 +255,14 @@ def handle_base44_entities(entity_name):
         results = []
         try:
             for item in items_to_process:
-                if 'document_name' in item: item['client_name'] = item.pop('document_name')
                 if 'user_email' in db_cols: item['user_email'] = user_email
-
-                cleaned_data = {}
-                for k, v in item.items():
-                    if k in db_cols: 
-                        cleaned_data[k] = v
-
+                cleaned_data = {k: v for k, v in item.items() if k in db_cols}
                 columns = ', '.join(cleaned_data.keys())
                 placeholders = ', '.join(['?'] * len(cleaned_data))
-                
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
                 cleaned_data['id'] = c.lastrowid
                 results.append(cleaned_data)
-            
             conn.commit()
-            # Return list if input was a list, otherwise return first item
             return jsonify(results if isinstance(request_data, list) else results[0]), 201
         except Exception as e:
             return jsonify({"error": str(e)}), 400
@@ -283,7 +270,7 @@ def handle_base44_entities(entity_name):
             conn.close()
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
-def handle_base44_single_item(entity_name, entity_id):
+def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     
     table_map = {
@@ -291,15 +278,13 @@ def handle_base44_single_item(entity_name, entity_id):
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
         'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests',
         'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
-        'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees',
-        'Department': 'departments'
+        'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees', 'Department': 'departments'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
 
     if request.method == 'DELETE':
-        # SPECIAL LOGIC FOR EMPLOYEES: Delete all child records to prevent foreign key errors
         if entity_name == 'Employee':
             c.execute("SELECT email FROM employees WHERE id = ?", (entity_id,))
             row = c.fetchone()
@@ -319,14 +304,7 @@ def handle_base44_single_item(entity_name, entity_id):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        
-        if 'document_name' in data: data['client_name'] = data.pop('document_name')
-
-        cleaned_data = {}
-        for k, v in data.items():
-            if k in db_cols:
-                cleaned_data[k] = v
-
+        cleaned_data = {k: v for k, v in data.items() if k in db_cols}
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()
