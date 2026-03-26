@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Trash2, FileCheck, Receipt, UploadCloud, ChevronDown, FileText, Plus, Save, FolderOpen, X, Search, Calendar, FileDigit, Briefcase, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Trash2, FileCheck, Receipt, UploadCloud, ChevronDown, FileText, Plus, Save, FolderOpen, Search, Calendar, FileDigit, Briefcase, FileSpreadsheet } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -91,7 +91,6 @@ export default function InvoicesList() {
   const handleSaveCustom = (isDraft = false) => {
     if (!templateFormData.document_name?.trim()) return setError('Contract Name is required.');
     
-    // Merge the custom fields (scope, salary, etc) into the notes or items for storage
     const customFields = templateFieldsConfig[selectedTemplate]?.fields || [];
     let extraDetails = "";
     customFields.forEach(f => {
@@ -175,6 +174,7 @@ export default function InvoicesList() {
             {typeFilter === 'template' && (
               <div className="mb-10">
                 {!selectedTemplate ? (
+                  // Selection Grid
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {Object.entries(templateFieldsConfig).map(([key, data]) => (
                       <Card 
@@ -194,15 +194,16 @@ export default function InvoicesList() {
                     ))}
                   </div>
                 ) : (
+                  // Configuration View for Selected Card
                   <Card className="border-indigo-100 bg-indigo-50/10 shadow-inner">
                     <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
                       <div className="flex items-center gap-3">
                         <Button variant="ghost" size="sm" onClick={() => setSelectedTemplate(null)} className="text-indigo-600">
-                          <ArrowLeft className="w-4 h-4 mr-1" /> Back
+                          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Templates
                         </Button>
                         <div>
                           <CardTitle className="text-lg text-indigo-900">{templateFieldsConfig[selectedTemplate].title}</CardTitle>
-                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Template Configuration</p>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Configure Document Details</p>
                         </div>
                       </div>
                       <Button onClick={() => setShowNDAModal(true)} className="bg-indigo-600 font-bold shadow-lg shadow-indigo-100">
@@ -273,11 +274,11 @@ export default function InvoicesList() {
         </CardContent>
       </Card>
 
-      {/* MODAL: CUSTOM CONTRACT (FORMAL) */}
+      {/* MODAL: FINALIZATION DIALOG */}
       <Dialog open={showNDAModal} onOpenChange={setShowNDAModal}>
         <DialogContent className="max-w-2xl overflow-y-auto max-h-[90vh] text-left">
           <DialogHeader className="border-b pb-4">
-            <DialogTitle className="text-2xl font-bold text-gray-800">Finalize Document</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-gray-800">Finalize & Sign</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 py-6">
             <div className="grid grid-cols-2 gap-4">
@@ -306,7 +307,7 @@ export default function InvoicesList() {
           <DialogFooter className="border-t pt-4 flex gap-3">
             <Button variant="outline" onClick={() => handleSaveCustom(true)} className="flex-1 h-11 font-bold"><Save className="w-4 h-4 mr-2" /> Save Draft</Button>
             <Button onClick={() => handleSaveCustom(false)} disabled={saveMutation.isPending} className="flex-1 h-11 bg-indigo-600 font-bold">
-              {saveMutation.isPending ? 'Processing...' : 'Finalize & Archive'}
+              {saveMutation.isPending ? 'Processing...' : 'Finalize & Register'}
             </Button>
           </DialogFooter>
         </DialogContent>
