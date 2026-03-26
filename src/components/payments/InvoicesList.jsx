@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Trash2, FileCheck, Receipt, UploadCloud, ChevronDown, FileText, Plus, Save, FolderOpen, Search, Calendar, FileDigit, Briefcase, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Trash2, FileCheck, Receipt, UploadCloud, ChevronDown, FileText, Plus, Save, FolderOpen, X, Search, Calendar, FileDigit, Briefcase, FileSpreadsheet } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -48,18 +48,22 @@ export default function InvoicesList() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 1. Queries
+  // 1. Queries - The API call includes the type, but we add the frontend filter below for 100% isolation
   const { data: invoices = [] } = useQuery({
     queryKey: ['invoices', typeFilter],
-    queryFn: () => {
+    queryFn: async () => {
         const dbType = typeFilter === 'template' ? 'contract' : typeFilter;
-        return base44.entities.Invoice.filter({ type: dbType, status: 'active' }, '-created_date');
+        const res = await base44.entities.Invoice.filter({ type: dbType, status: 'active' }, '-created_date');
+        return Array.isArray(res) ? res : [];
     },
   });
 
   const { data: drafts = [] } = useQuery({
     queryKey: ['invoices', 'drafts'],
-    queryFn: () => base44.entities.Invoice.filter({ status: 'draft' }, '-created_date'),
+    queryFn: async () => {
+        const res = await base44.entities.Invoice.filter({ status: 'draft' }, '-created_date');
+        return Array.isArray(res) ? res : [];
+    }
   });
 
   // 2. Mutations
@@ -101,7 +105,8 @@ export default function InvoicesList() {
 
     saveMutation.mutate({
       ...templateFormData,
-      type: 'contract', 
+      type: 'contract', // Templates are isolated to the 'contract' (Documents) type
+      client_name: templateFormData.document_name, // Map name for list display
       status: isDraft ? 'draft' : 'active',
       issue_date: templateFormData.signing_date || new Date().toISOString(),
       invoice_number: templateFormData.invoice_number || `CTR-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -113,16 +118,20 @@ export default function InvoicesList() {
     if (!templateFormData.client_name?.trim()) return setError('Required fields missing.');
     saveMutation.mutate({
       ...templateFormData,
-      type: typeFilter,
+      type: typeFilter, // This ensures a 'job' tab creates a 'job' type record
       status: 'active',
       issue_date: new Date().toISOString(),
       invoice_number: `${typeFilter.toUpperCase().slice(0,3)}-${Math.floor(1000 + Math.random() * 9000)}`,
     });
   };
 
-  const filteredInvoices = invoices.filter(inv => 
-    (inv.client_name || inv.document_name || '').toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // ISOLATION FILTER: Filters the current results to ensure only the active tab's type is shown
+  const filteredInvoices = invoices.filter(inv => {
+    const targetType = typeFilter === 'template' ? 'contract' : typeFilter;
+    const matchesType = inv.type === targetType;
+    const matchesSearch = (inv.client_name || inv.document_name || '').toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesType && matchesSearch;
+  });
 
   return (
     <div className="space-y-6 text-left">
@@ -174,7 +183,6 @@ export default function InvoicesList() {
             {typeFilter === 'template' && (
               <div className="mb-10">
                 {!selectedTemplate ? (
-                  // Selection Grid
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     {Object.entries(templateFieldsConfig).map(([key, data]) => (
                       <Card 
@@ -194,7 +202,6 @@ export default function InvoicesList() {
                     ))}
                   </div>
                 ) : (
-                  // Configuration View for Selected Card
                   <Card className="border-indigo-100 bg-indigo-50/10 shadow-inner">
                     <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
                       <div className="flex items-center gap-3">
@@ -203,7 +210,7 @@ export default function InvoicesList() {
                         </Button>
                         <div>
                           <CardTitle className="text-lg text-indigo-900">{templateFieldsConfig[selectedTemplate].title}</CardTitle>
-                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Configure Document Details</p>
+                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Template Configuration</p>
                         </div>
                       </div>
                       <Button onClick={() => setShowNDAModal(true)} className="bg-indigo-600 font-bold shadow-lg shadow-indigo-100">
@@ -251,7 +258,7 @@ export default function InvoicesList() {
                     <CardContent className="p-4 flex justify-between items-center">
                       <div className="flex items-center gap-4">
                         <div className="p-3 bg-indigo-50 rounded-xl text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                          {typeFilter === 'receipt' ? <Receipt className="w-5 h-5"/> : <FileText className="w-5 h-5"/>}
+                          {inv.type === 'receipt' ? <Receipt className="w-5 h-5"/> : <FileText className="w-5 h-5"/>}
                         </div>
                         <div>
                           <p className="font-black text-gray-900 tracking-tight">{inv.invoice_number}</p>
@@ -274,11 +281,11 @@ export default function InvoicesList() {
         </CardContent>
       </Card>
 
-      {/* MODAL: FINALIZATION DIALOG */}
+      {/* MODALS REMAIN THE SAME */}
       <Dialog open={showNDAModal} onOpenChange={setShowNDAModal}>
         <DialogContent className="max-w-2xl overflow-y-auto max-h-[90vh] text-left">
           <DialogHeader className="border-b pb-4">
-            <DialogTitle className="text-2xl font-bold text-gray-800">Finalize & Sign</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-gray-800">Finalize Document</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 py-6">
             <div className="grid grid-cols-2 gap-4">
@@ -313,7 +320,6 @@ export default function InvoicesList() {
         </DialogContent>
       </Dialog>
 
-      {/* MODAL: TAB-SPECIFIC CREATORS (QUOTE, JOB, ETC) */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent className="max-w-xl text-left">
           <DialogHeader className="border-b pb-4">
