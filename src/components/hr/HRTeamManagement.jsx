@@ -65,7 +65,7 @@ export default function HRTeamManagement() {
   const [tab, setTab] = useState('access');
 
   const [showInvite, setShowInvite] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ id: '', name: '', email: '', role: 'Employee', department: 'Employee' });
+  const [inviteForm, setInviteForm] = useState({ id: '', name: '', email: '', role: 'Employee' });
 
   // Fetch dynamic employees from the database
   const { data: dbEmployees = [] } = useQuery({
@@ -112,7 +112,6 @@ export default function HRTeamManagement() {
       name: inviteForm.name,
       email: inviteForm.email,
       role: inviteForm.role,
-      department: inviteForm.department,
       status: 'active',
       lastActive: 'Just now',
       avatar: initials,
@@ -121,7 +120,7 @@ export default function HRTeamManagement() {
 
     setMembers([newMember, ...members]); 
     setShowInvite(false); 
-    setInviteForm({ id: '', name: '', email: '', role: 'Employee', department: 'Employee' }); 
+    setInviteForm({ id: '', name: '', email: '', role: 'Employee' }); 
   };
 
   return (
@@ -296,34 +295,36 @@ export default function HRTeamManagement() {
         </TabsContent>
       </Tabs>
 
-      {/* Invite Dialog */}
+      {/* Grant System Access Dialog - Styled to match screenshot */}
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Invite New Member</DialogTitle>
+            <DialogTitle className="text-[#2b2b6c] font-bold text-xl">Grant System Access</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleInvite} className="space-y-4 py-2">
+          <form onSubmit={handleInvite} className="space-y-5 py-2">
             
-            {/* Dynamic Employee Dropdown with String Fallback */}
-            <div className="space-y-1">
-              <Label>Select Employee</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">SEARCH EMPLOYEE</Label>
+              {/* FIXED: Strict string fallback to prevent Shadcn from freezing */}
               <Select 
                 value={inviteForm.id ? String(inviteForm.id) : undefined} 
-                onValueChange={(selectedId) => {
-                  const selectedEmp = dbEmployees.find(e => String(e.id) === String(selectedId));
-                  if (selectedEmp) {
-                    setInviteForm(prev => ({ 
-                      ...prev, 
-                      id: String(selectedId),
-                      name: `${selectedEmp.first_name} ${selectedEmp.last_name}`, 
-                      email: selectedEmp.email || '', 
-                      department: selectedEmp.department || prev.department
-                    }));
-                  }
+                onValueChange={(val) => {
+                  const selectedEmp = dbEmployees.find(e => String(e.id) === String(val));
+                  
+                  const fullName = selectedEmp 
+                    ? (selectedEmp.first_name ? `${selectedEmp.first_name} ${selectedEmp.last_name}` : selectedEmp.name) 
+                    : '';
+
+                  setInviteForm(prev => ({ 
+                    ...prev, 
+                    id: String(val), 
+                    name: fullName || '', 
+                    email: selectedEmp?.email || ''
+                  }));
                 }}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an existing employee" />
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="" />
                 </SelectTrigger>
                 <SelectContent>
                   {dbEmployees.length === 0 ? (
@@ -331,7 +332,7 @@ export default function HRTeamManagement() {
                   ) : (
                     dbEmployees.map(emp => (
                       <SelectItem key={emp.id} value={String(emp.id)}>
-                        {emp.first_name} {emp.last_name}
+                        {emp.first_name ? `${emp.first_name} ${emp.last_name}` : emp.name}
                       </SelectItem>
                     ))
                   )}
@@ -339,35 +340,21 @@ export default function HRTeamManagement() {
               </Select>
             </div>
 
-            <div className="space-y-1">
-              <Label>Email Address</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">IDENTITY EMAIL</Label>
               <Input 
                 type="email" 
                 value={inviteForm.email} 
                 readOnly 
-                className="bg-gray-50 text-gray-500" 
-                placeholder="Auto-filled from selection" 
+                className="bg-gray-50 text-gray-500 italic" 
+                placeholder="Auto-populated" 
               />
             </div>
 
-            <div className="space-y-1">
-              <Label>Assign Department</Label>
-              <Select value={inviteForm.department} onValueChange={v => setInviteForm(p => ({ ...p, department: v }))}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a department" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Employee">Employee</SelectItem>
-                  <SelectItem value="Admin">Admin</SelectItem>
-                  <SelectItem value="IT">IT</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Assign Role</Label>
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">PERMISSION LEVEL</Label>
               <Select value={inviteForm.role} onValueChange={v => setInviteForm(p => ({ ...p, role: v }))}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select a role" />
                 </SelectTrigger>
                 <SelectContent>
@@ -378,10 +365,22 @@ export default function HRTeamManagement() {
               </Select>
             </div>
             
-            <div className="flex justify-end gap-2 mt-4">
-              <Button type="button" variant="outline" onClick={() => setShowInvite(false)}>Cancel</Button>
-              <Button type="submit" disabled={!inviteForm.name || !inviteForm.email} className="bg-indigo-600 hover:bg-indigo-700">
-                Grant Access
+            {/* Styled buttons to match the exact center layout */}
+            <div className="flex justify-center gap-3 mt-6 pt-2">
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="w-28 font-bold border-gray-200 text-gray-800" 
+                onClick={() => setShowInvite(false)}
+              >
+                Cancel
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={!inviteForm.name || !inviteForm.email} 
+                className="bg-[#9f9cf0] hover:bg-[#8b87e6] text-white font-bold w-36"
+              >
+                Invite Member
               </Button>
             </div>
           </form>

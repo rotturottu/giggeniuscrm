@@ -3,7 +3,6 @@ from flask_cors import CORS
 import sqlite3
 import json
 from werkzeug.security import generate_password_hash, check_password_hash
-
 app = Flask(__name__)
 # Enable CORS for all routes and allow the User-Email header
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
