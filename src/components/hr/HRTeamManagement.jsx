@@ -2,7 +2,7 @@ import { base44 } from '@/api/base44Client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -21,45 +21,26 @@ import {
   Unlock,
   Users,
   XCircle,
-  Loader2
+  Loader2,
+  AlertTriangle
 } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
+import { format } from 'date-fns';
 
 const ROLES = ['Admin', 'HR Manager', 'Manager', 'Employee', 'Viewer'];
 const STAFF_STATUSES = ['active', 'on leave', 'retired'];
-
-const PERMISSIONS = [
-  { key: 'view_employees', label: 'View Employees' },
-  { key: 'edit_employees', label: 'Edit Employees' },
-  { key: 'manage_payroll', label: 'Manage Payroll' },
-  { key: 'approve_leave', label: 'Approve Leave' },
-  { key: 'view_reports', label: 'View Reports' },
-  { key: 'manage_settings', label: 'Manage Settings' },
-  { key: 'manage_users', label: 'Manage Users' },
-];
-
-const defaultRolePermissions = {
-  Admin: ['view_employees','edit_employees','manage_payroll','approve_leave','view_reports','manage_settings','manage_users'],
-  'HR Manager': ['view_employees','edit_employees','approve_leave','view_reports'],
-  Manager: ['view_employees','approve_leave','view_reports'],
-  Employee: ['view_employees'],
-  Viewer: ['view_employees','view_reports'],
-};
-
-const activityColor = { approve: 'text-green-600 bg-green-50', create: 'text-blue-600 bg-blue-50', edit: 'text-yellow-600 bg-yellow-50', role: 'text-purple-600 bg-purple-50', export: 'text-gray-600 bg-gray-50', login: 'text-indigo-600 bg-indigo-50' };
+const activityColor = { role: 'text-purple-600 bg-purple-50', status: 'text-blue-600 bg-blue-50', dept: 'text-orange-600 bg-orange-50' };
 
 export default function HRTeamManagement() {
   const qc = useQueryClient();
-  const [rolePermissions, setRolePermissions] = useState(defaultRolePermissions);
   const [search, setSearch] = useState('');
-  const [selectedRole, setSelectedRole] = useState('Admin');
   const [tab, setTab] = useState('access');
-
   const [showInvite, setShowInvite] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({ id: '', name: '', email: '', role: 'Employee' });
 
-  // 1. FETCH DYNAMIC PERSONNEL FROM DATABASE
+  // 1. FETCH DATA
   const { data: dbEmployees = [], isLoading } = useQuery({
     queryKey: ['employees'],
     queryFn: () => base44.entities.Employee.list('-created_date', 200),
@@ -70,7 +51,12 @@ export default function HRTeamManagement() {
     queryFn: () => base44.entities.Department.list(),
   });
 
-  // 2. MUTATION FOR UPDATING STATUS OR DEPARTMENT
+  const { data: activityLogs = [] } = useQuery({
+    queryKey: ['activity_logs'],
+    queryFn: () => base44.entities.ActivityLog.list('-created_date', 50),
+  });
+
+  // 2. MUTATIONS
   const updateStaffMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.Employee.update(id, data),
     onSuccess: () => {
@@ -79,27 +65,43 @@ export default function HRTeamManagement() {
     }
   });
 
+  const grantAccessMutation = useMutation({
+    mutationFn: async (data) => {
+      // Action A: Update Employee Access
+      await base44.entities.Employee.update(data.id, { role: data.role, has_access: true });
+      
+      // Action B: Log the Activity
+      return base44.entities.ActivityLog.create({
+        action: 'System Access Granted',
+        details: `Granted ${data.role} permissions to ${data.name}`,
+        category: 'role',
+        target_id: data.id,
+        timestamp: new Date().toISOString()
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['employees'] });
+      qc.invalidateQueries({ queryKey: ['activity_logs'] });
+      setConfirmOpen(false);
+      setShowInvite(false);
+      setInviteForm({ id: '', name: '', email: '', role: 'Employee' });
+      toast.success('Access granted and activity logged!');
+    }
+  });
+
   const filtered = dbEmployees.filter(m => {
     const fullName = `${m.first_name} ${m.last_name}`.toLowerCase();
     return fullName.includes(search.toLowerCase()) || m.email.toLowerCase().includes(search.toLowerCase());
   });
 
-  const togglePermission = (role, perm) => {
-    setRolePermissions(prev => {
-      const perms = prev[role] || [];
-      return {
-        ...prev,
-        [role]: perms.includes(perm) ? perms.filter(p => p !== perm) : [...perms, perm],
-      };
-    });
-  };
-
-  const handleInvite = (e) => {
+  const handlePreInvite = (e) => {
     e.preventDefault();
     if (!inviteForm.name) return;
-    toast.success(`System access granted to ${inviteForm.name}`);
-    setShowInvite(false); 
-    setInviteForm({ id: '', name: '', email: '', role: 'Employee' }); 
+    setConfirmOpen(true);
+  };
+
+  const handleFinalConfirm = () => {
+    grantAccessMutation.mutate(inviteForm);
   };
 
   return (
@@ -112,7 +114,7 @@ export default function HRTeamManagement() {
           <TabsTrigger value="activity" className="rounded-lg gap-2"><Activity className="w-4 h-4" /> Activity Log</TabsTrigger>
         </TabsList>
 
-        {/* Staff Access - Dynamically linked to Database */}
+        {/* Staff Access Tab */}
         <TabsContent value="access">
           <Card>
             <CardHeader>
@@ -147,7 +149,6 @@ export default function HRTeamManagement() {
                     </div>
 
                     <div className="flex items-center gap-4 flex-wrap">
-                      {/* Department Change Dropdown */}
                       <div className="flex flex-col gap-1">
                         <label className="text-[10px] font-bold uppercase text-gray-400 tracking-tight">Department</label>
                         <select
@@ -159,7 +160,6 @@ export default function HRTeamManagement() {
                         </select>
                       </div>
 
-                      {/* Status Change Dropdown */}
                       <div className="flex flex-col gap-1">
                         <label className="text-[10px] font-bold uppercase text-gray-400 tracking-tight">Status</label>
                         <select
@@ -181,118 +181,65 @@ export default function HRTeamManagement() {
                     </div>
                   </div>
                 ))}
-                {!isLoading && filtered.length === 0 && <div className="text-center py-10 text-gray-400 italic">No personnel found in records.</div>}
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Roles & Permissions */}
-        <TabsContent value="roles">
-          <Card>
-            <CardHeader>
-              <CardTitle>Roles & Permissions</CardTitle>
-              <CardDescription>Configure access levels for each personnel category.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-3 mb-6 flex-wrap">
-                {ROLES.map(r => (
-                  <button
-                    key={r}
-                    onClick={() => setSelectedRole(r)}
-                    className={`px-4 py-2 rounded-xl text-sm font-medium border transition-all ${selectedRole === r ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-gray-600 border-gray-200 hover:border-indigo-300'}`}
-                  >
-                    {r}
-                  </button>
-                ))}
-              </div>
-              <div className="space-y-3">
-                {PERMISSIONS.map(p => {
-                  const enabled = (rolePermissions[selectedRole] || []).includes(p.key);
-                  return (
-                    <div key={p.key} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
-                      <div className="flex items-center gap-3">
-                        <Shield className="w-4 h-4 text-indigo-400" />
-                        <span className="text-sm text-gray-800 font-medium">{p.label}</span>
-                      </div>
-                      <button
-                        onClick={() => togglePermission(selectedRole, p.key)}
-                        className={`w-11 h-6 rounded-full transition-all duration-200 flex items-center px-1 ${enabled ? 'bg-indigo-600' : 'bg-gray-300'}`}
-                      >
-                        <div className={`w-4 h-4 bg-white rounded-full shadow transition-all duration-200 ${enabled ? 'translate-x-5' : 'translate-x-0'}`} />
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Calendar Access */}
-        <TabsContent value="calendar">
-          <Card>
-            <CardHeader>
-              <CardTitle>Calendar Access</CardTitle>
-              <CardDescription>Manage shared calendar permissions for personnel.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {dbEmployees.map(member => (
-                  <div key={member.id} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 bg-gray-50">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-slate-600 text-xs font-bold">
-                        {member.first_name ? member.first_name[0] : 'U'}
-                      </div>
-                      <div>
-                        <p className="font-bold text-sm text-gray-900">{member.first_name} {member.last_name}</p>
-                        <p className="text-xs text-gray-400">{member.department}</p>
-                      </div>
-                    </div>
-                    <button className="w-11 h-6 rounded-full bg-gray-300 transition-all flex items-center px-1">
-                      <div className="w-4 h-4 bg-white rounded-full shadow translate-x-0" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* Activity Log (Static Sample) */}
+        {/* Activity Log Tab */}
         <TabsContent value="activity">
           <Card>
             <CardHeader>
               <CardTitle>Team Activity Log</CardTitle>
-              <CardDescription>Historical log of administrative actions across the suite.</CardDescription>
+              <CardDescription>Historical record of access grants and administrative changes.</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-20 text-gray-400 italic">No activity logs recorded for this period.</div>
+              <div className="space-y-4">
+                {activityLogs.length > 0 ? (
+                  activityLogs.map(log => (
+                    <div key={log.id} className="flex items-start gap-4 p-3 rounded-lg border border-gray-100 bg-white shadow-sm">
+                      <div className={`p-2 rounded-lg ${activityColor[log.category] || 'bg-gray-100 text-gray-600'}`}>
+                        <Activity className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex justify-between items-start">
+                          <p className="text-sm font-bold text-gray-900">{log.action}</p>
+                          <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">
+                            {log.created_date ? format(new Date(log.created_date), 'MMM d, h:mm a') : 'Recently'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-1 font-medium">{log.details}</p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-20 text-gray-400 italic font-medium">No activity logs recorded yet.</div>
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
 
-      {/* Grant System Access Dialog */}
+      {/* MODAL 1: GRANT ACCESS FORM */}
       <Dialog open={showInvite} onOpenChange={setShowInvite}>
         <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle className="font-bold text-[#2b2b6c] text-xl">Grant System Access</DialogTitle></DialogHeader>
-          <form onSubmit={handleInvite} className="space-y-5 py-2 text-left">
+          <form onSubmit={handlePreInvite} className="space-y-5 py-2 text-left">
             <div className="space-y-1.5">
               <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Search Employee</Label>
               <Select 
-                value={inviteForm.id ? String(inviteForm.id) : undefined} 
+                value={inviteForm.id} 
                 onValueChange={(val) => {
                   const selectedEmp = dbEmployees.find(e => String(e.id) === String(val));
                   setInviteForm(prev => ({ 
-                    ...prev, 
-                    id: String(val),
+                    ...prev, id: val, 
                     name: selectedEmp ? `${selectedEmp.first_name} ${selectedEmp.last_name}` : '', 
                     email: selectedEmp?.email || '' 
                   }));
                 }}
               >
-                <SelectTrigger><SelectValue placeholder="Select existing personnel" /></SelectTrigger>
+                <SelectTrigger><SelectValue placeholder="Select personnel" /></SelectTrigger>
                 <SelectContent>
                   {dbEmployees.map(emp => (
                     <SelectItem key={emp.id} value={String(emp.id)}>{emp.first_name} {emp.last_name}</SelectItem>
@@ -308,9 +255,7 @@ export default function HRTeamManagement() {
               <Label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Permission Level</Label>
               <Select value={inviteForm.role} onValueChange={v => setInviteForm(p => ({ ...p, role: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                </SelectContent>
+                <SelectContent>{ROLES.map(r => <SelectItem key={r} value={r}>{r}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="flex justify-center gap-3 mt-6 pt-4 border-t">
@@ -318,6 +263,34 @@ export default function HRTeamManagement() {
               <Button type="submit" disabled={!inviteForm.name} className="bg-[#9f9cf0] hover:bg-[#8b87e6] text-white font-bold w-36">Grant Access</Button>
             </div>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL 2: FINAL CONFIRMATION POPUP */}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent className="max-w-md text-center">
+          <div className="flex flex-col items-center gap-4 py-4">
+            <div className="p-3 bg-amber-50 rounded-full">
+              <AlertTriangle className="w-10 h-10 text-amber-500" />
+            </div>
+            <div className="space-y-2">
+              <DialogTitle className="text-xl font-bold">Is this decision final?</DialogTitle>
+              <p className="text-sm text-gray-500">
+                You are about to grant <span className="font-bold text-indigo-600">{inviteForm.role}</span> access to 
+                <span className="font-bold text-gray-900"> {inviteForm.name}</span>. This will allow them to view and manage company data.
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="flex justify-center sm:justify-center gap-3 border-t pt-4">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} className="w-32">Wait, Go Back</Button>
+            <Button 
+                onClick={handleFinalConfirm} 
+                disabled={grantAccessMutation.isPending}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white w-32 font-bold"
+            >
+              {grantAccessMutation.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "Confirm Access"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
