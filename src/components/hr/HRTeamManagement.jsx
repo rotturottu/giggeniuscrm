@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar as CalendarWidget } from '@/components/ui/calendar'; // Ensure you have this shadcn component
+import { Calendar as CalendarWidget } from '@/components/ui/calendar'; 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
@@ -24,7 +24,8 @@ import {
   XCircle,
   Loader2,
   AlertTriangle,
-  UserCheck
+  UserCheck,
+  Briefcase
 } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
@@ -168,7 +169,7 @@ export default function HRTeamManagement() {
                           className={`text-xs border border-gray-200 rounded-lg px-2 py-1.5 bg-white font-bold capitalize 
                             ${member.status === 'active' ? 'text-green-600' : member.status === 'on leave' ? 'text-orange-500' : 'text-slate-400'}`}
                         >
-                          {STAFF_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
+                          {STAFF_STATUSES.filter(s => s !== 'retired').map(s => <option key={s} value={s}>{s}</option>)}
                         </select>
                       </div>
 
@@ -186,87 +187,117 @@ export default function HRTeamManagement() {
           </Card>
         </TabsContent>
 
-        {/* Roles & Permissions Tab - RESTORED */}
+        {/* Roles & Permissions Tab - RESTORED & DYNAMIC */}
         <TabsContent value="roles">
-          <Card>
-            <CardHeader>
-              <CardTitle>Personnel Roles & Permission Levels</CardTitle>
+          <Card className="border-none shadow-sm overflow-hidden">
+            <CardHeader className="bg-slate-50/50 border-b">
+              <CardTitle className="text-xl text-indigo-900">Personnel Roles & permissions</CardTitle>
               <CardDescription>Review the access hierarchy and current roles for all employed personnel.</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {dbEmployees.map(emp => (
-                  <div key={emp.id} className="flex items-center justify-between p-4 rounded-xl border bg-slate-50/50 hover:bg-white transition-all border-slate-100">
-                    <div className="flex items-center gap-4">
-                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
-                        <UserCheck className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <p className="font-bold text-sm text-slate-800">{emp.first_name} {emp.last_name}</p>
-                        <p className="text-[11px] text-slate-400 font-medium">{emp.email}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Current Role</p>
-                        <Badge variant="outline" className="bg-white border-indigo-100 text-indigo-600 font-bold text-xs uppercase px-3">
-                           {emp.role || 'No Access'}
-                        </Badge>
-                      </div>
-                      <div className="text-right min-w-[80px]">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Status</p>
-                        <p className={`text-xs font-black capitalize ${emp.status === 'active' ? 'text-green-500' : 'text-slate-400'}`}>
-                          {emp.status || 'active'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b">
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Employee</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Permission Level</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Department</th>
+                      <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-wider">Employment Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {dbEmployees.map(emp => (
+                      <tr key={emp.id} className="hover:bg-slate-50/50 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 text-xs font-bold">
+                              {emp.first_name ? emp.first_name[0] : 'U'}
+                            </div>
+                            <div>
+                              <p className="text-sm font-bold text-slate-700">{emp.first_name} {emp.last_name}</p>
+                              <p className="text-[11px] text-slate-400">{emp.email}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge variant="secondary" className="bg-indigo-50 text-indigo-700 border-none font-bold uppercase text-[10px]">
+                            {emp.role || 'No Role Assigned'}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-1.5 text-slate-500 text-sm">
+                            <Briefcase className="w-3.5 h-3.5" />
+                            {emp.department || 'Unassigned'}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <select
+                            value={emp.status || 'active'}
+                            onChange={e => updateStaffMutation.mutate({ id: emp.id, data: { status: e.target.value } })}
+                            className={`text-xs font-bold border-none bg-transparent focus:ring-0 cursor-pointer capitalize 
+                              ${emp.status === 'active' ? 'text-green-600' : 'text-orange-500'}`}
+                          >
+                            <option value="active">Active</option>
+                            <option value="on leave">On Leave</option>
+                          </select>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Calendar Access Tab - RESTORED */}
+        {/* Calendar Access Tab - RESTORED WITH WIDGET */}
         <TabsContent value="calendar">
-           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="md:col-span-1">
-                <CardHeader>
-                  <CardTitle className="text-lg">Schedule Overview</CardTitle>
-                  <CardDescription>Select a date to manage shifts.</CardDescription>
-                </CardHeader>
-                <CardContent className="flex justify-center">
-                  <CalendarWidget
-                    mode="single"
-                    selected={date}
-                    onSelect={setDate}
-                    className="rounded-md border shadow-sm bg-white"
-                  />
-                </CardContent>
-              </Card>
-              <Card className="md:col-span-2">
-                <CardHeader>
-                  <CardTitle className="text-lg flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-indigo-500" /> 
-                    Timeline: {format(date, 'MMMM d, yyyy')}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                   <div className="space-y-4">
-                      {dbEmployees.slice(0, 4).map(emp => (
-                        <div key={emp.id} className="flex items-center justify-between p-3 border-l-4 border-indigo-400 bg-slate-50 rounded-r-lg">
-                           <div>
-                              <p className="text-sm font-bold">{emp.first_name} {emp.last_name}</p>
-                              <p className="text-[10px] text-gray-500 uppercase tracking-widest">{emp.department}</p>
-                           </div>
-                           <Badge className="bg-white text-indigo-600 border-indigo-100">8:00 AM - 5:00 PM</Badge>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Card className="lg:col-span-1 border-none shadow-sm">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold text-indigo-900">Schedule Overview</CardTitle>
+                <CardDescription>Select a date to manage shifts.</CardDescription>
+              </CardHeader>
+              <CardContent className="flex justify-center">
+                <CalendarWidget
+                  mode="single"
+                  selected={date}
+                  onSelect={setDate}
+                  className="rounded-xl border border-slate-100 shadow-inner bg-white p-4"
+                />
+              </CardContent>
+            </Card>
+            <Card className="lg:col-span-2 border-none shadow-sm bg-indigo-50/30">
+              <CardHeader className="border-b border-white/50">
+                <CardTitle className="text-lg font-bold text-indigo-900 flex items-center gap-2">
+                  <Clock className="w-5 h-5 text-indigo-500" />
+                  Timeline: {format(date, 'MMMM d, yyyy')}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="py-6">
+                <div className="space-y-4">
+                  {dbEmployees.slice(0, 5).map(emp => (
+                    <div key={emp.id} className="flex items-center justify-between p-4 bg-white rounded-xl shadow-sm border border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                           <UserCheck className="w-5 h-5" />
                         </div>
-                      ))}
-                      <p className="text-center text-xs text-slate-400 italic pt-4">Attendance and shift management is synchronized with local time.</p>
-                   </div>
-                </CardContent>
-              </Card>
-           </div>
+                        <div>
+                          <p className="text-sm font-bold text-slate-800">{emp.first_name} {emp.last_name}</p>
+                          <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{emp.department}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge className="bg-green-50 text-green-700 border-none font-bold">Shift: 08:00 - 17:00</Badge>
+                        <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-slate-300 hover:text-indigo-600"><Clock className="w-4 h-4" /></Button>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-center text-xs text-slate-400 italic pt-4">Personnel availability is synced with the Leave Management system.</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         {/* Activity Log Tab */}
@@ -365,7 +396,7 @@ export default function HRTeamManagement() {
             </div>
           </div>
           <DialogFooter className="flex justify-center sm:justify-center gap-3 border-t pt-4">
-            <Button variant="outline" onClick={() => setConfirmOpen(false)} className="w-32">Wait, Go Back</Button>
+            <Button variant="outline" onClick={() => setConfirmOpen(false)} className="w-32 font-bold">Wait, Go Back</Button>
             <Button 
                 onClick={handleFinalConfirm} 
                 disabled={grantAccessMutation.isPending}
