@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Calendar as CalendarWidget } from '@/components/ui/calendar'; // Ensure you have this shadcn component
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Activity,
@@ -22,7 +23,8 @@ import {
   Users,
   XCircle,
   Loader2,
-  AlertTriangle
+  AlertTriangle,
+  UserCheck
 } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
@@ -36,6 +38,7 @@ export default function HRTeamManagement() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState('access');
+  const [date, setDate] = useState(new Date());
   const [showInvite, setShowInvite] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [inviteForm, setInviteForm] = useState({ id: '', name: '', email: '', role: 'Employee' });
@@ -67,10 +70,7 @@ export default function HRTeamManagement() {
 
   const grantAccessMutation = useMutation({
     mutationFn: async (data) => {
-      // Action A: Update Employee Access
       await base44.entities.Employee.update(data.id, { role: data.role, has_access: true });
-      
-      // Action B: Log the Activity
       return base44.entities.ActivityLog.create({
         action: 'System Access Granted',
         details: `Granted ${data.role} permissions to ${data.name}`,
@@ -184,6 +184,89 @@ export default function HRTeamManagement() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Roles & Permissions Tab - RESTORED */}
+        <TabsContent value="roles">
+          <Card>
+            <CardHeader>
+              <CardTitle>Personnel Roles & Permission Levels</CardTitle>
+              <CardDescription>Review the access hierarchy and current roles for all employed personnel.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {dbEmployees.map(emp => (
+                  <div key={emp.id} className="flex items-center justify-between p-4 rounded-xl border bg-slate-50/50 hover:bg-white transition-all border-slate-100">
+                    <div className="flex items-center gap-4">
+                      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-500">
+                        <UserCheck className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-sm text-slate-800">{emp.first_name} {emp.last_name}</p>
+                        <p className="text-[11px] text-slate-400 font-medium">{emp.email}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-6">
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Current Role</p>
+                        <Badge variant="outline" className="bg-white border-indigo-100 text-indigo-600 font-bold text-xs uppercase px-3">
+                           {emp.role || 'No Access'}
+                        </Badge>
+                      </div>
+                      <div className="text-right min-w-[80px]">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tighter">Status</p>
+                        <p className={`text-xs font-black capitalize ${emp.status === 'active' ? 'text-green-500' : 'text-slate-400'}`}>
+                          {emp.status || 'active'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Calendar Access Tab - RESTORED */}
+        <TabsContent value="calendar">
+           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <Card className="md:col-span-1">
+                <CardHeader>
+                  <CardTitle className="text-lg">Schedule Overview</CardTitle>
+                  <CardDescription>Select a date to manage shifts.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex justify-center">
+                  <CalendarWidget
+                    mode="single"
+                    selected={date}
+                    onSelect={setDate}
+                    className="rounded-md border shadow-sm bg-white"
+                  />
+                </CardContent>
+              </Card>
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-indigo-500" /> 
+                    Timeline: {format(date, 'MMMM d, yyyy')}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                   <div className="space-y-4">
+                      {dbEmployees.slice(0, 4).map(emp => (
+                        <div key={emp.id} className="flex items-center justify-between p-3 border-l-4 border-indigo-400 bg-slate-50 rounded-r-lg">
+                           <div>
+                              <p className="text-sm font-bold">{emp.first_name} {emp.last_name}</p>
+                              <p className="text-[10px] text-gray-500 uppercase tracking-widest">{emp.department}</p>
+                           </div>
+                           <Badge className="bg-white text-indigo-600 border-indigo-100">8:00 AM - 5:00 PM</Badge>
+                        </div>
+                      ))}
+                      <p className="text-center text-xs text-slate-400 italic pt-4">Attendance and shift management is synchronized with local time.</p>
+                   </div>
+                </CardContent>
+              </Card>
+           </div>
         </TabsContent>
 
         {/* Activity Log Tab */}
