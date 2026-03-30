@@ -138,12 +138,17 @@ def init_db():
                   leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%',
                   user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # TIME ENTRIES TABLE
+    # TIME ENTRIES TABLE (Unified with Frontend names)
     c.execute('''CREATE TABLE IF NOT EXISTS time_entries
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  user_name TEXT, user_email TEXT, 
-                  clock_in_time TEXT, clock_out_time TEXT,
-                  duration TEXT, status TEXT DEFAULT 'active',
+                  employee_name TEXT, 
+                  employee_email TEXT, 
+                  type TEXT,
+                  date TEXT,
+                  clock_in TEXT, 
+                  clock_out TEXT,
+                  duration_minutes INTEGER, 
+                  status TEXT DEFAULT 'active',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
