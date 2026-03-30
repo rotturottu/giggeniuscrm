@@ -47,35 +47,49 @@ export default function HRTimeTracker() {
   const createMutation = useMutation({
     mutationFn: (d) => base44.entities.TimeEntry.create(d),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['time_entries'] }); setShowForm(false); setForm(empty); },
+    onError: (error) => console.error("Failed to save entry:", error)
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.TimeEntry.update(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['time_entries'] }),
+    onError: (error) => console.error("Failed to update entry:", error)
   });
 
+  // FIXED: Added try/catch to gracefully handle backend failures
   const handleClockIn = async () => {
-    const now = new Date().toISOString();
-    const entry = await base44.entities.TimeEntry.create({
-      employee_name: employeeName,
-      employee_email: employeeEmail,
-      type: 'clock_in_out',
-      date: format(new Date(), 'yyyy-MM-dd'),
-      clock_in: now,
-      status: 'active',
-    });
-    setClockedIn(entry);
-    setElapsed(0);
-    qc.invalidateQueries({ queryKey: ['time_entries'] });
+    try {
+      const now = new Date().toISOString();
+      const entry = await base44.entities.TimeEntry.create({
+        employee_name: employeeName,
+        employee_email: employeeEmail,
+        type: 'clock_in_out',
+        date: format(new Date(), 'yyyy-MM-dd'),
+        clock_in: now,
+        status: 'active',
+      });
+      setClockedIn(entry);
+      setElapsed(0);
+      qc.invalidateQueries({ queryKey: ['time_entries'] });
+    } catch (error) {
+      console.error("Clock In Failed. Check if the time_entries table exists in app.py:", error);
+      alert("Failed to clock in. Check your backend console for errors.");
+    }
   };
 
+  // FIXED: Added try/catch here as well
   const handleClockOut = async () => {
     if (!clockedIn) return;
-    const now = new Date().toISOString();
-    const duration = differenceInMinutes(new Date(now), new Date(clockedIn.clock_in));
-    await updateMutation.mutateAsync({ id: clockedIn.id, data: { clock_out: now, duration_minutes: duration, status: 'completed' } });
-    setClockedIn(null);
-    setElapsed(0);
+    try {
+      const now = new Date().toISOString();
+      const duration = differenceInMinutes(new Date(now), new Date(clockedIn.clock_in));
+      await updateMutation.mutateAsync({ id: clockedIn.id, data: { clock_out: now, duration_minutes: duration, status: 'completed' } });
+      setClockedIn(null);
+      setElapsed(0);
+    } catch (error) {
+      console.error("Clock Out Failed:", error);
+      alert("Failed to clock out. Check your backend console for errors.");
+    }
   };
 
   const logProject = () => {

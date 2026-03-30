@@ -3,6 +3,7 @@ from flask_cors import CORS
 import sqlite3
 import json
 from werkzeug.security import generate_password_hash, check_password_hash
+
 app = Flask(__name__)
 # Enable CORS for all routes and allow the User-Email header
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
@@ -40,7 +41,7 @@ def init_db():
                   phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # Updated Project Tasks
+    # Updated Project Tasks (Added subtasks and attachments)
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   title TEXT, 
@@ -51,6 +52,8 @@ def init_db():
                   assigned_to TEXT,
                   start_date TEXT,
                   due_date TEXT,
+                  subtasks TEXT,
+                  attachments TEXT,
                   parent_task_id INTEGER, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
@@ -222,8 +225,7 @@ def handle_base44_list_create(entity_name):
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
         'Project': 'projects', 'LeaveRequest': 'leave_requests', 
         'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
-        'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees', 'Department': 'departments',
-        'TimeEntry': 'time_entries'
+        'OnboardingTask': 'onboarding_tasks', 'TimeEntry': 'time_entries'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -265,6 +267,14 @@ def handle_base44_list_create(entity_name):
             for item in items_to_process:
                 if 'user_email' in db_cols: item['user_email'] = user_email
                 cleaned_data = {k: v for k, v in item.items() if k in db_cols}
+                
+                # Special handling for JSON fields in ProjectTask
+                if entity_name == 'ProjectTask':
+                    if 'subtasks' in cleaned_data and isinstance(cleaned_data['subtasks'], (list, dict)):
+                        cleaned_data['subtasks'] = json.dumps(cleaned_data['subtasks'])
+                    if 'attachments' in cleaned_data and isinstance(cleaned_data['attachments'], (list, dict)):
+                        cleaned_data['attachments'] = json.dumps(cleaned_data['attachments'])
+
                 columns = ', '.join(cleaned_data.keys())
                 placeholders = ', '.join(['?'] * len(cleaned_data))
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
@@ -273,6 +283,7 @@ def handle_base44_list_create(entity_name):
             conn.commit()
             return jsonify(results if isinstance(request_data, list) else results[0]), 201
         except Exception as e:
+            print(f"POST Error: {e}")
             return jsonify({"error": str(e)}), 400
         finally:
             conn.close()
@@ -286,7 +297,8 @@ def handle_base44_single_item_action(entity_name, entity_id):
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
         'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests',
         'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
-        'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees', 'Department': 'departments'
+        'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees', 'Department': 'departments',
+        'TimeEntry': 'time_entries'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
@@ -312,7 +324,16 @@ def handle_base44_single_item_action(entity_name, entity_id):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
+        
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
+        
+        # Special handling for JSON fields in ProjectTask
+        if entity_name == 'ProjectTask':
+            if 'subtasks' in cleaned_data and isinstance(cleaned_data['subtasks'], (list, dict)):
+                cleaned_data['subtasks'] = json.dumps(cleaned_data['subtasks'])
+            if 'attachments' in cleaned_data and isinstance(cleaned_data['attachments'], (list, dict)):
+                cleaned_data['attachments'] = json.dumps(cleaned_data['attachments'])
+
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()
