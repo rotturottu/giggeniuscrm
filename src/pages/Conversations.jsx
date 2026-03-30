@@ -30,7 +30,7 @@ export default function Conversations() {
     queryFn: () => base44.auth.me(),
   });
 
-  // 1. Fetch Active Conversations (Strictly Sender OR Recipient)
+  // 1. Fetch Active Conversations
   const { data: conversations = [], isLoading } = useQuery({
     queryKey: ['conversations', platformFilter, me?.email],
     queryFn: async () => {
@@ -50,7 +50,7 @@ export default function Conversations() {
     enabled: !!me?.email
   });
 
-  // 3. Fetch Registered Contacts (Changed from Employee to Contact)
+  // 3. Fetch Contacts
   const { data: contacts = [] } = useQuery({
     queryKey: ['contacts', 'list'],
     queryFn: () => base44.entities.Contact.list().catch(() => []),
@@ -65,7 +65,11 @@ export default function Conversations() {
       setComposeOpen(false);
       setComposeData({ to: '', subject: '', message: '', id: null });
       setAttachedFile(null);
-      toast.success("Message sent successfully!");
+      toast.success("Action completed successfully!");
+    },
+    onError: (err) => {
+      console.error("Mutation Error:", err);
+      toast.error("Database connection failed. Please try again.");
     }
   });
 
@@ -78,25 +82,38 @@ export default function Conversations() {
   });
 
   const handleAction = (status = 'active') => {
+    // Validation
     if (!composeData.to) return toast.error("Please select a recipient");
-    if (!me?.email) return toast.error("Auth session error. Please re-login.");
+    if (!composeData.message) return toast.error("Message body cannot be empty");
+    if (!me?.email) return toast.error("Authentication session expired. Please re-login.");
 
-    // Recipient Info from Contacts list
-    const selectedContact = contacts.find(c => c.email === composeData.to);
-    const recipientName = selectedContact ? selectedContact.name : composeData.to;
+    try {
+      // Recipient Info from Contacts list
+      const selectedContact = contacts.find(c => c.email === composeData.to);
+      const recipientName = selectedContact ? selectedContact.name : composeData.to;
 
-    saveMutation.mutate({
-      ...composeData,
-      contact_name: recipientName,
-      contact_email: composeData.to,
-      sender_email: me.email,
-      recipient_email: composeData.to,
-      sender_name: `${me.firstName} ${me.lastName}`,
-      status: status,
-      platform: 'crm',
-      last_message: composeData.message,
-      last_message_at: new Date().toISOString()
-    });
+      // Prepare payload
+      const payload = {
+        contact_name: recipientName,
+        contact_email: composeData.to,
+        sender_email: me.email,
+        recipient_email: composeData.to,
+        sender_name: me.firstName ? `${me.firstName} ${me.lastName}` : me.email,
+        subject: composeData.subject || "(No Subject)",
+        last_message: composeData.message,
+        status: status,
+        platform: 'crm',
+        last_message_at: new Date().toISOString()
+      };
+
+      // Include ID if updating an existing draft
+      if (composeData.id) payload.id = composeData.id;
+
+      saveMutation.mutate(payload);
+    } catch (error) {
+      console.error("HandleAction Error:", error);
+      toast.error("Internal application error.");
+    }
   };
 
   const filteredConversations = conversations.filter(conv => {
@@ -133,14 +150,20 @@ export default function Conversations() {
                            <span className="text-[10px] text-gray-400">To: {d.contact_name}</span>
                         </div>
                       </DropdownMenuItem>
-                      <Trash2 className="w-3 h-3 text-gray-300 hover:text-red-500 cursor-pointer" onClick={() => deleteMutation.mutate(d.id)} />
+                      <Trash2 className="w-3 h-3 text-gray-300 hover:text-red-500 cursor-pointer" onClick={(e) => {
+                        e.stopPropagation();
+                        deleteMutation.mutate(d.id);
+                      }} />
                     </div>
                   ))
                 }
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button onClick={() => setComposeOpen(true)} className="gap-2 bg-indigo-600 px-6 font-bold shadow-indigo-100 shadow-lg hover:bg-indigo-700">
+            <Button onClick={() => {
+              setComposeData({ to: '', subject: '', message: '', id: null });
+              setComposeOpen(true);
+            }} className="gap-2 bg-indigo-600 px-6 font-bold shadow-indigo-100 shadow-lg hover:bg-indigo-700">
               <Plus className="w-4 h-4" /> Compose
             </Button>
           </div>
@@ -189,7 +212,6 @@ export default function Conversations() {
         </div>
       </div>
 
-      {/* NEW MESSAGE MODAL */}
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
         <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
           <div className="bg-slate-900 text-white p-5 flex justify-between items-center">
@@ -250,7 +272,7 @@ export default function Conversations() {
             <div className="flex gap-3 w-full">
               <Button 
                 onClick={() => handleAction('active')} 
-                disabled={saveMutation.isPending || !composeData.to}
+                disabled={saveMutation.isPending}
                 className="flex-1 bg-indigo-600 hover:bg-indigo-700 h-12 font-bold rounded-xl shadow-lg shadow-indigo-100"
               >
                 {saveMutation.isPending ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Send className="w-4 h-4 mr-2" />}
@@ -259,6 +281,7 @@ export default function Conversations() {
               <Button 
                 variant="outline" 
                 onClick={() => handleAction('draft')} 
+                disabled={saveMutation.isPending}
                 className="h-12 border-slate-200 bg-white rounded-xl text-slate-600 px-6 font-bold"
               >
                 <Save className="w-4 h-4 mr-2" /> Save Draft
