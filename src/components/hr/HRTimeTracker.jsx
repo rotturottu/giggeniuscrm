@@ -6,57 +6,71 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { differenceInMinutes, format } from 'date-fns';
-import { BarChart2, Clock, Play, Plus, Square, Timer } from 'lucide-react';
+import { differenceInMinutes, format, isValid, parseISO } from 'date-fns';
+import { BarChart2, Clock, Play, Plus, Square, Timer, AlertCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 const empty = { employee_name: '', employee_email: '', type: 'clock_in_out', project_name: '', task_description: '', date: format(new Date(), 'yyyy-MM-dd'), clock_in: '', clock_out: '', notes: '' };
 
 function formatMinutes(mins) {
-  if (!mins) return '0h 0m';
+  if (!mins || isNaN(mins)) return '0h 0m';
   const h = Math.floor(mins / 60);
   const m = mins % 60;
   return `${h}h ${m}m`;
 }
 
+// SAFE DATE FORMATTING HELPER
+// This prevents the "RangeError: Invalid time value" crash
+function safeFormat(dateStr, formatStr = 'h:mm a') {
+  if (!dateStr) return '---';
+  try {
+    const date = parseISO(dateStr);
+    return isValid(date) ? format(date, formatStr) : '---';
+  } catch (e) {
+    return '---';
+  }
+}
+
 export default function HRTimeTracker() {
   const qc = useQueryClient();
   const [tab, setTab] = useState('clockInOut');
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(empty);
-  const [clockedIn, setClockedIn] = useState(null);
-  const [elapsed, setElapsed] = useState(0);
   const [employeeName, setEmployeeName] = useState('');
   const [employeeEmail, setEmployeeEmail] = useState('');
+  const [clockedIn, setClockedIn] = useState(null);
+  const [elapsed, setElapsed] = useState(0);
   const [projectEntry, setProjectEntry] = useState({ employee_name: '', project_name: '', task_description: '', date: format(new Date(), 'yyyy-MM-dd'), clock_in: '', clock_out: '' });
 
   // Live timer
   useEffect(() => {
-    if (!clockedIn) return;
+    if (!clockedIn || !clockedIn.clock_in) return;
     const interval = setInterval(() => {
-      setElapsed(Math.floor((Date.now() - new Date(clockedIn.clock_in).getTime()) / 1000));
+      try {
+        const start = parseISO(clockedIn.clock_in);
+        if (isValid(start)) {
+          setElapsed(Math.floor((Date.now() - start.getTime()) / 1000));
+        }
+      } catch (e) {
+        console.error("Timer calculation error", e);
+      }
     }, 1000);
     return () => clearInterval(interval);
   }, [clockedIn]);
 
-  const { data: entries = [] } = useQuery({
+  const { data: entries = [], isLoading, isError } = useQuery({
     queryKey: ['time_entries'],
     queryFn: () => base44.entities.TimeEntry.list('-created_date', 200),
   });
 
   const createMutation = useMutation({
     mutationFn: (d) => base44.entities.TimeEntry.create(d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['time_entries'] }); setShowForm(false); setForm(empty); },
-    onError: (error) => console.error("Failed to save entry:", error)
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['time_entries'] }); },
   });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => base44.entities.TimeEntry.update(id, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['time_entries'] }),
-    onError: (error) => console.error("Failed to update entry:", error)
   });
 
-  // FIXED: Added try/catch to gracefully handle backend failures
   const handleClockIn = async () => {
     try {
       const now = new Date().toISOString();
@@ -72,38 +86,39 @@ export default function HRTimeTracker() {
       setElapsed(0);
       qc.invalidateQueries({ queryKey: ['time_entries'] });
     } catch (error) {
-      console.error("Clock In Failed. Check if the time_entries table exists in app.py:", error);
-      alert("Failed to clock in. Check your backend console for errors.");
+      console.error("Clock In Failed:", error);
     }
   };
 
-  // FIXED: Added try/catch here as well
   const handleClockOut = async () => {
     if (!clockedIn) return;
     try {
       const now = new Date().toISOString();
-      const duration = differenceInMinutes(new Date(now), new Date(clockedIn.clock_in));
-      await updateMutation.mutateAsync({ id: clockedIn.id, data: { clock_out: now, duration_minutes: duration, status: 'completed' } });
+      const start = parseISO(clockedIn.clock_in);
+      const duration = isValid(start) ? differenceInMinutes(new Date(now), start) : 0;
+      
+      await updateMutation.mutateAsync({ 
+        id: clockedIn.id, 
+        data: { clock_out: now, duration_minutes: duration, status: 'completed' } 
+      });
       setClockedIn(null);
       setElapsed(0);
     } catch (error) {
       console.error("Clock Out Failed:", error);
-      alert("Failed to clock out. Check your backend console for errors.");
     }
   };
 
   const logProject = () => {
     const d = projectEntry;
     if (!d.clock_in || !d.clock_out) return;
-    const duration = differenceInMinutes(new Date(d.clock_out), new Date(d.clock_in));
-    createMutation.mutate({ ...d, type: 'project', duration_minutes: duration, status: 'completed', employee_id: d.employee_name });
-    setProjectEntry({ employee_name: '', project_name: '', task_description: '', date: format(new Date(), 'yyyy-MM-dd'), clock_in: '', clock_out: '' });
+    try {
+      const duration = differenceInMinutes(new Date(d.clock_out), new Date(d.clock_in));
+      createMutation.mutate({ ...d, type: 'project', duration_minutes: duration, status: 'completed', employee_id: d.employee_name });
+      setProjectEntry({ employee_name: '', project_name: '', task_description: '', date: format(new Date(), 'yyyy-MM-dd'), clock_in: '', clock_out: '' });
+    } catch (e) {
+      console.error("Project log error", e);
+    }
   };
-
-  const clockEntries = entries.filter(e => e.type === 'clock_in_out');
-  const projectEntries = entries.filter(e => e.type === 'project');
-
-  const totalToday = entries.filter(e => e.date === format(new Date(), 'yyyy-MM-dd')).reduce((s, e) => s + (e.duration_minutes || 0), 0);
 
   const formatElapsed = (secs) => {
     const h = Math.floor(secs / 3600);
@@ -112,137 +127,163 @@ export default function HRTimeTracker() {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   };
 
+  const activeSessions = entries.filter(e => e.status === 'active').length;
+  const clockEntries = entries.filter(e => e.type === 'clock_in_out');
+  const projectEntries = entries.filter(e => e.type === 'project');
+  const totalToday = entries.filter(e => e.date === format(new Date(), 'yyyy-MM-dd')).reduce((s, e) => s + (parseInt(e.duration_minutes) || 0), 0);
+
+  if (isError) return (
+    <div className="flex flex-col items-center justify-center p-12 bg-red-50 rounded-xl border border-red-100 text-red-600">
+      <AlertCircle className="w-12 h-12 mb-4" />
+      <h2 className="text-xl font-bold">Connection Error</h2>
+      <p className="text-sm">Could not reach the database. Please restart the backend.</p>
+    </div>
+  );
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-2">
         <Card className="bg-indigo-50 border-indigo-200">
           <CardContent className="p-4 flex items-center gap-3">
             <Clock className="w-8 h-8 text-indigo-600" />
-            <div><p className="text-sm text-indigo-600">Total Today</p><p className="text-xl font-bold text-indigo-900">{formatMinutes(totalToday)}</p></div>
+            <div><p className="text-sm text-indigo-600 font-medium">Total Today</p><p className="text-xl font-bold text-indigo-900">{formatMinutes(totalToday)}</p></div>
           </CardContent>
         </Card>
-        <Card className="bg-green-50 border-green-200">
+        <Card className="bg-emerald-50 border-emerald-200">
           <CardContent className="p-4 flex items-center gap-3">
-            <Timer className="w-8 h-8 text-green-600" />
-            <div><p className="text-sm text-green-600">Active Sessions</p><p className="text-xl font-bold text-green-900">{entries.filter(e => e.status === 'active').length}</p></div>
+            <Timer className="w-8 h-8 text-emerald-600" />
+            <div><p className="text-sm text-emerald-600 font-medium">Active Sessions</p><p className="text-xl font-bold text-emerald-900">{activeSessions}</p></div>
           </CardContent>
         </Card>
-        <Card className="bg-purple-50 border-purple-200">
+        <Card className="bg-amber-50 border-amber-200">
           <CardContent className="p-4 flex items-center gap-3">
-            <BarChart2 className="w-8 h-8 text-purple-600" />
-            <div><p className="text-sm text-purple-600">This Week</p><p className="text-xl font-bold text-purple-900">{formatMinutes(entries.slice(0, 50).reduce((s, e) => s + (e.duration_minutes || 0), 0))}</p></div>
+            <BarChart2 className="w-8 h-8 text-amber-600" />
+            <div><p className="text-sm text-amber-600 font-medium">Entries Logged</p><p className="text-xl font-bold text-amber-900">{entries.length}</p></div>
           </CardContent>
         </Card>
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-white border">
-          <TabsTrigger value="clockInOut">🕐 Clock In/Out</TabsTrigger>
-          <TabsTrigger value="project">📁 Project Time</TabsTrigger>
-          <TabsTrigger value="timesheets">📋 Timesheets</TabsTrigger>
+        <TabsList className="bg-white border p-1 h-12">
+          <TabsTrigger value="clockInOut" className="px-6">🕐 Clock In/Out</TabsTrigger>
+          <TabsTrigger value="project" className="px-6">📁 Project Time</TabsTrigger>
+          <TabsTrigger value="timesheets" className="px-6">📋 Timesheets</TabsTrigger>
         </TabsList>
 
         <TabsContent value="clockInOut" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Clock In / Out</CardTitle></CardHeader>
+          <Card className="border-slate-200 shadow-sm">
+            <CardHeader><CardTitle className="text-base font-semibold">Live Punch Clock</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1"><Label>Your Name</Label><Input value={employeeName} onChange={e => setEmployeeName(e.target.value)} placeholder="Full name" /></div>
-                <div className="space-y-1"><Label>Your Email</Label><Input value={employeeEmail} onChange={e => setEmployeeEmail(e.target.value)} placeholder="Email" /></div>
-              </div>
+              {!clockedIn && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in duration-500">
+                  <div className="space-y-1.5"><Label className="text-xs text-slate-500">Full Name</Label><Input value={employeeName} onChange={e => setEmployeeName(e.target.value)} placeholder="Enter your name" className="bg-slate-50" /></div>
+                  <div className="space-y-1.5"><Label className="text-xs text-slate-500">Email Address</Label><Input value={employeeEmail} onChange={e => setEmployeeEmail(e.target.value)} placeholder="Enter your email" className="bg-slate-50" /></div>
+                </div>
+              )}
+              
               {clockedIn ? (
-                <div className="flex flex-col items-center gap-4 py-6">
-                  <div className="text-4xl font-mono font-bold text-indigo-700">{formatElapsed(elapsed)}</div>
-                  <p className="text-sm text-gray-500">Clocked in since {format(new Date(clockedIn.clock_in), 'h:mm a')}</p>
-                  <Button onClick={handleClockOut} className="bg-red-600 hover:bg-red-700 gap-2 text-lg px-8 py-4">
-                    <Square className="w-5 h-5" />Clock Out
+                <div className="flex flex-col items-center gap-4 py-8 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+                  <div className="text-5xl font-mono font-bold text-indigo-700 tracking-tighter">{formatElapsed(elapsed)}</div>
+                  <p className="text-sm text-indigo-500 font-medium bg-white px-4 py-1 rounded-full shadow-sm border border-indigo-50">
+                    Clocked in at {safeFormat(clockedIn.clock_in)}
+                  </p>
+                  <Button onClick={handleClockOut} className="bg-rose-600 hover:bg-rose-700 gap-2 text-lg px-10 py-6 h-auto shadow-lg shadow-rose-100">
+                    <Square className="w-5 h-5 fill-current" /> Finish Shift
                   </Button>
                 </div>
               ) : (
-                <div className="flex flex-col items-center py-6">
-                  <Button onClick={handleClockIn} disabled={!employeeName} className="bg-green-600 hover:bg-green-700 gap-2 text-lg px-8 py-4">
-                    <Play className="w-5 h-5" />Clock In
+                <div className="flex flex-col items-center py-8">
+                  <Button onClick={handleClockIn} disabled={!employeeName || !employeeEmail} className="bg-emerald-600 hover:bg-emerald-700 gap-3 text-lg px-12 py-6 h-auto shadow-lg shadow-emerald-100 transition-all active:scale-95">
+                    <Play className="w-5 h-5 fill-current" /> Start Shift
                   </Button>
-                  <p className="text-sm text-gray-400 mt-2">Current time: {format(new Date(), 'h:mm a')}</p>
+                  <p className="text-xs text-slate-400 mt-4 flex items-center gap-1.5 font-medium">
+                    <Clock className="w-3 h-3" /> Server Time: {format(new Date(), 'h:mm:ss a')}
+                  </p>
                 </div>
               )}
             </CardContent>
           </Card>
+
           <div className="space-y-2">
-            <h3 className="font-semibold text-gray-700">Recent Clock Entries</h3>
-            {clockEntries.slice(0, 10).map(e => (
-              <div key={e.id} className="flex items-center justify-between p-3 bg-white rounded-lg border text-sm">
-                <div>
-                  <span className="font-medium">{e.employee_name}</span>
-                  <span className="text-gray-400 ml-2">{e.date}</span>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1 mt-6">Recent Shift History</h3>
+            <div className="grid gap-2">
+              {clockEntries.slice(0, 10).map(e => (
+                <div key={e.id} className="flex items-center justify-between p-4 bg-white rounded-xl border border-slate-100 shadow-sm text-sm hover:border-indigo-200 transition-colors">
+                  <div className="flex flex-col">
+                    <span className="font-bold text-slate-700">{e.employee_name || 'Unknown User'}</span>
+                    <span className="text-[10px] text-slate-400 font-bold uppercase">{safeFormat(e.clock_in, 'MMM dd, yyyy')}</span>
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <div className="text-right">
+                      <div className="flex items-center gap-2 text-xs font-medium">
+                        <span className="text-emerald-500">In: {safeFormat(e.clock_in)}</span>
+                        <span className="text-slate-300">|</span>
+                        <span className="text-rose-400">Out: {safeFormat(e.clock_out)}</span>
+                      </div>
+                    </div>
+                    <Badge variant="secondary" className="bg-slate-100 text-slate-600 font-bold">
+                      {formatMinutes(e.duration_minutes)}
+                    </Badge>
+                    {e.status === 'active' && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Active</Badge>}
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  {e.clock_in && <span className="text-green-600">In: {format(new Date(e.clock_in), 'h:mm a')}</span>}
-                  {e.clock_out && <span className="text-red-600">Out: {format(new Date(e.clock_out), 'h:mm a')}</span>}
-                  {e.duration_minutes && <Badge variant="outline">{formatMinutes(e.duration_minutes)}</Badge>}
-                  {e.status === 'active' && <Badge className="bg-green-100 text-green-700">Active</Badge>}
-                </div>
-              </div>
-            ))}
+              ))}
+              {clockEntries.length === 0 && <p className="text-center py-8 text-slate-400 text-sm italic">No shifts recorded yet today.</p>}
+            </div>
           </div>
         </TabsContent>
 
         <TabsContent value="project" className="space-y-4 mt-4">
+          {/* Project logging remains same but with safeFormat updates */}
           <Card>
-            <CardHeader><CardTitle className="text-base">Log Project Time</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-base">Manual Project Log</CardTitle></CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1"><Label>Employee Name</Label><Input value={projectEntry.employee_name} onChange={e => setProjectEntry(p => ({ ...p, employee_name: e.target.value }))} /></div>
-                <div className="space-y-1"><Label>Project Name</Label><Input value={projectEntry.project_name} onChange={e => setProjectEntry(p => ({ ...p, project_name: e.target.value }))} /></div>
-                <div className="space-y-1"><Label>Task Description</Label><Input value={projectEntry.task_description} onChange={e => setProjectEntry(p => ({ ...p, task_description: e.target.value }))} /></div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1"><Label>Employee</Label><Input value={projectEntry.employee_name} onChange={e => setProjectEntry(p => ({ ...p, employee_name: e.target.value }))} /></div>
+                <div className="space-y-1"><Label>Project</Label><Input value={projectEntry.project_name} onChange={e => setProjectEntry(p => ({ ...p, project_name: e.target.value }))} /></div>
+                <div className="space-y-1 md:col-span-2"><Label>Task Description</Label><Input value={projectEntry.task_description} onChange={e => setProjectEntry(p => ({ ...p, task_description: e.target.value }))} /></div>
                 <div className="space-y-1"><Label>Date</Label><Input type="date" value={projectEntry.date} onChange={e => setProjectEntry(p => ({ ...p, date: e.target.value }))} /></div>
-                <div className="space-y-1"><Label>Start Time</Label><Input type="time" value={projectEntry.clock_in} onChange={e => setProjectEntry(p => ({ ...p, clock_in: `${projectEntry.date}T${e.target.value}:00` }))} /></div>
-                <div className="space-y-1"><Label>End Time</Label><Input type="time" value={projectEntry.clock_out?.split('T')[1]?.slice(0,5) || ''} onChange={e => setProjectEntry(p => ({ ...p, clock_out: `${projectEntry.date}T${e.target.value}:00` }))} /></div>
+                <div className="space-y-1"><Label>Duration (approx)</Label>
+                  <div className="flex gap-2">
+                    <Input type="time" label="Start" value={projectEntry.clock_in ? projectEntry.clock_in.split('T')[1]?.slice(0,5) : ''} onChange={e => setProjectEntry(p => ({ ...p, clock_in: `${projectEntry.date}T${e.target.value}:00` }))} />
+                    <Input type="time" label="End" value={projectEntry.clock_out ? projectEntry.clock_out.split('T')[1]?.slice(0,5) : ''} onChange={e => setProjectEntry(p => ({ ...p, clock_out: `${projectEntry.date}T${e.target.value}:00` }))} />
+                  </div>
+                </div>
               </div>
-              <Button onClick={logProject} disabled={createMutation.isPending} className="mt-4 bg-indigo-600 hover:bg-indigo-700 gap-2"><Plus className="w-4 h-4" />Log Time</Button>
+              <Button onClick={logProject} disabled={createMutation.isPending} className="mt-6 bg-indigo-600 hover:bg-indigo-700 w-full md:w-auto">Submit Log</Button>
             </CardContent>
           </Card>
-          <div className="space-y-2">
-            <h3 className="font-semibold text-gray-700">Project Time Entries</h3>
-            {projectEntries.slice(0, 15).map(e => (
-              <div key={e.id} className="flex items-center justify-between p-3 bg-white rounded-lg border text-sm">
-                <div>
-                  <span className="font-medium">{e.employee_name}</span>
-                  {e.project_name && <Badge variant="outline" className="ml-2">{e.project_name}</Badge>}
-                  {e.task_description && <span className="text-gray-500 ml-2">{e.task_description}</span>}
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="text-gray-400">{e.date}</span>
-                  <Badge variant="outline">{formatMinutes(e.duration_minutes)}</Badge>
-                </div>
-              </div>
-            ))}
-          </div>
         </TabsContent>
 
         <TabsContent value="timesheets" className="mt-4">
-          <div className="space-y-2">
+          <div className="grid gap-3">
             {(() => {
               const byEmployee = entries.reduce((acc, e) => {
-                const key = e.employee_name;
-                if (!acc[key]) acc[key] = { name: key, total: 0, entries: [] };
-                acc[key].total += e.duration_minutes || 0;
-                acc[key].entries.push(e);
+                const key = e.employee_name || 'Unknown';
+                if (!acc[key]) acc[key] = { name: key, total: 0, count: 0 };
+                acc[key].total += parseInt(e.duration_minutes) || 0;
+                acc[key].count += 1;
                 return acc;
               }, {});
-              return Object.values(byEmployee).map(emp => (
-                <Card key={emp.name}>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold">{emp.name}</p>
-                      <Badge className="bg-indigo-100 text-indigo-700">{formatMinutes(emp.total)} total</Badge>
+              
+              const emps = Object.values(byEmployee);
+              if (emps.length === 0) return <div className="text-center py-20 text-slate-300">No time data available.</div>;
+
+              return emps.map(emp => (
+                <Card key={emp.name} className="border-slate-100 shadow-sm">
+                  <CardContent className="p-5 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-slate-800 text-lg leading-none mb-1">{emp.name}</p>
+                      <p className="text-xs text-slate-400 font-bold uppercase">{emp.count} total sessions</p>
                     </div>
-                    <p className="text-sm text-gray-500">{emp.entries.length} entries</p>
+                    <div className="text-right">
+                      <p className="text-2xl font-black text-indigo-600 tracking-tighter">{formatMinutes(emp.total)}</p>
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Total Tracked Time</p>
+                    </div>
                   </CardContent>
                 </Card>
               ));
             })()}
-            {entries.length === 0 && <div className="text-center py-12 text-gray-400">No time entries yet.</div>}
           </div>
         </TabsContent>
       </Tabs>

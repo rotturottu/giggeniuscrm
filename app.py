@@ -273,7 +273,7 @@ def handle_base44_list_create(entity_name):
                 # FIX: Ensure clock_in_time is never empty for TimeEntry
                 if entity_name == 'TimeEntry':
                     if not item.get('clock_in_time'):
-                        item['clock_in_time'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
+                        item['clock_in_time'] = datetime.now().isoformat()
                     if not item.get('status'):
                         item['status'] = 'active'
 
