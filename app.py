@@ -2,7 +2,8 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS 
 import sqlite3
 import json
-from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.security import generate_password_hash, check_password_hash\
+from datetime import datetime
 
 app = Flask(__name__)
 # Enable CORS for all routes and allow the User-Email header
@@ -272,7 +273,7 @@ def handle_base44_list_create(entity_name):
                 # FIX: Ensure clock_in_time is never empty for TimeEntry
                 if entity_name == 'TimeEntry':
                     if not item.get('clock_in_time'):
-                        item['clock_in_time'] = datetime.now().isoformat()
+                        item['clock_in_time'] = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
                     if not item.get('status'):
                         item['status'] = 'active'
 
