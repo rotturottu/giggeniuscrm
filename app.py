@@ -257,6 +257,7 @@ def handle_base44_list_create(entity_name):
 
     if request.method == 'POST':
         request_data = request.json
+        # Handle both single objects and lists (for bulk onboarding)
         items_to_process = request_data if isinstance(request_data, list) else [request_data]
         
         c.execute(f"PRAGMA table_info({table_name})")
@@ -265,23 +266,31 @@ def handle_base44_list_create(entity_name):
         results = []
         try:
             for item in items_to_process:
-                if 'user_email' in db_cols: item['user_email'] = user_email
-                cleaned_data = {k: v for k, v in item.items() if k in db_cols}
+                # 1. Map user email
+                if 'user_email' in db_cols: 
+                    item['user_email'] = user_email
                 
-                # Special handling for JSON fields in ProjectTask
+                # 2. Handle JSON fields for Tasks
                 if entity_name == 'ProjectTask':
-                    if 'subtasks' in cleaned_data and isinstance(cleaned_data['subtasks'], (list, dict)):
-                        cleaned_data['subtasks'] = json.dumps(cleaned_data['subtasks'])
-                    if 'attachments' in cleaned_data and isinstance(cleaned_data['attachments'], (list, dict)):
-                        cleaned_data['attachments'] = json.dumps(cleaned_data['attachments'])
+                    for json_field in ['subtasks', 'attachments']:
+                        if json_field in item and isinstance(item[json_field], (list, dict)):
+                            item[json_field] = json.dumps(item[json_field])
 
+                # 3. Clean and Insert
+                cleaned_data = {k: v for k, v in item.items() if k in db_cols}
                 columns = ', '.join(cleaned_data.keys())
                 placeholders = ', '.join(['?'] * len(cleaned_data))
-                c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
+                
+                c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", 
+                          tuple(cleaned_data.values()))
+                
                 cleaned_data['id'] = c.lastrowid
                 results.append(cleaned_data)
+            
             conn.commit()
+            # Return single object if single was sent, else return list
             return jsonify(results if isinstance(request_data, list) else results[0]), 201
+        
         except Exception as e:
             print(f"POST Error: {e}")
             return jsonify({"error": str(e)}), 400
