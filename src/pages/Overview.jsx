@@ -35,6 +35,8 @@ export default function Overview() {
   const { data: customDashboards = [] } = useQuery({
     queryKey: ['custom-dashboards'],
     queryFn: () => base44.entities.CustomDashboard.filter({}),
+    // Added Real-Time Polling: Refreshes the dashboard list every 5 seconds
+    refetchInterval: 5000, 
   });
 
   return (
@@ -148,6 +150,6 @@ export default function Overview() {
           onClose={() => setShowReportBuilder(false)}
         />
       </div>
-    </div>
+    </div> 
   );
 }
