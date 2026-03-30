@@ -34,7 +34,6 @@ export default function Conversations() {
   const { data: conversations = [], isLoading } = useQuery({
     queryKey: ['conversations', platformFilter, me?.email],
     queryFn: async () => {
-      // Backend handles the (sender_email = me OR recipient_email = me) logic
       const res = await base44.entities.Conversation.filter({ status: 'active' }, '-last_message_at');
       return Array.isArray(res) ? res : [];
     },
@@ -51,10 +50,10 @@ export default function Conversations() {
     enabled: !!me?.email
   });
 
-  // 3. Fetch Registered Teammates (Employees) for the "To:" field
-  const { data: employees = [] } = useQuery({
-    queryKey: ['employees', 'list'],
-    queryFn: () => base44.entities.Employee.list().catch(() => []),
+  // 3. Fetch Registered Contacts (Changed from Employee to Contact)
+  const { data: contacts = [] } = useQuery({
+    queryKey: ['contacts', 'list'],
+    queryFn: () => base44.entities.Contact.list().catch(() => []),
   });
 
   const saveMutation = useMutation({
@@ -82,17 +81,17 @@ export default function Conversations() {
     if (!composeData.to) return toast.error("Please select a recipient");
     if (!me?.email) return toast.error("Auth session error. Please re-login.");
 
-    // Recipient Info
-    const selectedEmp = employees.find(e => e.email === composeData.to);
-    const recipientName = selectedEmp ? `${selectedEmp.first_name} ${selectedEmp.last_name}` : composeData.to;
+    // Recipient Info from Contacts list
+    const selectedContact = contacts.find(c => c.email === composeData.to);
+    const recipientName = selectedContact ? selectedContact.name : composeData.to;
 
     saveMutation.mutate({
       ...composeData,
-      contact_name: recipientName, // For Kier's sidebar view
+      contact_name: recipientName,
       contact_email: composeData.to,
-      sender_email: me.email,      // Gab's email
-      recipient_email: composeData.to, // Kier's email
-      sender_name: `${me.firstName} ${me.lastName}`, // Fixing the "null" display
+      sender_email: me.email,
+      recipient_email: composeData.to,
+      sender_name: `${me.firstName} ${me.lastName}`,
       status: status,
       platform: 'crm',
       last_message: composeData.message,
@@ -182,7 +181,7 @@ export default function Conversations() {
                     <MessageSquare className="w-10 h-10 opacity-20" />
                   </div>
                   <p className="font-bold">Inbox is Ready</p>
-                  <p className="text-sm">Select a teammate from the left to start chatting</p>
+                  <p className="text-sm">Select a contact from the left to start chatting</p>
                 </div>
               </Card>
             )}
@@ -196,7 +195,7 @@ export default function Conversations() {
           <div className="bg-slate-900 text-white p-5 flex justify-between items-center">
             <div className="flex items-center gap-2">
                 <div className="p-2 bg-white/10 rounded-lg"><Send className="w-4 h-4 text-indigo-300" /></div>
-                <span className="font-bold tracking-tight">Compose Teammate Message</span>
+                <span className="font-bold tracking-tight">Compose Message</span>
             </div>
             <X className="w-5 h-5 cursor-pointer opacity-50 hover:opacity-100 transition-opacity" onClick={() => setComposeOpen(false)} />
           </div>
@@ -209,10 +208,10 @@ export default function Conversations() {
                 value={composeData.to} 
                 onChange={(e) => setComposeData({...composeData, to: e.target.value})}
               >
-                <option value="">Select a registered user...</option>
-                {employees.map(emp => (
-                    <option key={emp.id} value={emp.email}>
-                        {emp.first_name} {emp.last_name} ({emp.email})
+                <option value="">Select a contact...</option>
+                {contacts.map(c => (
+                    <option key={c.id} value={c.email}>
+                        {c.name} ({c.email})
                     </option>
                 ))}
               </select>
