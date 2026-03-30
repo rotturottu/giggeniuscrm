@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS 
 import sqlite3
 import json
-from werkzeug.security import generate_password_hash, check_password_hash\
+from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 app = Flask(__name__)
