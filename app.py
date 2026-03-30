@@ -112,6 +112,14 @@ def init_db():
                   leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%',
                   user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # TIME ENTRIES TABLE
+    c.execute('''CREATE TABLE IF NOT EXISTS time_entries
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  user_name TEXT, user_email TEXT, 
+                  clock_in_time TEXT, clock_out_time TEXT,
+                  duration TEXT, status TEXT DEFAULT 'active',
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
     conn.commit()
     conn.close()
 
@@ -191,7 +199,8 @@ def handle_base44_entities(entity_name):
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
         'Project': 'projects', 'LeaveRequest': 'leave_requests', 
-        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews'
+        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
+        'TimeEntry': 'time_entries'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -260,7 +269,8 @@ def handle_base44_single_item(entity_name, entity_id):
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
         'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests',
-        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews'
+        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
+        'TimeEntry': 'time_entries'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
