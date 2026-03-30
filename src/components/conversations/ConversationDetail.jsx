@@ -1,108 +1,152 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Send, Paperclip } from 'lucide-react';
+import { Send, Paperclip, MoreVertical, ShieldCheck, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
 export default function ConversationDetail({ conversation }) {
   const [reply, setReply] = useState('');
   const queryClient = useQueryClient();
+  const scrollRef = useRef(null);
 
-  const { data: messages = [] } = useQuery({
-    queryKey: ['messages', conversation.id],
-    queryFn: () => base44.entities.Message.filter({ conversation_id: conversation.id }, 'created_date'),
+  // 1. Fetch Current User Identity
+  const { data: me } = useQuery({
+    queryKey: ['user', 'me'],
+    queryFn: () => base44.auth.me(),
   });
 
-  // --- SAFETY NET ---
-  const safeMessages = Array.isArray(messages) ? messages : [];
+  // 2. Fetch Messages for this specific thread
+  const { data: messages = [], isLoading } = useQuery({
+    queryKey: ['messages', conversation.id],
+    queryFn: async () => {
+      const res = await base44.entities.Message.filter({ conversation_id: conversation.id }, 'created_date');
+      return Array.isArray(res) ? res : [];
+    },
+    refetchInterval: 3000, // Auto-refresh every 3 seconds for "Live" feel
+  });
 
+  // 3. Auto-scroll to bottom when messages change
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  // 4. Send Message Mutation
   const sendMessageMutation = useMutation({
-    mutationFn: (data) => base44.entities.Message.create(data),
+    mutationFn: async (content) => {
+      // Step A: Create the message record
+      await base44.entities.Message.create({
+        conversation_id: conversation.id,
+        sender_email: me.email,
+        sender_name: `${me.firstName} ${me.lastName}`,
+        recipient_email: me.email === conversation.sender_email ? conversation.recipient_email : conversation.sender_email,
+        body: content,
+        is_read: 0,
+        created_date: new Date().toISOString()
+      });
+
+      // Step B: Update the Conversation "Head" with the latest snippet
+      return base44.entities.Conversation.update(conversation.id, {
+        last_message: content,
+        last_message_at: new Date().toISOString()
+      });
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['messages', conversation.id] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setReply('');
-      toast.success('Message sent');
     },
+    onError: () => toast.error("Failed to send message")
   });
 
   const handleSend = () => {
-    if (!reply.trim()) return;
-
-    sendMessageMutation.mutate({
-      conversation_id: conversation.id,
-      sender_email: 'me',
-      sender_name: 'Me',
-      content: reply,
-      platform: conversation.platform,
-      is_outbound: true,
-      read: true,
-    });
+    if (!reply.trim() || !me) return;
+    sendMessageMutation.mutate(reply);
   };
 
+  const otherPersonName = me?.email === conversation.sender_email 
+    ? (conversation.contact_name || conversation.recipient_email) 
+    : (conversation.sender_name || conversation.sender_email);
+
   return (
-    <Card className="h-[calc(100vh-200px)] flex flex-col">
-      <CardHeader className="border-b">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Avatar>
-              <AvatarFallback className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-                {conversation.contact_name?.[0]?.toUpperCase() || conversation.contact_email?.[0]?.toUpperCase() || '?'}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <CardTitle className="text-lg">{conversation.contact_name || conversation.contact_email}</CardTitle>
-              <p className="text-sm text-gray-600">{conversation.subject}</p>
+    <Card className="h-[calc(100vh-180px)] flex flex-col border-none shadow-sm bg-white overflow-hidden text-left">
+      {/* Header */}
+      <CardHeader className="border-b py-3 px-6 bg-white flex flex-row items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Avatar className="h-10 w-10 border-2 border-indigo-50">
+            <AvatarFallback className="bg-indigo-600 text-white font-bold text-xs">
+              {otherPersonName?.[0]?.toUpperCase() || '?'}
+            </AvatarFallback>
+          </Avatar>
+          <div>
+            <CardTitle className="text-base font-bold text-slate-800">{otherPersonName}</CardTitle>
+            <div className="flex items-center gap-1.5">
+               <div className="h-2 w-2 rounded-full bg-green-500" />
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Teammate</p>
             </div>
           </div>
         </div>
+        <Button variant="ghost" size="icon" className="text-slate-400"><MoreVertical className="w-5 h-5" /></Button>
       </CardHeader>
 
-      <CardContent className="flex-1 overflow-y-auto p-4 space-y-4">
-        {safeMessages.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            No messages yet
+      {/* Chat Area */}
+      <CardContent 
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 custom-scrollbar"
+      >
+        {isLoading ? (
+          <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" /></div>
+        ) : messages.length === 0 ? (
+          <div className="text-center py-20">
+            <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
+                <ShieldCheck className="text-indigo-200 w-8 h-8" />
+            </div>
+            <p className="text-sm font-bold text-slate-400">Encrypted Conversation Started</p>
+            <p className="text-xs text-slate-300">Messages are only visible to registered participants.</p>
           </div>
         ) : (
-          safeMessages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.is_outbound ? 'justify-end' : 'justify-start'}`}
-            >
+          messages.map((msg) => {
+            const isMe = msg.sender_email === me?.email;
+            
+            return (
               <div
-                className={`max-w-[70%] rounded-lg p-3 ${
-                  message.is_outbound
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-900'
-                }`}
+                key={msg.id}
+                className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
               >
-                {!message.is_outbound && (
-                  <p className="text-xs font-semibold mb-1">{message.sender_name}</p>
-                )}
-                <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                <p className={`text-xs mt-1 ${
-                  message.is_outbound ? 'text-blue-100' : 'text-gray-500'
-                }`}>
-                  {format(new Date(message.created_date), 'MMM d, h:mm a')}
-                </p>
+                <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
+                  <div
+                    className={`px-4 py-3 rounded-2xl text-sm font-medium shadow-sm leading-relaxed ${
+                      isMe
+                        ? 'bg-indigo-600 text-white rounded-tr-none'
+                        : 'bg-white text-slate-700 rounded-tl-none border border-slate-100'
+                    }`}
+                  >
+                    {msg.body || msg.content}
+                  </div>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase mt-1.5 px-1">
+                    {msg.created_date ? format(new Date(msg.created_date), 'HH:mm') : 'Just now'}
+                  </span>
+                </div>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </CardContent>
 
-      <div className="border-t p-4">
-        <div className="flex gap-2">
+      {/* Footer / Input */}
+      <div className="p-4 bg-white border-t">
+        <div className="flex items-end gap-3 bg-slate-50 rounded-2xl p-2 border border-slate-100 focus-within:border-indigo-200 transition-all">
           <Textarea
-            placeholder="Type your message..."
+            placeholder="Write a message..."
             value={reply}
             onChange={(e) => setReply(e.target.value)}
-            className="flex-1 min-h-[60px] max-h-[120px]"
+            className="flex-1 min-h-[45px] max-h-[150px] border-none bg-transparent shadow-none focus-visible:ring-0 resize-none py-3 px-2 text-sm"
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
@@ -110,16 +154,16 @@ export default function ConversationDetail({ conversation }) {
               }
             }}
           />
-          <div className="flex flex-col gap-2">
-            <Button variant="outline" size="icon">
-              <Paperclip className="w-4 h-4" />
+          <div className="flex items-center gap-1 pb-1 pr-1">
+            <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl">
+              <Paperclip className="w-5 h-5" />
             </Button>
             <Button
               onClick={handleSend}
               disabled={!reply.trim() || sendMessageMutation.isPending}
-              className="bg-gradient-to-r from-blue-600 to-purple-600"
+              className="h-10 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-md font-bold transition-all active:scale-95"
             >
-              <Send className="w-4 h-4" />
+              {sendMessageMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             </Button>
           </div>
         </div>
