@@ -14,11 +14,14 @@ export default function ConversationDetail({ conversation }) {
   const queryClient = useQueryClient();
   const scrollRef = useRef(null);
 
-  // 1. Fetch Current User Identity
+  // 1. Fetch Current User Identity with backup
   const { data: me } = useQuery({
     queryKey: ['user', 'me'],
     queryFn: () => base44.auth.me(),
+    retry: false
   });
+
+  const myEmail = me?.email || localStorage.getItem('userEmail');
 
   // 2. Fetch Messages for this specific thread
   const { data: messages = [], isLoading } = useQuery({
@@ -27,10 +30,10 @@ export default function ConversationDetail({ conversation }) {
       const res = await base44.entities.Message.filter({ conversation_id: conversation.id }, 'created_date');
       return Array.isArray(res) ? res : [];
     },
-    refetchInterval: 3000, // Auto-refresh every 3 seconds for "Live" feel
+    refetchInterval: 3000, 
   });
 
-  // 3. Auto-scroll to bottom when messages change
+  // 3. Auto-scroll to bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -40,18 +43,24 @@ export default function ConversationDetail({ conversation }) {
   // 4. Send Message Mutation
   const sendMessageMutation = useMutation({
     mutationFn: async (content) => {
-      // Step A: Create the message record
+      // Determine recipient: If I am the sender of the conv, recipient is contact_email.
+      // If I am the recipient of the conv, recipient is sender_email.
+      const recipient = myEmail === conversation.sender_email 
+        ? conversation.recipient_email 
+        : conversation.sender_email;
+
+      // Create the message bubble
       await base44.entities.Message.create({
         conversation_id: conversation.id,
-        sender_email: me.email,
-        sender_name: `${me.firstName} ${me.lastName}`,
-        recipient_email: me.email === conversation.sender_email ? conversation.recipient_email : conversation.sender_email,
+        sender_email: myEmail,
+        sender_name: me?.firstName ? `${me.firstName} ${me.lastName}` : myEmail,
+        recipient_email: recipient,
         body: content,
         is_read: 0,
         created_date: new Date().toISOString()
       });
 
-      // Step B: Update the Conversation "Head" with the latest snippet
+      // Update conversation preview
       return base44.entities.Conversation.update(conversation.id, {
         last_message: content,
         last_message_at: new Date().toISOString()
@@ -62,15 +71,16 @@ export default function ConversationDetail({ conversation }) {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setReply('');
     },
-    onError: () => toast.error("Failed to send message")
+    onError: () => toast.error("Message failed to send")
   });
 
   const handleSend = () => {
-    if (!reply.trim() || !me) return;
+    if (!reply.trim() || !myEmail) return;
     sendMessageMutation.mutate(reply);
   };
 
-  const otherPersonName = me?.email === conversation.sender_email 
+  // Determine which name to show in the Header
+  const otherPersonName = myEmail === conversation.sender_email 
     ? (conversation.contact_name || conversation.recipient_email) 
     : (conversation.sender_name || conversation.sender_email);
 
@@ -104,15 +114,16 @@ export default function ConversationDetail({ conversation }) {
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" /></div>
         ) : messages.length === 0 ? (
           <div className="text-center py-20">
-            <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm">
-                <ShieldCheck className="text-indigo-200 w-8 h-8" />
+            <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-indigo-200">
+                <ShieldCheck className="w-8 h-8" />
             </div>
-            <p className="text-sm font-bold text-slate-400">Encrypted Conversation Started</p>
-            <p className="text-xs text-slate-300">Messages are only visible to registered participants.</p>
+            <p className="text-sm font-bold text-slate-400">Secure Conversation</p>
+            <p className="text-xs text-slate-300">Start the discussion below.</p>
           </div>
         ) : (
           messages.map((msg) => {
-            const isMe = msg.sender_email === me?.email;
+            // CRITICAL FIX: Identity check for alignment
+            const isMe = msg.sender_email === myEmail;
             
             return (
               <div
@@ -130,6 +141,7 @@ export default function ConversationDetail({ conversation }) {
                     {msg.body || msg.content}
                   </div>
                   <span className="text-[9px] font-bold text-slate-400 uppercase mt-1.5 px-1">
+                    {msg.sender_name && !isMe ? `${msg.sender_name} • ` : ''}
                     {msg.created_date ? format(new Date(msg.created_date), 'HH:mm') : 'Just now'}
                   </span>
                 </div>

@@ -31,24 +31,26 @@ export default function Conversations() {
     retry: false
   });
 
+  const myEmail = me?.email || localStorage.getItem('userEmail');
+
   // 1. Fetch Active Conversations
   const { data: conversations = [], isLoading } = useQuery({
-    queryKey: ['conversations', platformFilter, me?.email || localStorage.getItem('userEmail')],
+    queryKey: ['conversations', platformFilter, myEmail],
     queryFn: async () => {
       const res = await base44.entities.Conversation.filter({ status: 'active' }, '-last_message_at');
       return Array.isArray(res) ? res : [];
     },
-    enabled: !!localStorage.getItem('userEmail')
+    enabled: !!myEmail
   });
 
   // 2. Fetch Drafts
   const { data: drafts = [] } = useQuery({
-    queryKey: ['conversations', 'drafts', me?.email || localStorage.getItem('userEmail')],
+    queryKey: ['conversations', 'drafts', myEmail],
     queryFn: async () => {
       const res = await base44.entities.Conversation.filter({ status: 'draft' }, '-last_message_at');
       return Array.isArray(res) ? res : [];
     },
-    enabled: !!localStorage.getItem('userEmail')
+    enabled: !!myEmail
   });
 
   // 3. Fetch Contacts
@@ -58,19 +60,35 @@ export default function Conversations() {
   });
 
   const saveMutation = useMutation({
-    mutationFn: (msg) => msg.id 
-      ? base44.entities.Conversation.update(msg.id, msg)
-      : base44.entities.Conversation.create(msg),
+    mutationFn: async (payload) => {
+      // Step A: Create or Update Conversation
+      const conv = payload.id 
+        ? await base44.entities.Conversation.update(payload.id, payload)
+        : await base44.entities.Conversation.create(payload);
+      
+      // Step B: If active, create the first message bubble so history is visible
+      if (payload.status === 'active') {
+        await base44.entities.Message.create({
+          conversation_id: conv.id,
+          sender_email: payload.sender_email,
+          sender_name: payload.sender_name,
+          recipient_email: payload.recipient_email,
+          body: payload.last_message,
+          created_date: new Date().toISOString()
+        });
+      }
+      return conv;
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['messages'] });
       setComposeOpen(false);
       setComposeData({ to: '', subject: '', message: '', id: null });
-      setAttachedFile(null);
-      toast.success("Action completed successfully!");
+      toast.success("Message sent and history updated!");
     },
     onError: (err) => {
       console.error("Mutation Error:", err);
-      toast.error("Database connection failed. Please try again.");
+      toast.error("Database error. Please try again.");
     }
   });
 
@@ -83,12 +101,9 @@ export default function Conversations() {
   });
 
   const handleAction = (status = 'active') => {
-    // BACKUP: Get email from localStorage if 'me' is not yet available/failed
-    const currentEmail = me?.email || localStorage.getItem('userEmail');
-    
     if (!composeData.to) return toast.error("Please select a recipient");
     if (!composeData.message) return toast.error("Message body cannot be empty");
-    if (!currentEmail) return toast.error("User identity not found. Please log in again.");
+    if (!myEmail) return toast.error("Please re-login.");
 
     try {
       const selectedContact = contacts.find(c => c.email === composeData.to);
@@ -97,9 +112,9 @@ export default function Conversations() {
       const payload = {
         contact_name: recipientName,
         contact_email: composeData.to,
-        sender_email: currentEmail,
+        sender_email: myEmail,
         recipient_email: composeData.to,
-        sender_name: me?.firstName ? `${me.firstName} ${me.lastName}` : currentEmail,
+        sender_name: me?.firstName ? `${me.firstName} ${me.lastName}` : myEmail,
         subject: composeData.subject || "(No Subject)",
         last_message: composeData.message,
         status: status,
@@ -108,19 +123,16 @@ export default function Conversations() {
       };
 
       if (composeData.id) payload.id = composeData.id;
-
       saveMutation.mutate(payload);
     } catch (error) {
       console.error("HandleAction Error:", error);
-      toast.error("Failed to process message.");
     }
   };
 
   const filteredConversations = conversations.filter(conv => {
     const nameMatch = (conv?.contact_name || '').toLowerCase().includes(searchTerm.toLowerCase());
     const emailMatch = (conv?.contact_email || '').toLowerCase().includes(searchTerm.toLowerCase());
-    const subjectMatch = (conv?.subject || '').toLowerCase().includes(searchTerm.toLowerCase());
-    return nameMatch || emailMatch || subjectMatch;
+    return nameMatch || emailMatch;
   });
 
   return (
@@ -176,7 +188,7 @@ export default function Conversations() {
                 <div className="relative">
                   <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                   <Input 
-                    placeholder="Search people or subjects..." 
+                    placeholder="Search people..." 
                     value={searchTerm} 
                     onChange={(e) => setSearchTerm(e.target.value)} 
                     className="pl-10 h-11 border-slate-100 bg-slate-50/50" 
@@ -204,7 +216,7 @@ export default function Conversations() {
                     <MessageSquare className="w-10 h-10 opacity-20" />
                   </div>
                   <p className="font-bold">Inbox is Ready</p>
-                  <p className="text-sm">Select a contact from the left to start chatting</p>
+                  <p className="text-sm">Select a contact to start chatting</p>
                 </div>
               </Card>
             )}
@@ -212,19 +224,18 @@ export default function Conversations() {
         </div>
       </div>
 
-      {/* NEW MESSAGE MODAL */}
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl text-left">
           <DialogHeader className="bg-slate-900 text-white p-5 space-y-1">
             <DialogTitle className="flex items-center gap-2">
               <Send className="w-4 h-4 text-indigo-300" /> Compose Message
             </DialogTitle>
             <DialogDescription className="text-slate-400 text-xs">
-              Send a secure message to a registered contact in your database.
+              Send a message to a teammate.
             </DialogDescription>
           </DialogHeader>
           
-          <div className="p-6 space-y-4 bg-white text-left">
+          <div className="p-6 space-y-4 bg-white">
             <div className="space-y-1.5">
               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recipient</Label>
               <select 

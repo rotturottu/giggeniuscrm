@@ -12,7 +12,10 @@ export default function ConversationList({ conversations, selectedId, onSelect }
   const { data: me } = useQuery({
     queryKey: ['user', 'me'],
     queryFn: () => base44.auth.me(),
+    retry: false
   });
+
+  const myEmail = me?.email || localStorage.getItem('userEmail');
 
   const platformIcons = {
     crm: MessageSquare,
@@ -45,18 +48,30 @@ export default function ConversationList({ conversations, selectedId, onSelect }
         const Icon = platformIcons[conv.platform] || MessageSquare;
         const isSelected = conv.id === selectedId;
         
-        // DYNAMIC LOGIC: If I sent the last message, show the recipient's name. 
-        // If they sent it, show their name.
-        const displayName = conv.sender_email === me?.email 
-          ? (conv.contact_name || conv.recipient_email) 
+        /**
+         * LOGIC FIX: 
+         * We want to show the name of the person you are talking to.
+         * If the sender is ME, show the Recipient's details.
+         * If the sender is NOT ME, show the Sender's details.
+         */
+        const isSentByMe = conv.sender_email === myEmail;
+        
+        const displayName = isSentByMe 
+          ? (conv.contact_name || conv.recipient_email || "Teammate")
           : (conv.sender_name || conv.sender_email || "Teammate");
 
-        const initials = displayName.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
+        // Generate initials for the avatar
+        const initials = displayName
+          .split(' ')
+          .map(n => n[0])
+          .join('')
+          .toUpperCase()
+          .substring(0, 2);
 
         return (
           <Card
             key={conv.id}
-            className={`p-4 cursor-pointer transition-all border-none shadow-none group relative ${
+            className={`p-4 cursor-pointer transition-all border-none shadow-none group relative text-left ${
               isSelected ? 'bg-indigo-50' : 'bg-white hover:bg-slate-50'
             }`}
             onClick={() => onSelect(conv)}
@@ -85,6 +100,7 @@ export default function ConversationList({ conversations, selectedId, onSelect }
                 </div>
                 
                 <p className="text-xs truncate text-slate-500 font-medium">
+                  {isSentByMe ? <span className="text-indigo-400 font-bold mr-1">You:</span> : null}
                   {conv.last_message || conv.subject || "Started a conversation"}
                 </p>
                 
