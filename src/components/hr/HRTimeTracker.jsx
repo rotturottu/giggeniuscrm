@@ -9,22 +9,20 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { differenceInMinutes, format, isValid, parseISO } from 'date-fns';
 import { BarChart2, Clock, Play, Plus, Square, Timer, AlertCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { toast } from 'react-hot-toast';
 
 const empty = { employee_name: '', employee_email: '', type: 'clock_in_out', project_name: '', task_description: '', date: format(new Date(), 'yyyy-MM-dd'), clock_in: '', clock_out: '', notes: '' };
 
 function formatMinutes(mins) {
   if (!mins || isNaN(mins)) return '0h 0m';
-  const h = Math.floor(mins / 60);
-  const m = mins % 60;
-  return `${h}h ${m}m`;
+  const h = Math.floor(Math.abs(mins) / 60);
+  const m = Math.abs(mins) % 60;
+  return `${mins < 0 ? '-' : ''}${h}h ${m}m`;
 }
 
-// SAFE DATE FORMATTING HELPER
-// This prevents the "RangeError: Invalid time value" crash
 function safeFormat(dateStr, formatStr = 'h:mm a') {
   if (!dateStr) return '---';
   try {
-    // parseISO is more robust for SQLite strings than new Date()
     const date = parseISO(dateStr);
     return isValid(date) ? format(date, formatStr) : '---';
   } catch (e) {
@@ -41,7 +39,6 @@ export default function HRTimeTracker() {
   const [elapsed, setElapsed] = useState(0);
   const [projectEntry, setProjectEntry] = useState({ employee_name: '', project_name: '', task_description: '', date: format(new Date(), 'yyyy-MM-dd'), clock_in: '', clock_out: '' });
 
-  // Live timer
   useEffect(() => {
     if (!clockedIn || !clockedIn.clock_in) return;
     const interval = setInterval(() => {
@@ -113,9 +110,34 @@ export default function HRTimeTracker() {
     const d = projectEntry;
     if (!d.clock_in || !d.clock_out) return;
     try {
-      const duration = differenceInMinutes(new Date(d.clock_out), new Date(d.clock_in));
-      createMutation.mutate({ ...d, type: 'project', duration_minutes: duration, status: 'completed', employee_id: d.employee_name });
-      setProjectEntry({ employee_name: '', project_name: '', task_description: '', date: format(new Date(), 'yyyy-MM-dd'), clock_in: '', clock_out: '' });
+      const start = parseISO(d.clock_in);
+      const end = parseISO(d.clock_out);
+      
+      if (isValid(start) && isValid(end)) {
+        const duration = differenceInMinutes(end, start);
+        
+        if (duration < 0) {
+          toast.error("End time cannot be earlier than start time!");
+          return;
+        }
+
+        createMutation.mutate({ 
+          ...d, 
+          type: 'project', 
+          duration_minutes: duration, 
+          status: 'completed', 
+          employee_id: d.employee_name 
+        });
+        
+        setProjectEntry({ 
+          employee_name: '', 
+          project_name: '', 
+          task_description: '', 
+          date: format(new Date(), 'yyyy-MM-dd'), 
+          clock_in: '', 
+          clock_out: '' 
+        });
+      }
     } catch (e) {
       console.error("Project log error", e);
     }
@@ -131,7 +153,9 @@ export default function HRTimeTracker() {
   const activeSessions = entries.filter(e => e.status === 'active').length;
   const clockEntries = entries.filter(e => e.type === 'clock_in_out');
   const projectEntries = entries.filter(e => e.type === 'project');
-  const totalToday = entries.filter(e => e.date === format(new Date(), 'yyyy-MM-dd')).reduce((s, e) => s + (parseInt(e.duration_minutes) || 0), 0);
+  const totalToday = entries
+    .filter(e => e.date === format(new Date(), 'yyyy-MM-dd'))
+    .reduce((s, e) => s + (Number(e.duration_minutes) || 0), 0);
 
   if (isError) return (
     <div className="flex flex-col items-center justify-center p-12 bg-red-50 rounded-xl border border-red-100 text-red-600">
@@ -223,7 +247,7 @@ export default function HRTimeTracker() {
                       </div>
                     </div>
                     <Badge variant="secondary" className="bg-slate-100 text-slate-600 font-bold">
-                      {formatMinutes(e.duration_minutes)}
+                      {formatMinutes(Number(e.duration_minutes) || 0)}
                     </Badge>
                     {e.status === 'active' && <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">Active</Badge>}
                   </div>
@@ -261,7 +285,7 @@ export default function HRTimeTracker() {
               const byEmployee = entries.reduce((acc, e) => {
                 const key = e.employee_name || 'Unknown';
                 if (!acc[key]) acc[key] = { name: key, total: 0, count: 0 };
-                acc[key].total += parseInt(e.duration_minutes) || 0;
+                acc[key].total += Number(e.duration_minutes) || 0;
                 acc[key].count += 1;
                 return acc;
               }, {});
