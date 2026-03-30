@@ -222,6 +222,7 @@ def handle_base44_list_create(entity_name):
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
         'Project': 'projects', 'LeaveRequest': 'leave_requests', 
         'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
+        'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees', 'Department': 'departments',
         'TimeEntry': 'time_entries'
     }
     table_name = table_map.get(entity_name)
