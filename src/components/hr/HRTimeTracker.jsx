@@ -24,6 +24,7 @@ function formatMinutes(mins) {
 function safeFormat(dateStr, formatStr = 'h:mm a') {
   if (!dateStr) return '---';
   try {
+    // parseISO is more robust for SQLite strings than new Date()
     const date = parseISO(dateStr);
     return isValid(date) ? format(date, formatStr) : '---';
   } catch (e) {
@@ -234,7 +235,6 @@ export default function HRTimeTracker() {
         </TabsContent>
 
         <TabsContent value="project" className="space-y-4 mt-4">
-          {/* Project logging remains same but with safeFormat updates */}
           <Card>
             <CardHeader><CardTitle className="text-base">Manual Project Log</CardTitle></CardHeader>
             <CardContent>
