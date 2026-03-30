@@ -11,8 +11,7 @@ export const base44 = createClient({
   functionsVersion: 'v1',
   requiresAuth: false,
 
-  // This ensures standard SDK calls (like fetching contacts/tasks) 
-  // always include Gabrielle's email in the headers for Nginx to see
+  // Standard SDK headers
   headers: () => {
     const savedEmail = localStorage.getItem('userEmail');
     return {
@@ -23,8 +22,12 @@ export const base44 = createClient({
 });
 
 /**
- * Custom Auth object to sync with your Flask + SQLite backend
+ * AVAILABLE ENTITIES FOR MESSAGING:
+ * base44.entities.Conversation -> For the chat thread lists
+ * base44.entities.Message      -> For the individual chat bubbles
+ * base44.entities.Employee     -> To fetch the "To:" dropdown list
  */
+
 base44.auth = {
   ...base44.auth,
 
@@ -36,7 +39,6 @@ base44.auth = {
     }
 
     try {
-      // Fetching from Nginx (Port 80) which proxies to Flask (Port 5000)
       const response = await fetch(`${SERVER_URL}/api/apps/giggenius-crm/entities/User/me`, {
         method: 'GET',
         headers: {
@@ -46,13 +48,11 @@ base44.auth = {
       });
 
       if (!response.ok) {
-        // THE CLEANUP CREW: If backend says unauthorized, wipe the ghost session
         if (response.status === 401) {
           localStorage.removeItem('gigGeniusAuth');
           localStorage.removeItem('userEmail');
           window.location.href = '/login';
         }
-
         const errorData = await response.json();
         console.error("Backend error:", errorData.error);
         return null;
@@ -62,8 +62,7 @@ base44.auth = {
       return data;
 
     } catch (error) {
-      // RESTORED: The catch block to prevent the app from crashing on network errors
-      console.error("Auth Me API Error (Network or CORS):", error);
+      console.error("Auth Me API Error:", error);
       return null;
     }
   },
@@ -78,7 +77,6 @@ base44.auth = {
         'User-Email': savedEmail,
         'Content-Type': 'application/json'
       },
-      // data contains { firstName, lastName, email, profilePicture }
       body: JSON.stringify(data)
     });
 
@@ -89,7 +87,6 @@ base44.auth = {
 
     const result = await response.json();
 
-    // If the email was changed, update localStorage so the next refresh still works
     if (data.email && data.email !== savedEmail) {
       localStorage.setItem('userEmail', data.email);
     }

@@ -42,7 +42,7 @@ def init_db():
                   phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # Updated Project Tasks (Added subtasks and attachments)
+    # Updated Project Tasks
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   title TEXT, 
@@ -58,11 +58,27 @@ def init_db():
                   parent_task_id INTEGER, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # UPDATED CONVERSATIONS TABLE
+    # This acts as the "Thread Head"
     c.execute('''CREATE TABLE IF NOT EXISTS conversations
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, contact_name TEXT, contact_email TEXT,
-                  subject TEXT, last_message TEXT, platform TEXT DEFAULT 'gmail',
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  contact_name TEXT, contact_email TEXT,
+                  subject TEXT, last_message TEXT, platform TEXT DEFAULT 'crm',
                   status TEXT DEFAULT 'active', unread_count INTEGER DEFAULT 0,
-                  user_email TEXT, last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  sender_email TEXT, recipient_email TEXT,
+                  last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    # NEW: MESSAGES TABLE
+    # This stores every individual reply in a chat
+    c.execute('''CREATE TABLE IF NOT EXISTS messages
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  conversation_id INTEGER,
+                  sender_email TEXT,
+                  recipient_email TEXT,
+                  sender_name TEXT,
+                  body TEXT,
+                  is_read INTEGER DEFAULT 0,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # PROJECTS TABLE
@@ -132,13 +148,13 @@ def init_db():
                   user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # 4. CAMPAIGNS TABLE
+    # CAMPAIGNS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS campaigns
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, status TEXT DEFAULT 'Draft',
                   leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%',
                   user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # TIME ENTRIES TABLE (Unified with Frontend names)
+    # TIME ENTRIES TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS time_entries
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT, 
@@ -231,7 +247,8 @@ def handle_base44_list_create(entity_name):
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
         'Project': 'projects', 'LeaveRequest': 'leave_requests', 
         'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
-        'OnboardingTask': 'onboarding_tasks', 'TimeEntry': 'time_entries'
+        'OnboardingTask': 'onboarding_tasks', 'TimeEntry': 'time_entries',
+        'Message': 'messages' # Added Message entity
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -244,18 +261,29 @@ def handle_base44_list_create(entity_name):
     if request.method == 'GET':
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
+        
         query = f"SELECT * FROM {table_name}"
         params = []
         where_clauses = []
-        if 'user_email' in db_cols and user_email:
+
+        # LOGIC FOR MESSAGES/CONVERSATIONS:
+        # If it's a conversation or message, show if the user is either sender OR recipient
+        if entity_name in ['Conversation', 'Message']:
+            if user_email:
+                where_clauses.append("(sender_email = ? OR recipient_email = ?)")
+                params.extend([user_email, user_email])
+        elif 'user_email' in db_cols and user_email:
             where_clauses.append("user_email = ?")
             params.append(user_email)
+
         for key, value in request.args.items():
             if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
+        
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
+            
         c.execute(query + " ORDER BY id DESC", tuple(params))
         data = [dict(row) for row in c.fetchall()]
         conn.close()
@@ -268,28 +296,18 @@ def handle_base44_list_create(entity_name):
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
-        from datetime import datetime # Make sure this is at the top of app.py
-
         results = []
         try:
             for item in items_to_process:
-                if 'user_email' in db_cols: item['user_email'] = user_email
+                if 'user_email' in db_cols and 'user_email' not in item:
+                    item['user_email'] = user_email
                 
-                # FIX: Ensure clock_in_time is never empty for TimeEntry
-                if entity_name == 'TimeEntry':
-                    if not item.get('clock_in_time'):
-                        item['clock_in_time'] = datetime.now().isoformat()
-                    if not item.get('status'):
-                        item['status'] = 'active'
+                # Default timestamp for new messages
+                if entity_name == 'Message' and 'created_date' not in item:
+                    item['created_date'] = datetime.now().isoformat()
 
                 cleaned_data = {k: v for k, v in item.items() if k in db_cols}
                 
-                # Handle JSON fields for Tasks
-                if entity_name == 'ProjectTask':
-                    for f in ['subtasks', 'attachments']:
-                        if isinstance(item.get(f), (list, dict)):
-                            cleaned_data[f] = json.dumps(item[f])
-
                 columns = ', '.join(cleaned_data.keys())
                 placeholders = ', '.join(['?'] * len(cleaned_data))
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
@@ -299,7 +317,6 @@ def handle_base44_list_create(entity_name):
             conn.commit()
             return jsonify(results if isinstance(request_data, list) else results[0]), 201
         except Exception as e:
-            print(f"POST Error: {e}")
             return jsonify({"error": str(e)}), 400
         finally:
             conn.close()
@@ -314,23 +331,13 @@ def handle_base44_single_item_action(entity_name, entity_id):
         'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests',
         'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
         'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees', 'Department': 'departments',
-        'TimeEntry': 'time_entries'
+        'TimeEntry': 'time_entries', 'Message': 'messages'
     }
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
 
     if request.method == 'DELETE':
-        if entity_name == 'Employee':
-            c.execute("SELECT email FROM employees WHERE id = ?", (entity_id,))
-            row = c.fetchone()
-            if row:
-                emp_email = row[0]
-                c.execute("DELETE FROM onboarding_tasks WHERE employee_id = ?", (emp_email,))
-                c.execute("DELETE FROM performance_reviews WHERE employee_email = ?", (emp_email,))
-                c.execute("DELETE FROM payroll_records WHERE employee_email = ?", (emp_email,))
-                c.execute("DELETE FROM leave_requests WHERE employee_email = ?", (emp_email,))
-
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
@@ -340,15 +347,7 @@ def handle_base44_single_item_action(entity_name, entity_id):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
-        
-        # Special handling for JSON fields in ProjectTask
-        if entity_name == 'ProjectTask':
-            if 'subtasks' in cleaned_data and isinstance(cleaned_data['subtasks'], (list, dict)):
-                cleaned_data['subtasks'] = json.dumps(cleaned_data['subtasks'])
-            if 'attachments' in cleaned_data and isinstance(cleaned_data['attachments'], (list, dict)):
-                cleaned_data['attachments'] = json.dumps(cleaned_data['attachments'])
 
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
