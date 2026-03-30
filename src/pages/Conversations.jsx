@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MessageSquare, Search, Plus, Send, Paperclip, X, FileIcon, FolderOpen, Save, Trash2, User, Loader2 } from 'lucide-react';
@@ -28,26 +28,27 @@ export default function Conversations() {
   const { data: me } = useQuery({
     queryKey: ['user', 'me'],
     queryFn: () => base44.auth.me(),
+    retry: false
   });
 
   // 1. Fetch Active Conversations
   const { data: conversations = [], isLoading } = useQuery({
-    queryKey: ['conversations', platformFilter, me?.email],
+    queryKey: ['conversations', platformFilter, me?.email || localStorage.getItem('userEmail')],
     queryFn: async () => {
       const res = await base44.entities.Conversation.filter({ status: 'active' }, '-last_message_at');
       return Array.isArray(res) ? res : [];
     },
-    enabled: !!me?.email
+    enabled: !!localStorage.getItem('userEmail')
   });
 
   // 2. Fetch Drafts
   const { data: drafts = [] } = useQuery({
-    queryKey: ['conversations', 'drafts', me?.email],
+    queryKey: ['conversations', 'drafts', me?.email || localStorage.getItem('userEmail')],
     queryFn: async () => {
       const res = await base44.entities.Conversation.filter({ status: 'draft' }, '-last_message_at');
       return Array.isArray(res) ? res : [];
     },
-    enabled: !!me?.email
+    enabled: !!localStorage.getItem('userEmail')
   });
 
   // 3. Fetch Contacts
@@ -82,23 +83,23 @@ export default function Conversations() {
   });
 
   const handleAction = (status = 'active') => {
-    // Validation
+    // BACKUP: Get email from localStorage if 'me' is not yet available/failed
+    const currentEmail = me?.email || localStorage.getItem('userEmail');
+    
     if (!composeData.to) return toast.error("Please select a recipient");
     if (!composeData.message) return toast.error("Message body cannot be empty");
-    if (!me?.email) return toast.error("Authentication session expired. Please re-login.");
+    if (!currentEmail) return toast.error("User identity not found. Please log in again.");
 
     try {
-      // Recipient Info from Contacts list
       const selectedContact = contacts.find(c => c.email === composeData.to);
       const recipientName = selectedContact ? selectedContact.name : composeData.to;
 
-      // Prepare payload
       const payload = {
         contact_name: recipientName,
         contact_email: composeData.to,
-        sender_email: me.email,
+        sender_email: currentEmail,
         recipient_email: composeData.to,
-        sender_name: me.firstName ? `${me.firstName} ${me.lastName}` : me.email,
+        sender_name: me?.firstName ? `${me.firstName} ${me.lastName}` : currentEmail,
         subject: composeData.subject || "(No Subject)",
         last_message: composeData.message,
         status: status,
@@ -106,13 +107,12 @@ export default function Conversations() {
         last_message_at: new Date().toISOString()
       };
 
-      // Include ID if updating an existing draft
       if (composeData.id) payload.id = composeData.id;
 
       saveMutation.mutate(payload);
     } catch (error) {
       console.error("HandleAction Error:", error);
-      toast.error("Internal application error.");
+      toast.error("Failed to process message.");
     }
   };
 
@@ -212,17 +212,19 @@ export default function Conversations() {
         </div>
       </div>
 
+      {/* NEW MESSAGE MODAL */}
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
         <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
-          <div className="bg-slate-900 text-white p-5 flex justify-between items-center">
-            <div className="flex items-center gap-2">
-                <div className="p-2 bg-white/10 rounded-lg"><Send className="w-4 h-4 text-indigo-300" /></div>
-                <span className="font-bold tracking-tight">Compose Message</span>
-            </div>
-            <X className="w-5 h-5 cursor-pointer opacity-50 hover:opacity-100 transition-opacity" onClick={() => setComposeOpen(false)} />
-          </div>
+          <DialogHeader className="bg-slate-900 text-white p-5 space-y-1">
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="w-4 h-4 text-indigo-300" /> Compose Message
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-xs">
+              Send a secure message to a registered contact in your database.
+            </DialogDescription>
+          </DialogHeader>
           
-          <div className="p-6 space-y-4 bg-white">
+          <div className="p-6 space-y-4 bg-white text-left">
             <div className="space-y-1.5">
               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recipient</Label>
               <select 
@@ -258,14 +260,6 @@ export default function Conversations() {
                 onChange={(e) => setComposeData({...composeData, message: e.target.value})} 
                />
             </div>
-            
-            {attachedFile && (
-              <div className="flex items-center gap-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100 text-xs text-indigo-700 animate-in fade-in slide-in-from-top-1">
-                <FileIcon className="w-4 h-4" />
-                <span className="flex-1 font-bold truncate">{attachedFile.name}</span>
-                <X className="w-4 h-4 cursor-pointer hover:text-red-500" onClick={() => setAttachedFile(null)} />
-              </div>
-            )}
           </div>
 
           <DialogFooter className="p-6 bg-slate-50/50 border-t border-slate-100">
@@ -273,7 +267,7 @@ export default function Conversations() {
               <Button 
                 onClick={() => handleAction('active')} 
                 disabled={saveMutation.isPending}
-                className="flex-1 bg-indigo-600 hover:bg-indigo-700 h-12 font-bold rounded-xl shadow-lg shadow-indigo-100"
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 h-12 font-bold rounded-xl shadow-lg"
               >
                 {saveMutation.isPending ? <Loader2 className="animate-spin w-4 h-4 mr-2" /> : <Send className="w-4 h-4 mr-2" />}
                 Send Message
@@ -285,16 +279,6 @@ export default function Conversations() {
                 className="h-12 border-slate-200 bg-white rounded-xl text-slate-600 px-6 font-bold"
               >
                 <Save className="w-4 h-4 mr-2" /> Save Draft
-              </Button>
-              
-              <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setAttachedFile(e.target.files[0])} />
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                className="h-12 w-12 hover:bg-indigo-100 hover:text-indigo-600 text-slate-400 rounded-xl transition-colors" 
-                onClick={() => fileInputRef.current.click()}
-              >
-                <Paperclip className="w-5 h-5" />
               </Button>
             </div>
           </DialogFooter>
