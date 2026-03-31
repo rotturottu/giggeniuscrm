@@ -208,9 +208,10 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- REFINED PRIVACY LOGIC (GROUPS THE OR CONDITION) ---
+        # --- FIX: GROUPED OR LOGIC ---
         if entity_name in ['Conversation', 'Message']:
             if user_email and user_email not in ['null', 'undefined', '']:
+                # Forces parentheses around the participant check so it works with other filters
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
             else:
@@ -238,10 +239,18 @@ def handle_base44_list_create(entity_name):
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
-        if 'user_email' in db_cols and 'user_email' not in item:
-            item['user_email'] = user_email
-        if entity_name == 'Message' and 'created_date' not in item:
+        # Ensure sender identity
+        if 'sender_email' in db_cols:
+            item['sender_email'] = user_email
+        
+        if entity_name == 'Message':
             item['created_date'] = datetime.now().isoformat()
+            # Inherit recipient from parent conversation if missing
+            if 'recipient_email' not in item:
+                c.execute("SELECT sender_email, recipient_email FROM conversations WHERE id = ?", (item.get('conversation_id'),))
+                conv = c.fetchone()
+                if conv:
+                    item['recipient_email'] = conv['recipient_email'] if conv['sender_email'] == user_email else conv['sender_email']
 
         cleaned_data = {k: v for k, v in item.items() if k in db_cols}
         cols = ', '.join(cleaned_data.keys())
