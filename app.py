@@ -204,7 +204,11 @@ def login():
 def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
-    if not user_email: return jsonify({"error": "No user email provided"}), 401
+    
+    # 1. FIX: RESILIENT IDENTITY CHECK
+    # Returns 200 with flag instead of 401 to prevent frontend crashing
+    if not user_email or user_email in ['null', 'undefined', '']:
+        return jsonify({"authenticated": False, "error": "No session"}), 200
     
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row
@@ -216,9 +220,12 @@ def handle_me():
         conn.close()
         if user_row:
             u = dict(user_row)
-            return jsonify({"id": u['id'], "firstName": u['first_name'], "lastName": u['last_name'],
-                            "email": u['email'], "profilePicture": u['profile_picture'], "role": "user"}), 200
-        return jsonify({"error": "User not found"}), 404
+            return jsonify({
+                "id": u['id'], "firstName": u['first_name'], "lastName": u['last_name'],
+                "email": u['email'], "profilePicture": u['profile_picture'], "role": "user",
+                "authenticated": True
+            }), 200
+        return jsonify({"authenticated": False, "error": "User not found"}), 200
     
     if request.method == 'PUT':
         data = request.json
@@ -264,10 +271,9 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- REFINED PRIVACY LOGIC (GROUPS THE OR CONDITION) ---
+        # --- 2. FIX: ROBUST PRIVACY LOCK (PARENTHeSES ARE KEY) ---
         if entity_name in ['Conversation', 'Message']:
-            if user_email:
-                # Parentheses are critical here to combine OR with other AND filters
+            if user_email and user_email not in ['null', 'undefined']:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
             else:
@@ -277,7 +283,6 @@ def handle_base44_list_create(entity_name):
             params.append(user_email)
 
         for key, value in request.args.items():
-            # Apply URL filters but ensure they don't break the participant isolation logic
             if key in db_cols and key not in ['sender_email', 'recipient_email', 'user_email', 'participant_email']:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
@@ -285,9 +290,7 @@ def handle_base44_list_create(entity_name):
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
             
-        # UI sorting logic
         order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
-        
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
         conn.close()
@@ -296,27 +299,22 @@ def handle_base44_list_create(entity_name):
     if request.method == 'POST':
         request_data = request.json
         items_to_process = request_data if isinstance(request_data, list) else [request_data]
-        
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        
         results = []
         try:
             for item in items_to_process:
                 if 'user_email' in db_cols and 'user_email' not in item:
                     item['user_email'] = user_email
-                
                 if entity_name == 'Message' and 'created_date' not in item:
                     item['created_date'] = datetime.now().isoformat()
 
                 cleaned_data = {k: v for k, v in item.items() if k in db_cols}
-                
                 columns = ', '.join(cleaned_data.keys())
                 placeholders = ', '.join(['?'] * len(cleaned_data))
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
                 cleaned_data['id'] = c.lastrowid
                 results.append(cleaned_data)
-            
             conn.commit()
             return jsonify(results if isinstance(request_data, list) else results[0]), 201
         except Exception as e:
@@ -327,7 +325,6 @@ def handle_base44_list_create(entity_name):
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
@@ -339,23 +336,18 @@ def handle_base44_single_item_action(entity_name, entity_id):
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
-
     if request.method == 'DELETE':
-        # CASCADE: If a conversation is deleted, delete associated messages
         if entity_name == 'Conversation':
             c.execute("DELETE FROM messages WHERE conversation_id = ?", (entity_id,))
-            
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
         return jsonify({"success": True}), 200
-
     if request.method == 'PUT':
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
-
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()
