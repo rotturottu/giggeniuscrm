@@ -4,12 +4,11 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MessageSquare, Search, Plus, Send, Paperclip, X, FileIcon, FolderOpen, Save, Trash2, User, Loader2 } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { MessageSquare, Search, Plus, Send, X, FolderOpen, Save, Trash2, Loader2 } from 'lucide-react';
+import { useState } from 'react';
 import toast from 'react-hot-toast';
 import ConversationDetail from '../components/conversations/ConversationDetail';
 import ConversationList from '../components/conversations/ConversationList';
@@ -17,11 +16,9 @@ import ConversationList from '../components/conversations/ConversationList';
 export default function Conversations() {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [platformFilter, setPlatformFilter] = useState('all');
+  const [platformFilter] = useState('all');
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeData, setComposeData] = useState({ to: '', subject: '', message: '', id: null });
-  const [attachedFile, setAttachedFile] = useState(null);
-  const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
 
   // 0. Fetch Logged In User Info
@@ -33,21 +30,28 @@ export default function Conversations() {
 
   const myEmail = me?.email || localStorage.getItem('userEmail');
 
-  // 1. Fetch Active Conversations
+  // 1. Fetch Active Conversations (Privacy Isolation)
   const { data: conversations = [], isLoading } = useQuery({
     queryKey: ['conversations', platformFilter, myEmail],
     queryFn: async () => {
-      const res = await base44.entities.Conversation.filter({ status: 'active' }, '-last_message_at');
+      // Added participant_email to filter so only YOUR chats appear
+      const res = await base44.entities.Conversation.filter({ 
+        status: 'active',
+        participant_email: myEmail 
+      }, '-last_message_at');
       return Array.isArray(res) ? res : [];
     },
     enabled: !!myEmail
   });
 
-  // 2. Fetch Drafts
+  // 2. Fetch Drafts (Privacy Isolation)
   const { data: drafts = [] } = useQuery({
     queryKey: ['conversations', 'drafts', myEmail],
     queryFn: async () => {
-      const res = await base44.entities.Conversation.filter({ status: 'draft' }, '-last_message_at');
+      const res = await base44.entities.Conversation.filter({ 
+        status: 'draft',
+        sender_email: myEmail 
+      }, '-last_message_at');
       return Array.isArray(res) ? res : [];
     },
     enabled: !!myEmail
@@ -66,7 +70,7 @@ export default function Conversations() {
         ? await base44.entities.Conversation.update(payload.id, payload)
         : await base44.entities.Conversation.create(payload);
       
-      // Step B: If active, create the first message bubble so history is visible
+      // Step B: Create the first message bubble so history starts at the bottom
       if (payload.status === 'active') {
         await base44.entities.Message.create({
           conversation_id: conv.id,
@@ -84,7 +88,7 @@ export default function Conversations() {
       queryClient.invalidateQueries({ queryKey: ['messages'] });
       setComposeOpen(false);
       setComposeData({ to: '', subject: '', message: '', id: null });
-      toast.success("Message sent and history updated!");
+      toast.success("Conversation started!");
     },
     onError: (err) => {
       console.error("Mutation Error:", err);
@@ -215,8 +219,8 @@ export default function Conversations() {
                   <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
                     <MessageSquare className="w-10 h-10 opacity-20" />
                   </div>
-                  <p className="font-bold">Inbox is Ready</p>
-                  <p className="text-sm">Select a contact to start chatting</p>
+                  <p className="font-bold text-slate-500">Select a contact to chat</p>
+                  <p className="text-sm">Privacy is active. Only you and your recipient can see these messages.</p>
                 </div>
               </Card>
             )}
@@ -231,12 +235,12 @@ export default function Conversations() {
               <Send className="w-4 h-4 text-indigo-300" /> Compose Message
             </DialogTitle>
             <DialogDescription className="text-slate-400 text-xs">
-              Send a message to a teammate.
+              Start a private conversation.
             </DialogDescription>
           </DialogHeader>
           
           <div className="p-6 space-y-4 bg-white">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 text-left">
               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recipient</Label>
               <select 
                 className="w-full h-11 px-3 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold outline-none focus:ring-2 focus:ring-indigo-500/20" 
@@ -252,21 +256,21 @@ export default function Conversations() {
               </select>
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 text-left">
                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Subject</Label>
                <Input 
                 placeholder="What is this about?" 
-                className="h-11 border-slate-100 bg-slate-50 font-bold px-4 rounded-xl" 
+                className="h-11 border-slate-100 bg-slate-50 font-bold px-4 rounded-xl text-left" 
                 value={composeData.subject} 
                 onChange={(e) => setComposeData({...composeData, subject: e.target.value})} 
                />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 text-left">
                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Message Content</Label>
                <Textarea 
                 placeholder="Type your message here..." 
-                className="min-h-[200px] border-slate-100 bg-slate-50 p-4 rounded-xl resize-none text-sm leading-relaxed" 
+                className="min-h-[200px] border-slate-100 bg-slate-50 p-4 rounded-xl resize-none text-sm leading-relaxed text-left" 
                 value={composeData.message} 
                 onChange={(e) => setComposeData({...composeData, message: e.target.value})} 
                />

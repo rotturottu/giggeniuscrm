@@ -59,7 +59,6 @@ def init_db():
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # UPDATED CONVERSATIONS TABLE
-    # This acts as the "Thread Head"
     c.execute('''CREATE TABLE IF NOT EXISTS conversations
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   contact_name TEXT, contact_email TEXT,
@@ -70,7 +69,6 @@ def init_db():
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # NEW: MESSAGES TABLE
-    # This stores every individual reply in a chat
     c.execute('''CREATE TABLE IF NOT EXISTS messages
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   conversation_id INTEGER,
@@ -127,7 +125,7 @@ def init_db():
                   review_period TEXT,
                   overall_rating INTEGER,
                   goals_met TEXT,
-                  strengths TEXT,
+                   strengths TEXT,
                   areas_of_improvement TEXT,
                   goals_next_period TEXT,
                   comments TEXT,
@@ -248,7 +246,7 @@ def handle_base44_list_create(entity_name):
         'Project': 'projects', 'LeaveRequest': 'leave_requests', 
         'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
         'OnboardingTask': 'onboarding_tasks', 'TimeEntry': 'time_entries',
-        'Message': 'messages' # Added Message entity
+        'Message': 'messages'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
@@ -266,8 +264,8 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # LOGIC FOR MESSAGES/CONVERSATIONS:
-        # If it's a conversation or message, show if the user is either sender OR recipient
+        # PRIVACY ISOLATION FIX:
+        # For conversations/messages, ensure user only sees what they are part of
         if entity_name in ['Conversation', 'Message']:
             if user_email:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
@@ -276,7 +274,11 @@ def handle_base44_list_create(entity_name):
             where_clauses.append("user_email = ?")
             params.append(user_email)
 
+        # Apply specific filters from request args (e.g., conversation_id)
         for key, value in request.args.items():
+            # Special case for participant_email passed as arg
+            if key == 'participant_email':
+                continue # Already handled in Privacy isolation block above
             if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
@@ -284,7 +286,11 @@ def handle_base44_list_create(entity_name):
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
             
-        c.execute(query + " ORDER BY id DESC", tuple(params))
+        # UI FIX: Sort messages by creation date (Ascending) for natural flow
+        # Conversations remain DESC so latest chats are on top of the list
+        order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
+        
+        c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
         conn.close()
         return jsonify(data), 200
@@ -302,7 +308,6 @@ def handle_base44_list_create(entity_name):
                 if 'user_email' in db_cols and 'user_email' not in item:
                     item['user_email'] = user_email
                 
-                # Default timestamp for new messages
                 if entity_name == 'Message' and 'created_date' not in item:
                     item['created_date'] = datetime.now().isoformat()
 

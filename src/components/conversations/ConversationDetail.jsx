@@ -14,7 +14,7 @@ export default function ConversationDetail({ conversation }) {
   const queryClient = useQueryClient();
   const scrollRef = useRef(null);
 
-  // 1. Fetch Current User Identity with backup
+  // 1. Fetch Identity
   const { data: me } = useQuery({
     queryKey: ['user', 'me'],
     queryFn: () => base44.auth.me(),
@@ -23,44 +23,40 @@ export default function ConversationDetail({ conversation }) {
 
   const myEmail = me?.email || localStorage.getItem('userEmail');
 
-  // 2. Fetch Messages for this specific thread
+  // 2. Fetch Messages (Sorted: Oldest -> Newest at Bottom)
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ['messages', conversation.id],
     queryFn: async () => {
+      // FIX: Removed the '-' prefix to sort ascending (Oldest to Newest)
       const res = await base44.entities.Message.filter({ conversation_id: conversation.id }, 'created_date');
       return Array.isArray(res) ? res : [];
     },
     refetchInterval: 3000, 
   });
 
-  // 3. Auto-scroll to bottom
+  // 3. Auto-scroll to Bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // 4. Send Message Mutation
+  // 4. Send Message
   const sendMessageMutation = useMutation({
     mutationFn: async (content) => {
-      // Determine recipient: If I am the sender of the conv, recipient is contact_email.
-      // If I am the recipient of the conv, recipient is sender_email.
       const recipient = myEmail === conversation.sender_email 
         ? conversation.recipient_email 
         : conversation.sender_email;
 
-      // Create the message bubble
       await base44.entities.Message.create({
         conversation_id: conversation.id,
         sender_email: myEmail,
         sender_name: me?.firstName ? `${me.firstName} ${me.lastName}` : myEmail,
         recipient_email: recipient,
         body: content,
-        is_read: 0,
         created_date: new Date().toISOString()
       });
 
-      // Update conversation preview
       return base44.entities.Conversation.update(conversation.id, {
         last_message: content,
         last_message_at: new Date().toISOString()
@@ -71,7 +67,7 @@ export default function ConversationDetail({ conversation }) {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setReply('');
     },
-    onError: () => toast.error("Message failed to send")
+    onError: () => toast.error("Failed to send message")
   });
 
   const handleSend = () => {
@@ -79,14 +75,12 @@ export default function ConversationDetail({ conversation }) {
     sendMessageMutation.mutate(reply);
   };
 
-  // Determine which name to show in the Header
   const otherPersonName = myEmail === conversation.sender_email 
     ? (conversation.contact_name || conversation.recipient_email) 
     : (conversation.sender_name || conversation.sender_email);
 
   return (
     <Card className="h-[calc(100vh-180px)] flex flex-col border-none shadow-sm bg-white overflow-hidden text-left">
-      {/* Header */}
       <CardHeader className="border-b py-3 px-6 bg-white flex flex-row items-center justify-between">
         <div className="flex items-center gap-4">
           <Avatar className="h-10 w-10 border-2 border-indigo-50">
@@ -98,50 +92,36 @@ export default function ConversationDetail({ conversation }) {
             <CardTitle className="text-base font-bold text-slate-800">{otherPersonName}</CardTitle>
             <div className="flex items-center gap-1.5">
                <div className="h-2 w-2 rounded-full bg-green-500" />
-               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Teammate</p>
+               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Chat</p>
             </div>
           </div>
         </div>
         <Button variant="ghost" size="icon" className="text-slate-400"><MoreVertical className="w-5 h-5" /></Button>
       </CardHeader>
 
-      {/* Chat Area */}
       <CardContent 
         ref={scrollRef}
-        className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 custom-scrollbar"
+        className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/50 flex flex-col scroll-smooth"
       >
         {isLoading ? (
           <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" /></div>
         ) : messages.length === 0 ? (
           <div className="text-center py-20">
-            <div className="bg-white w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 shadow-sm text-indigo-200">
-                <ShieldCheck className="w-8 h-8" />
-            </div>
-            <p className="text-sm font-bold text-slate-400">Secure Conversation</p>
-            <p className="text-xs text-slate-300">Start the discussion below.</p>
+            <ShieldCheck className="w-12 h-12 text-indigo-200 mx-auto mb-4" />
+            <p className="text-sm font-bold text-slate-400 uppercase">Private Thread</p>
           </div>
         ) : (
           messages.map((msg) => {
-            // CRITICAL FIX: Identity check for alignment
             const isMe = msg.sender_email === myEmail;
-            
             return (
-              <div
-                key={msg.id}
-                className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}
-              >
+              <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                 <div className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[80%]`}>
-                  <div
-                    className={`px-4 py-3 rounded-2xl text-sm font-medium shadow-sm leading-relaxed ${
-                      isMe
-                        ? 'bg-indigo-600 text-white rounded-tr-none'
-                        : 'bg-white text-slate-700 rounded-tl-none border border-slate-100'
-                    }`}
-                  >
+                  <div className={`px-4 py-3 rounded-2xl text-sm font-medium shadow-sm leading-relaxed ${
+                    isMe ? 'bg-indigo-600 text-white rounded-tr-none' : 'bg-white text-slate-700 rounded-tl-none border'
+                  }`}>
                     {msg.body || msg.content}
                   </div>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase mt-1.5 px-1">
-                    {msg.sender_name && !isMe ? `${msg.sender_name} • ` : ''}
+                  <span className="text-[9px] font-bold text-slate-400 uppercase mt-1 px-1 tracking-tight">
                     {msg.created_date ? format(new Date(msg.created_date), 'HH:mm') : 'Just now'}
                   </span>
                 </div>
@@ -151,11 +131,10 @@ export default function ConversationDetail({ conversation }) {
         )}
       </CardContent>
 
-      {/* Footer / Input */}
       <div className="p-4 bg-white border-t">
         <div className="flex items-end gap-3 bg-slate-50 rounded-2xl p-2 border border-slate-100 focus-within:border-indigo-200 transition-all">
           <Textarea
-            placeholder="Write a message..."
+            placeholder="Write your message..."
             value={reply}
             onChange={(e) => setReply(e.target.value)}
             className="flex-1 min-h-[45px] max-h-[150px] border-none bg-transparent shadow-none focus-visible:ring-0 resize-none py-3 px-2 text-sm"
@@ -167,9 +146,6 @@ export default function ConversationDetail({ conversation }) {
             }}
           />
           <div className="flex items-center gap-1 pb-1 pr-1">
-            <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-400 hover:text-indigo-600 hover:bg-white rounded-xl">
-              <Paperclip className="w-5 h-5" />
-            </Button>
             <Button
               onClick={handleSend}
               disabled={!reply.trim() || sendMessageMutation.isPending}
