@@ -5,11 +5,17 @@ import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { base44 } from '@/api/base44Client';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Send, Paperclip, MoreVertical, ShieldCheck, Loader2 } from 'lucide-react';
+import { Send, MoreVertical, ShieldCheck, Loader2, Trash2 } from 'lucide-react';
+import { 
+  DropdownMenu, 
+  DropdownMenuContent, 
+  DropdownMenuItem, 
+  DropdownMenuTrigger 
+} from '@/components/ui/dropdown-menu';
 import { format } from 'date-fns';
 import toast from 'react-hot-toast';
 
-export default function ConversationDetail({ conversation }) {
+export default function ConversationDetail({ conversation, onDeleteSuccess }) {
   const [reply, setReply] = useState('');
   const queryClient = useQueryClient();
   const scrollRef = useRef(null);
@@ -23,11 +29,10 @@ export default function ConversationDetail({ conversation }) {
 
   const myEmail = me?.email || localStorage.getItem('userEmail');
 
-  // 2. Fetch Messages (Sorted: Oldest -> Newest at Bottom)
+  // 2. Fetch Messages
   const { data: messages = [], isLoading } = useQuery({
     queryKey: ['messages', conversation.id],
     queryFn: async () => {
-      // FIX: Removed the '-' prefix to sort ascending (Oldest to Newest)
       const res = await base44.entities.Message.filter({ conversation_id: conversation.id }, 'created_date');
       return Array.isArray(res) ? res : [];
     },
@@ -40,6 +45,21 @@ export default function ConversationDetail({ conversation }) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // --- UPDATED: DELETE CONVERSATION MUTATION ---
+  const deleteMutation = useMutation({
+    mutationFn: () => base44.entities.Conversation.delete(conversation.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      toast.success("Conversation deleted");
+      
+      // Call the prop from Conversations.jsx to clear the selection
+      if (onDeleteSuccess) {
+        onDeleteSuccess();
+      }
+    },
+    onError: () => toast.error("Failed to delete thread")
+  });
 
   // 4. Send Message
   const sendMessageMutation = useMutation({
@@ -96,7 +116,27 @@ export default function ConversationDetail({ conversation }) {
             </div>
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="text-slate-400"><MoreVertical className="w-5 h-5" /></Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="icon" className="text-slate-400 focus-visible:ring-0">
+              <MoreVertical className="w-5 h-5" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-48 p-2 shadow-xl border-slate-100">
+            <DropdownMenuItem 
+              className="text-red-600 focus:bg-red-50 focus:text-red-600 cursor-pointer font-bold gap-2"
+              onClick={() => {
+                if (window.confirm("Delete this entire conversation? This cannot be undone.")) {
+                  deleteMutation.mutate();
+                }
+              }}
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Thread
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </CardHeader>
 
       <CardContent 
