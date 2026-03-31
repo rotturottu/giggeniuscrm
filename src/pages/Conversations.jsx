@@ -29,17 +29,15 @@ export default function Conversations() {
 
   const myEmail = me?.email || localStorage.getItem('userEmail');
 
-  // --- NEW: SESSIONS ISOLATION ---
-  // If the user changes (logout/login), clear the active conversation immediately
+  // --- SESSION ISOLATION: Wipe everything if the user account changes ---
   useEffect(() => {
     setSelectedConversation(null);
-    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    queryClient.clear(); // Complete cache wipe to prevent cross-account leakage
   }, [myEmail, queryClient]);
 
   const { data: conversations = [], isLoading } = useQuery({
     queryKey: ['conversations', platformFilter, myEmail],
     queryFn: async () => {
-      // We pass myEmail to ensure the backend only gives us OUR conversations
       const res = await base44.entities.Conversation.filter({ 
         status: 'active',
         participant_email: myEmail 
@@ -85,15 +83,17 @@ export default function Conversations() {
       return conv;
     },
     onSuccess: (newConv) => {
+      // 1. Force the detail window to close and PURGE the cache for this thread
+      setSelectedConversation(null);
+      queryClient.removeQueries({ queryKey: ['messages', newConv.id] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+
       setComposeOpen(false);
       setComposeData({ to: '', subject: '', message: '', id: null });
       
-      // CLEAR CACHE FOR NEW MESSAGES
-      queryClient.removeQueries({ queryKey: ['messages', newConv.id] });
-      setSelectedConversation(null);
-      setTimeout(() => setSelectedConversation(newConv), 50);
-      toast.success("Message sent successfully!");
+      // 2. Open the fresh, empty-history window after a slight delay
+      setTimeout(() => setSelectedConversation(newConv), 100);
+      toast.success("New thread started!");
     }
   });
 
@@ -106,8 +106,8 @@ export default function Conversations() {
   });
 
   const handleAction = (status = 'active') => {
-    if (!composeData.to || !composeData.message) return toast.error("Please provide recipient and message");
-    if (!myEmail) return toast.error("Session expired. Please log in again.");
+    if (!composeData.to || !composeData.message) return toast.error("Check recipient and message content");
+    if (!myEmail) return toast.error("Session expired. Please log in.");
 
     const selectedContact = contacts.find(c => c.email === composeData.to);
     const recipientName = selectedContact ? selectedContact.name : composeData.to;
@@ -136,9 +136,9 @@ export default function Conversations() {
   });
 
   const handleConversationDeleted = () => {
-    // When deleted, wipe the state and the cache for that specific ID
+    // Hard wipe of messages cache when a window is deleted
     if (selectedConversation) {
-        queryClient.removeQueries({ queryKey: ['messages', selectedConversation.id] });
+      queryClient.removeQueries({ queryKey: ['messages', selectedConversation.id] });
     }
     setSelectedConversation(null);
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
@@ -158,18 +158,18 @@ export default function Conversations() {
                   <FolderOpen className="w-4 h-4 text-amber-500" /> Drafts ({drafts.length})
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64 p-2">
-                {drafts.length === 0 ? <p className="p-4 text-center text-xs text-gray-400">No drafts</p> : 
+              <DropdownMenuContent align="end" className="w-64 p-2 shadow-xl border-slate-100">
+                {drafts.length === 0 ? <p className="p-4 text-center text-xs text-gray-400 font-bold">No drafts</p> : 
                   drafts.map(d => (
                     <div key={d.id} className="flex items-center hover:bg-slate-50 rounded-lg px-2 group">
                       <DropdownMenuItem className="flex-1 cursor-pointer py-3 border-none outline-none" onClick={() => {
-                        setSelectedConversation(null);
+                        setSelectedConversation(null); // Wipe UI before opening draft
                         setComposeData({ id: d.id, to: d.contact_email, subject: d.subject, message: d.last_message });
                         setComposeOpen(true);
                       }}>
                         <div className="flex flex-col text-left">
                            <span className="text-sm font-bold truncate">{d.subject || '(No Subject)'}</span>
-                           <span className="text-[10px] text-gray-400">To: {d.contact_name}</span>
+                           <span className="text-[10px] text-gray-400 font-bold">To: {d.contact_name}</span>
                         </div>
                       </DropdownMenuItem>
                       <Trash2 className="w-4 h-4 text-slate-300 hover:text-red-500 cursor-pointer transition-colors" onClick={(e) => { e.stopPropagation(); deleteDraftMutation.mutate(d.id); }} />
@@ -183,7 +183,7 @@ export default function Conversations() {
               setSelectedConversation(null); 
               setComposeData({ to: '', subject: '', message: '', id: null }); 
               setComposeOpen(true); 
-            }} className="gap-2 bg-indigo-600 px-6 font-bold shadow-indigo-100 shadow-lg hover:bg-indigo-700">
+            }} className="gap-2 bg-indigo-600 px-6 font-bold shadow-indigo-200 shadow-xl hover:bg-indigo-700 transition-all active:scale-95">
               <Plus className="w-4 h-4" /> Compose
             </Button>
           </div>
@@ -191,20 +191,21 @@ export default function Conversations() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-4">
-            <Card className="p-4 border-none shadow-sm bg-white">
+            <Card className="p-4 border-none shadow-sm bg-white rounded-2xl">
               <div className="space-y-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <Input placeholder="Search people..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 h-11 border-slate-100 bg-slate-50/50 rounded-xl" />
+                  <Input placeholder="Search threads..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 h-11 border-slate-100 bg-slate-50 font-bold rounded-xl" />
                 </div>
                 {isLoading ? <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" /></div> : 
                     <ConversationList 
-                      conversations={filteredConversations} 
-                      selectedId={selectedConversation?.id} 
-                      onSelect={(c) => {
-                        setSelectedConversation(null);
-                        setTimeout(() => setSelectedConversation(c), 20);
-                      }} 
+                        conversations={filteredConversations} 
+                        selectedId={selectedConversation?.id} 
+                        onSelect={(c) => {
+                            // FORCE CLEARANCE ON SELECTION
+                            setSelectedConversation(null);
+                            setTimeout(() => setSelectedConversation(c), 20);
+                        }} 
                     />
                 }
               </div>
@@ -214,18 +215,18 @@ export default function Conversations() {
           <div className="lg:col-span-8">
             {selectedConversation ? (
               <ConversationDetail 
-                key={selectedConversation.id} 
+                key={selectedConversation.id} // CRITICAL: This destroys the component when switching users
                 conversation={selectedConversation} 
                 onDeleteSuccess={handleConversationDeleted}
               />
             ) : (
-              <Card className="h-full min-h-[550px] flex items-center justify-center bg-white border-none shadow-sm text-center p-8">
+              <Card className="h-full min-h-[550px] flex items-center justify-center bg-white border-none shadow-sm text-center p-8 rounded-2xl">
                 <div className="max-w-xs space-y-3">
-                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
                     <MessageSquare className="w-10 h-10 text-slate-200" />
                   </div>
-                  <p className="font-bold text-slate-600 text-lg text-left">Inbox is Ready</p>
-                  <p className="text-sm text-slate-400 text-left">Select a thread to view private messages.</p>
+                  <p className="font-bold text-slate-600 text-lg">Identity Verified</p>
+                  <p className="text-sm text-slate-400">Your messages are strictly private and isolated. Select a thread to view history.</p>
                 </div>
               </Card>
             )}
@@ -234,33 +235,33 @@ export default function Conversations() {
       </div>
 
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-2xl border-none shadow-2xl">
+        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-3xl border-none shadow-2xl">
           <DialogHeader className="bg-slate-900 text-white p-6">
             <DialogTitle className="flex items-center gap-2 text-xl font-bold">
-              <Send className="w-5 h-5 text-indigo-300" /> New Message
+              <Send className="w-5 h-5 text-indigo-400" /> Secure Message
             </DialogTitle>
-            <DialogDescription className="text-slate-400">Start an encrypted private conversation.</DialogDescription>
+            <DialogDescription className="text-slate-400 font-medium">Messages are isolated per user account.</DialogDescription>
           </DialogHeader>
           <div className="p-6 space-y-4 bg-white text-left">
-            <div className="space-y-1.5 text-left">
+            <div className="space-y-1.5">
               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recipient</Label>
-              <select className="w-full h-11 px-3 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold outline-none" value={composeData.to} onChange={(e) => setComposeData({...composeData, to: e.target.value})}>
-                <option value="">Select a contact...</option>
+              <select className="w-full h-11 px-3 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold outline-none ring-offset-white focus:ring-2 focus:ring-indigo-500/20" value={composeData.to} onChange={(e) => setComposeData({...composeData, to: e.target.value})}>
+                <option value="">Select a teammate...</option>
                 {contacts.map(c => <option key={c.id} value={c.email}>{c.name} ({c.email})</option>)}
               </select>
             </div>
-            <div className="space-y-1.5 text-left">
+            <div className="space-y-1.5">
                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Subject</Label>
-               <Input placeholder="What is this about?" className="h-11 border-slate-100 bg-slate-50 font-bold px-4 rounded-xl" value={composeData.subject} onChange={(e) => setComposeData({...composeData, subject: e.target.value})} />
+               <Input placeholder="Thread topic" className="h-11 border-slate-100 bg-slate-50 font-bold px-4 rounded-xl" value={composeData.subject} onChange={(e) => setComposeData({...composeData, subject: e.target.value})} />
             </div>
-            <div className="space-y-1.5 text-left">
-               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Message Content</Label>
-               <Textarea placeholder="Type your message here..." className="min-h-[180px] border-slate-100 bg-slate-50 p-4 rounded-xl resize-none text-sm" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
+            <div className="space-y-1.5">
+               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Initial Message</Label>
+               <Textarea placeholder="Type your first message..." className="min-h-[180px] border-slate-100 bg-slate-50 p-4 rounded-xl resize-none text-sm font-medium" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
             </div>
           </div>
           <DialogFooter className="p-6 bg-slate-50/50 border-t border-slate-100">
             <div className="flex gap-3 w-full">
-              <Button onClick={() => handleAction('active')} disabled={saveMutation.isPending} className="flex-1 bg-indigo-600 hover:bg-indigo-700 h-12 font-bold rounded-xl shadow-lg">
+              <Button onClick={() => handleAction('active')} disabled={saveMutation.isPending} className="flex-1 bg-indigo-600 hover:bg-indigo-700 h-12 font-bold rounded-xl shadow-lg shadow-indigo-100">
                 {saveMutation.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "Send Message"}
               </Button>
               <Button variant="outline" onClick={() => handleAction('draft')} disabled={saveMutation.isPending} className="h-12 border-slate-200 bg-white rounded-xl text-slate-600 px-6 font-bold">
