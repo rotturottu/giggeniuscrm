@@ -264,10 +264,10 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- UPDATED PRIVACY ISOLATION ---
+        # --- REFINED PRIVACY LOCK ---
         if entity_name in ['Conversation', 'Message']:
             if user_email:
-                # Group the OR in parentheses so sender OR recipient check works correctly with other filters
+                # Group parentheses ensure the participant check is its own block
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
             else:
@@ -277,7 +277,7 @@ def handle_base44_list_create(entity_name):
             params.append(user_email)
 
         for key, value in request.args.items():
-            # Apply URL filters (like conversation_id) but skip emails to avoid overriding the security check above
+            # Apply URL filters but ensure they don't break the participant isolation logic
             if key in db_cols and key not in ['sender_email', 'recipient_email', 'user_email', 'participant_email']:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
@@ -285,9 +285,7 @@ def handle_base44_list_create(entity_name):
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
             
-        # Order messages chronologically, others by ID descending
         order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
-        
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
         conn.close()
@@ -296,7 +294,6 @@ def handle_base44_list_create(entity_name):
     if request.method == 'POST':
         request_data = request.json
         items_to_process = request_data if isinstance(request_data, list) else [request_data]
-        
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
@@ -305,12 +302,10 @@ def handle_base44_list_create(entity_name):
             for item in items_to_process:
                 if 'user_email' in db_cols and 'user_email' not in item:
                     item['user_email'] = user_email
-                
                 if entity_name == 'Message' and 'created_date' not in item:
                     item['created_date'] = datetime.now().isoformat()
 
                 cleaned_data = {k: v for k, v in item.items() if k in db_cols}
-                
                 columns = ', '.join(cleaned_data.keys())
                 placeholders = ', '.join(['?'] * len(cleaned_data))
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
@@ -341,10 +336,8 @@ def handle_base44_single_item_action(entity_name, entity_id):
     c = conn.cursor()
 
     if request.method == 'DELETE':
-        # CASCADE: If a conversation is deleted, delete associated messages
         if entity_name == 'Conversation':
             c.execute("DELETE FROM messages WHERE conversation_id = ?", (entity_id,))
-            
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
@@ -355,7 +348,6 @@ def handle_base44_single_item_action(entity_name, entity_id):
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
-
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()
