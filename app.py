@@ -42,7 +42,7 @@ def init_db():
                   phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # Updated Project Tasks (FIX: Restored the Task/ProjectTask mappings)
+    # Updated Project Tasks (FIX: Added user_email for Task isolation)
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   title TEXT, description TEXT, list_name TEXT,
@@ -153,7 +153,7 @@ def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
     if not user_email or user_email in ['null', 'undefined', '']:
-        return jsonify({"authenticated": False, "message": "No active session"}), 200
+        return jsonify({"authenticated": False}), 200
     
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row
@@ -170,7 +170,7 @@ def handle_me():
             u['lastName'] = u['last_name']
             u['profilePicture'] = u['profile_picture']
             return jsonify(u), 200
-        return jsonify({"authenticated": False, "message": "User not found"}), 200
+        return jsonify({"authenticated": False}), 200
     
     if request.method == 'PUT':
         data = request.json
@@ -215,7 +215,7 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- FIX: Grouped Privacy (Restored Task Tab Visibility) ---
+        # --- FIX: Grouped Privacy (Messaging & Task Isolation) ---
         if entity_name in ['Conversation', 'Message']:
             if user_email and user_email not in ['null', 'undefined', '']:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
