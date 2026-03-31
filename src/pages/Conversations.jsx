@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { MessageSquare, Search, Plus, Send, X, FolderOpen, Save, Trash2, Loader2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import ConversationDetail from '../components/conversations/ConversationDetail';
 import ConversationList from '../components/conversations/ConversationList';
@@ -21,7 +21,6 @@ export default function Conversations() {
   const [composeData, setComposeData] = useState({ to: '', subject: '', message: '', id: null });
   const queryClient = useQueryClient();
 
-  // 0. Identity
   const { data: me } = useQuery({
     queryKey: ['user', 'me'],
     queryFn: () => base44.auth.me(),
@@ -30,10 +29,17 @@ export default function Conversations() {
 
   const myEmail = me?.email || localStorage.getItem('userEmail');
 
-  // 1. Fetch Conversations (Privacy is handled here via participant_email filter)
+  // --- NEW: SESSIONS ISOLATION ---
+  // If the user changes (logout/login), clear the active conversation immediately
+  useEffect(() => {
+    setSelectedConversation(null);
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+  }, [myEmail, queryClient]);
+
   const { data: conversations = [], isLoading } = useQuery({
     queryKey: ['conversations', platformFilter, myEmail],
     queryFn: async () => {
+      // We pass myEmail to ensure the backend only gives us OUR conversations
       const res = await base44.entities.Conversation.filter({ 
         status: 'active',
         participant_email: myEmail 
@@ -43,7 +49,6 @@ export default function Conversations() {
     enabled: !!myEmail
   });
 
-  // 2. Fetch Drafts
   const { data: drafts = [] } = useQuery({
     queryKey: ['conversations', 'drafts', myEmail],
     queryFn: async () => {
@@ -56,13 +61,11 @@ export default function Conversations() {
     enabled: !!myEmail
   });
 
-  // 3. Fetch Contacts
   const { data: contacts = [] } = useQuery({
     queryKey: ['contacts', 'list'],
     queryFn: () => base44.entities.Contact.list().catch(() => []),
   });
 
-  // Save/Create Mutation
   const saveMutation = useMutation({
     mutationFn: async (payload) => {
       const conv = payload.id 
@@ -86,7 +89,8 @@ export default function Conversations() {
       setComposeOpen(false);
       setComposeData({ to: '', subject: '', message: '', id: null });
       
-      // FORCED CLEAR: Wipe selection then mount the new one to ensure fresh UI
+      // CLEAR CACHE FOR NEW MESSAGES
+      queryClient.removeQueries({ queryKey: ['messages', newConv.id] });
       setSelectedConversation(null);
       setTimeout(() => setSelectedConversation(newConv), 50);
       toast.success("Message sent successfully!");
@@ -131,8 +135,11 @@ export default function Conversations() {
            (conv?.contact_email || '').toLowerCase().includes(search);
   });
 
-  // Reset UI after deletion
   const handleConversationDeleted = () => {
+    // When deleted, wipe the state and the cache for that specific ID
+    if (selectedConversation) {
+        queryClient.removeQueries({ queryKey: ['messages', selectedConversation.id] });
+    }
     setSelectedConversation(null);
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
   };
@@ -156,7 +163,7 @@ export default function Conversations() {
                   drafts.map(d => (
                     <div key={d.id} className="flex items-center hover:bg-slate-50 rounded-lg px-2 group">
                       <DropdownMenuItem className="flex-1 cursor-pointer py-3 border-none outline-none" onClick={() => {
-                        setSelectedConversation(null); // Clear active thread when editing draft
+                        setSelectedConversation(null);
                         setComposeData({ id: d.id, to: d.contact_email, subject: d.subject, message: d.last_message });
                         setComposeOpen(true);
                       }}>
@@ -173,7 +180,7 @@ export default function Conversations() {
             </DropdownMenu>
 
             <Button onClick={() => { 
-              setSelectedConversation(null); // Force reset of detail window
+              setSelectedConversation(null); 
               setComposeData({ to: '', subject: '', message: '', id: null }); 
               setComposeOpen(true); 
             }} className="gap-2 bg-indigo-600 px-6 font-bold shadow-indigo-100 shadow-lg hover:bg-indigo-700">
@@ -195,8 +202,8 @@ export default function Conversations() {
                       conversations={filteredConversations} 
                       selectedId={selectedConversation?.id} 
                       onSelect={(c) => {
-                        setSelectedConversation(null); // Reset UI state
-                        setTimeout(() => setSelectedConversation(c), 20); // Remount with new data
+                        setSelectedConversation(null);
+                        setTimeout(() => setSelectedConversation(c), 20);
                       }} 
                     />
                 }
@@ -207,7 +214,7 @@ export default function Conversations() {
           <div className="lg:col-span-8">
             {selectedConversation ? (
               <ConversationDetail 
-                key={selectedConversation.id} // CRITICAL: This destroys the component when ID changes
+                key={selectedConversation.id} 
                 conversation={selectedConversation} 
                 onDeleteSuccess={handleConversationDeleted}
               />
@@ -217,8 +224,8 @@ export default function Conversations() {
                   <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
                     <MessageSquare className="w-10 h-10 text-slate-200" />
                   </div>
-                  <p className="font-bold text-slate-600 text-lg">Inbox is Ready</p>
-                  <p className="text-sm text-slate-400">Select a thread to view private messages.</p>
+                  <p className="font-bold text-slate-600 text-lg text-left">Inbox is Ready</p>
+                  <p className="text-sm text-slate-400 text-left">Select a thread to view private messages.</p>
                 </div>
               </Card>
             )}
@@ -235,18 +242,18 @@ export default function Conversations() {
             <DialogDescription className="text-slate-400">Start an encrypted private conversation.</DialogDescription>
           </DialogHeader>
           <div className="p-6 space-y-4 bg-white text-left">
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 text-left">
               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recipient</Label>
               <select className="w-full h-11 px-3 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold outline-none" value={composeData.to} onChange={(e) => setComposeData({...composeData, to: e.target.value})}>
                 <option value="">Select a contact...</option>
                 {contacts.map(c => <option key={c.id} value={c.email}>{c.name} ({c.email})</option>)}
               </select>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 text-left">
                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Subject</Label>
                <Input placeholder="What is this about?" className="h-11 border-slate-100 bg-slate-50 font-bold px-4 rounded-xl" value={composeData.subject} onChange={(e) => setComposeData({...composeData, subject: e.target.value})} />
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 text-left">
                <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Message Content</Label>
                <Textarea placeholder="Type your message here..." className="min-h-[180px] border-slate-100 bg-slate-50 p-4 rounded-xl resize-none text-sm" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
             </div>

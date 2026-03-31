@@ -264,21 +264,19 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # PRIVACY ISOLATION FIX:
-        # For conversations/messages, ensure user only sees what they are part of
+        # --- CRITICAL PRIVACY LOCK ---
+        # If the user is NOT authenticated, they get NOTHING for messages/conversations
         if entity_name in ['Conversation', 'Message']:
-            if user_email:
-                where_clauses.append("(sender_email = ? OR recipient_email = ?)")
-                params.extend([user_email, user_email])
+            if not user_email:
+                return jsonify([]), 200 # Return empty if identity is missing
+            where_clauses.append("(sender_email = ? OR recipient_email = ?)")
+            params.extend([user_email, user_email])
         elif 'user_email' in db_cols and user_email:
             where_clauses.append("user_email = ?")
             params.append(user_email)
 
-        # Apply specific filters from request args (e.g., conversation_id)
         for key, value in request.args.items():
-            # Special case for participant_email passed as arg
-            if key == 'participant_email':
-                continue # Already handled in Privacy isolation block above
+            if key == 'participant_email': continue
             if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
@@ -286,10 +284,7 @@ def handle_base44_list_create(entity_name):
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
             
-        # UI FIX: Sort messages by creation date (Ascending) for natural flow
-        # Conversations remain DESC so latest chats are on top of the list
         order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
-        
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
         conn.close()
@@ -298,7 +293,6 @@ def handle_base44_list_create(entity_name):
     if request.method == 'POST':
         request_data = request.json
         items_to_process = request_data if isinstance(request_data, list) else [request_data]
-        
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
@@ -307,12 +301,10 @@ def handle_base44_list_create(entity_name):
             for item in items_to_process:
                 if 'user_email' in db_cols and 'user_email' not in item:
                     item['user_email'] = user_email
-                
                 if entity_name == 'Message' and 'created_date' not in item:
                     item['created_date'] = datetime.now().isoformat()
 
                 cleaned_data = {k: v for k, v in item.items() if k in db_cols}
-                
                 columns = ', '.join(cleaned_data.keys())
                 placeholders = ', '.join(['?'] * len(cleaned_data))
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
@@ -343,6 +335,10 @@ def handle_base44_single_item_action(entity_name, entity_id):
     c = conn.cursor()
 
     if request.method == 'DELETE':
+        # CASCADE DELETE: If a conversation is deleted, delete its messages too
+        if entity_name == 'Conversation':
+            c.execute("DELETE FROM messages WHERE conversation_id = ?", (entity_id,))
+            
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
