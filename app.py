@@ -265,7 +265,6 @@ def handle_base44_list_create(entity_name):
         where_clauses = []
 
         # PRIVACY ISOLATION FIX:
-        # For conversations/messages, ensure user only sees what they are part of
         if entity_name in ['Conversation', 'Message']:
             if user_email:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
@@ -274,11 +273,9 @@ def handle_base44_list_create(entity_name):
             where_clauses.append("user_email = ?")
             params.append(user_email)
 
-        # Apply specific filters from request args (e.g., conversation_id)
         for key, value in request.args.items():
-            # Special case for participant_email passed as arg
             if key == 'participant_email':
-                continue # Already handled in Privacy isolation block above
+                continue 
             if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
@@ -286,12 +283,22 @@ def handle_base44_list_create(entity_name):
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
             
-        # UI FIX: Sort messages by creation date (Ascending) for natural flow
-        # Conversations remain DESC so latest chats are on top of the list
         order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
         
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
+
+        # --- TASK TAB FIX (Ensures frontend doesn't crash) ---
+        if entity_name in ['Task', 'ProjectTask']:
+            for item in data:
+                if not item.get('subtasks'):
+                    item['subtasks'] = []
+                elif isinstance(item['subtasks'], str):
+                    try:
+                        item['subtasks'] = json.loads(item['subtasks'])
+                    except:
+                        item['subtasks'] = []
+
         conn.close()
         return jsonify(data), 200
 
@@ -310,6 +317,10 @@ def handle_base44_list_create(entity_name):
                 
                 if entity_name == 'Message' and 'created_date' not in item:
                     item['created_date'] = datetime.now().isoformat()
+
+                # Fix: Stringify subtasks for storage if they are lists
+                if entity_name in ['Task', 'ProjectTask'] and isinstance(item.get('subtasks'), list):
+                    item['subtasks'] = json.dumps(item['subtasks'])
 
                 cleaned_data = {k: v for k, v in item.items() if k in db_cols}
                 
@@ -352,6 +363,11 @@ def handle_base44_single_item_action(entity_name, entity_id):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
+
+        # Fix: Stringify subtasks for storage if they are lists
+        if entity_name in ['Task', 'ProjectTask'] and isinstance(data.get('subtasks'), list):
+            data['subtasks'] = json.dumps(data['subtasks'])
+
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
 
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
