@@ -42,16 +42,23 @@ def init_db():
                   phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # Updated Project Tasks (FIX: Added user_email for Task isolation)
+    # Updated Project Tasks
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  title TEXT, description TEXT, list_name TEXT,
-                  status TEXT, priority TEXT, assigned_to TEXT,
-                  start_date TEXT, due_date TEXT, subtasks TEXT,
-                  attachments TEXT, parent_task_id INTEGER, 
-                  user_email TEXT,
+                  title TEXT, 
+                  description TEXT,
+                  list_name TEXT,
+                  status TEXT, 
+                  priority TEXT,
+                  assigned_to TEXT,
+                  start_date TEXT,
+                  due_date TEXT,
+                  subtasks TEXT,
+                  attachments TEXT,
+                  parent_task_id INTEGER, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # UPDATED CONVERSATIONS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS conversations
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   contact_name TEXT, contact_email TEXT,
@@ -61,56 +68,101 @@ def init_db():
                   last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # NEW: MESSAGES TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS messages
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  conversation_id INTEGER, sender_email TEXT, recipient_email TEXT,
-                  sender_name TEXT, body TEXT, is_read INTEGER DEFAULT 0,
+                  conversation_id INTEGER,
+                  sender_email TEXT,
+                  recipient_email TEXT,
+                  sender_name TEXT,
+                  body TEXT,
+                  is_read INTEGER DEFAULT 0,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # PROJECTS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS projects
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, assigned_person TEXT,
-                  start_date TEXT, end_date TEXT, description TEXT,
-                  budget REAL, currency TEXT, signed_contract TEXT,
-                  status TEXT DEFAULT 'active', user_email TEXT, 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
+                  name TEXT, 
+                  assigned_person TEXT,
+                  start_date TEXT,
+                  end_date TEXT,
+                  description TEXT,
+                  budget REAL,
+                  currency TEXT,
+                  signed_contract TEXT,
+                  status TEXT DEFAULT 'active',
+                  user_email TEXT, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # LEAVE REQUESTS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS leave_requests
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT,
-                  employee_email TEXT, leave_type TEXT, start_date TEXT,
-                  end_date TEXT, days_count INTEGER, reason TEXT,
-                  status TEXT DEFAULT 'pending', user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT,
+                  employee_email TEXT,
+                  leave_type TEXT,
+                  start_date TEXT,
+                  end_date TEXT,
+                  days_count INTEGER,
+                  reason TEXT,
+                  status TEXT DEFAULT 'pending',
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # PAYROLL RECORDS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS payroll_records
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT, 
-                  employee_email TEXT, period_start TEXT, period_end TEXT,
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT, employee_email TEXT, period_start TEXT, period_end TEXT,
                   currency TEXT, base_salary REAL, hours_worked REAL, overtime_hours REAL,
                   overtime_pay REAL, bonuses REAL, deductions REAL, tax REAL, net_pay REAL,
                   status TEXT DEFAULT 'draft', notes TEXT, paid_at TEXT,
                   user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # PERFORMANCE REVIEWS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS performance_reviews
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT,
-                  employee_email TEXT, reviewer_email TEXT, review_period TEXT,
-                  overall_rating INTEGER, goals_met TEXT, strengths TEXT,
-                  areas_of_improvement TEXT, goals_next_period TEXT, comments TEXT,
-                  status TEXT DEFAULT 'draft', user_email TEXT,
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT,
+                  employee_email TEXT,
+                  reviewer_email TEXT,
+                  review_period TEXT,
+                  overall_rating INTEGER,
+                  goals_met TEXT,
+                   strengths TEXT,
+                  areas_of_improvement TEXT,
+                  goals_next_period TEXT,
+                  comments TEXT,
+                  status TEXT DEFAULT 'draft',
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # ONBOARDING TASKS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS onboarding_tasks
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT,
-                  employee_id TEXT, task_name TEXT, category TEXT,
-                  status TEXT DEFAULT 'pending', due_date TEXT, department TEXT,
-                  user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT,
+                  employee_id TEXT,
+                  task_name TEXT,
+                  category TEXT,
+                  status TEXT DEFAULT 'pending',
+                  due_date TEXT,
+                  department TEXT,
+                  user_email TEXT,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # CAMPAIGNS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS campaigns
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, status TEXT DEFAULT 'Draft',
                   leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%',
                   user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
+    # TIME ENTRIES TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS time_entries
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT, 
-                  employee_email TEXT, type TEXT, date TEXT, clock_in TEXT, 
-                  clock_out TEXT, duration_minutes INTEGER, status TEXT DEFAULT 'active',
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  employee_name TEXT, 
+                  employee_email TEXT, 
+                  type TEXT,
+                  date TEXT,
+                  clock_in TEXT, 
+                  clock_out TEXT,
+                  duration_minutes INTEGER, 
+                  status TEXT DEFAULT 'active',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
@@ -152,8 +204,7 @@ def login():
 def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
-    if not user_email or user_email in ['null', 'undefined', '']:
-        return jsonify({"authenticated": False}), 200
+    if not user_email: return jsonify({"error": "No user email provided"}), 401
     
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row
@@ -165,12 +216,9 @@ def handle_me():
         conn.close()
         if user_row:
             u = dict(user_row)
-            u['authenticated'] = True
-            u['firstName'] = u['first_name']
-            u['lastName'] = u['last_name']
-            u['profilePicture'] = u['profile_picture']
-            return jsonify(u), 200
-        return jsonify({"authenticated": False}), 200
+            return jsonify({"id": u['id'], "firstName": u['first_name'], "lastName": u['last_name'],
+                            "email": u['email'], "profilePicture": u['profile_picture'], "role": "user"}), 200
+        return jsonify({"error": "User not found"}), 404
     
     if request.method == 'PUT':
         data = request.json
@@ -211,64 +259,77 @@ def handle_base44_list_create(entity_name):
     if request.method == 'GET':
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
+        
         query = f"SELECT * FROM {table_name}"
         params = []
         where_clauses = []
 
-        # --- FIX: Grouped Privacy (Messaging & Task Isolation) ---
+        # PRIVACY ISOLATION FIX:
+        # For conversations/messages, ensure user only sees what they are part of
         if entity_name in ['Conversation', 'Message']:
-            if user_email and user_email not in ['null', 'undefined', '']:
+            if user_email:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
-            else:
-                return jsonify([]), 200 
         elif 'user_email' in db_cols and user_email:
             where_clauses.append("user_email = ?")
             params.append(user_email)
 
+        # Apply specific filters from request args (e.g., conversation_id)
         for key, value in request.args.items():
-            if key in db_cols and key not in ['sender_email', 'recipient_email', 'user_email', 'participant_email']:
+            # Special case for participant_email passed as arg
+            if key == 'participant_email':
+                continue # Already handled in Privacy isolation block above
+            if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
         
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
             
+        # UI FIX: Sort messages by creation date (Ascending) for natural flow
+        # Conversations remain DESC so latest chats are on top of the list
         order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
+        
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
         conn.close()
         return jsonify(data), 200
 
     if request.method == 'POST':
-        item = request.json
+        request_data = request.json
+        items_to_process = request_data if isinstance(request_data, list) else [request_data]
+        
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         
-        if 'user_email' in db_cols and 'user_email' not in item:
-            item['user_email'] = user_email
-            
-        if entity_name == 'Message':
-            item['sender_email'] = user_email
-            item['created_date'] = datetime.now().isoformat()
-            if 'recipient_email' not in item:
-                c.execute("SELECT sender_email, recipient_email FROM conversations WHERE id = ?", (item.get('conversation_id'),))
-                conv = c.fetchone()
-                if conv:
-                    item['recipient_email'] = conv['recipient_email'] if conv['sender_email'] == user_email else conv['sender_email']
+        results = []
+        try:
+            for item in items_to_process:
+                if 'user_email' in db_cols and 'user_email' not in item:
+                    item['user_email'] = user_email
+                
+                if entity_name == 'Message' and 'created_date' not in item:
+                    item['created_date'] = datetime.now().isoformat()
 
-        cleaned_data = {k: v for k, v in item.items() if k in db_cols}
-        cols = ', '.join(cleaned_data.keys())
-        placeholders = ', '.join(['?'] * len(cleaned_data))
-        c.execute(f"INSERT INTO {table_name} ({cols}) VALUES ({placeholders})", tuple(cleaned_data.values()))
-        conn.commit()
-        cleaned_data['id'] = c.lastrowid
-        conn.close()
-        return jsonify(cleaned_data), 201
+                cleaned_data = {k: v for k, v in item.items() if k in db_cols}
+                
+                columns = ', '.join(cleaned_data.keys())
+                placeholders = ', '.join(['?'] * len(cleaned_data))
+                c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
+                cleaned_data['id'] = c.lastrowid
+                results.append(cleaned_data)
+            
+            conn.commit()
+            return jsonify(results if isinstance(request_data, list) else results[0]), 201
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+        finally:
+            conn.close()
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
@@ -280,18 +341,19 @@ def handle_base44_single_item_action(entity_name, entity_id):
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
+
     if request.method == 'DELETE':
-        if entity_name == 'Conversation':
-            c.execute("DELETE FROM messages WHERE conversation_id = ?", (entity_id,))
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
         return jsonify({"success": True}), 200
+
     if request.method == 'PUT':
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
+
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()
