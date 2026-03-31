@@ -200,32 +200,39 @@ def login():
         return jsonify({"message": "Login successful!"}), 200
     return jsonify({"error": "Invalid email or password"}), 401
 
-@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
+@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'OPTIONS'])
 def handle_me():
-    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    if request.method == 'OPTIONS': 
+        return jsonify({"status": "ok"}), 200
+    
+    # Get email from the header
     user_email = request.headers.get('User-Email')
     
-    # 1. FIX: RESILIENT IDENTITY CHECK
-    # Returns 200 with flag instead of 401 to prevent frontend crashing
+    # If header is missing or invalid, return a 200 with authenticated: False 
+    # instead of a hard 401. This prevents the app from breaking.
     if not user_email or user_email in ['null', 'undefined', '']:
-        return jsonify({"authenticated": False, "error": "No session"}), 200
+        return jsonify({"authenticated": False, "message": "No active session"}), 200
     
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
     
-    if request.method == 'GET':
-        c.execute("SELECT id, first_name, last_name, email, profile_picture FROM users WHERE email=?", (user_email,))
-        user_row = c.fetchone()
-        conn.close()
-        if user_row:
-            u = dict(user_row)
-            return jsonify({
-                "id": u['id'], "firstName": u['first_name'], "lastName": u['last_name'],
-                "email": u['email'], "profilePicture": u['profile_picture'], "role": "user",
-                "authenticated": True
-            }), 200
-        return jsonify({"authenticated": False, "error": "User not found"}), 200
+    c.execute("SELECT id, first_name, last_name, email, profile_picture FROM users WHERE email=?", (user_email,))
+    user_row = c.fetchone()
+    conn.close()
+    
+    if user_row:
+        u = dict(user_row)
+        return jsonify({
+            "id": u['id'], 
+            "firstName": u['first_name'], 
+            "lastName": u['last_name'],
+            "email": u['email'],
+            "authenticated": True
+        }), 200
+    
+    # If the email isn't in the DB, the session is "poisoned" from an old DB
+    return jsonify({"authenticated": False, "message": "User not found"}), 200
     
     if request.method == 'PUT':
         data = request.json
