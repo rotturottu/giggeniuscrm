@@ -81,15 +81,19 @@ export default function Conversations() {
       }
       return conv;
     },
-    onSuccess: () => {
+    onSuccess: (newConv) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
       setComposeOpen(false);
       setComposeData({ to: '', subject: '', message: '', id: null });
+      
+      // AUTO-CLEAR & SWITCH: Force the window to open the new clean conversation
+      setSelectedConversation(null);
+      setTimeout(() => setSelectedConversation(newConv), 10);
+      
       toast.success("Success!");
     }
   });
 
-  // Delete Draft Mutation (Small Trash can in dropdown)
   const deleteDraftMutation = useMutation({
     mutationFn: (id) => base44.entities.Conversation.delete(id),
     onSuccess: () => {
@@ -128,7 +132,7 @@ export default function Conversations() {
            (conv?.contact_email || '').toLowerCase().includes(search);
   });
 
-  // This handles the deletion sync from ConversationDetail
+  // This handles the deletion sync
   const handleConversationDeleted = () => {
     setSelectedConversation(null);
     queryClient.invalidateQueries({ queryKey: ['conversations'] });
@@ -153,6 +157,7 @@ export default function Conversations() {
                   drafts.map(d => (
                     <div key={d.id} className="flex items-center hover:bg-slate-50 rounded-lg px-2 group">
                       <DropdownMenuItem className="flex-1 cursor-pointer py-3 border-none outline-none" onClick={() => {
+                        setSelectedConversation(null); // Clear active window when opening draft
                         setComposeData({ id: d.id, to: d.contact_email, subject: d.subject, message: d.last_message });
                         setComposeOpen(true);
                       }}>
@@ -161,17 +166,18 @@ export default function Conversations() {
                            <span className="text-[10px] text-gray-400">To: {d.contact_name}</span>
                         </div>
                       </DropdownMenuItem>
-                      <Trash2 
-                        className="w-4 h-4 text-slate-300 hover:text-red-500 cursor-pointer transition-colors" 
-                        onClick={(e) => { e.stopPropagation(); deleteDraftMutation.mutate(d.id); }} 
-                      />
+                      <Trash2 className="w-4 h-4 text-slate-300 hover:text-red-500 cursor-pointer transition-colors" onClick={(e) => { e.stopPropagation(); deleteDraftMutation.mutate(d.id); }} />
                     </div>
                   ))
                 }
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button onClick={() => { setComposeData({ to: '', subject: '', message: '', id: null }); setComposeOpen(true); }} className="gap-2 bg-indigo-600 px-6 font-bold shadow-indigo-100 shadow-lg hover:bg-indigo-700">
+            <Button onClick={() => { 
+              setSelectedConversation(null); // Ensure background is clear
+              setComposeData({ to: '', subject: '', message: '', id: null }); 
+              setComposeOpen(true); 
+            }} className="gap-2 bg-indigo-600 px-6 font-bold shadow-indigo-100 shadow-lg hover:bg-indigo-700">
               <Plus className="w-4 h-4" /> Compose
             </Button>
           </div>
@@ -186,7 +192,14 @@ export default function Conversations() {
                   <Input placeholder="Search people..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 h-11 border-slate-100 bg-slate-50/50 rounded-xl" />
                 </div>
                 {isLoading ? <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" /></div> : 
-                    <ConversationList conversations={filteredConversations} selectedId={selectedConversation?.id} onSelect={setSelectedConversation} />
+                    <ConversationList 
+                      conversations={filteredConversations} 
+                      selectedId={selectedConversation?.id} 
+                      onSelect={(c) => {
+                        setSelectedConversation(null); // Force unmount
+                        setTimeout(() => setSelectedConversation(c), 10); // Re-mount fresh
+                      }} 
+                    />
                 }
               </div>
             </Card>
@@ -195,6 +208,7 @@ export default function Conversations() {
           <div className="lg:col-span-8">
             {selectedConversation ? (
               <ConversationDetail 
+                key={selectedConversation.id} // CRITICAL: This wipes the chat history UI every time
                 conversation={selectedConversation} 
                 onDeleteSuccess={handleConversationDeleted}
               />
@@ -219,7 +233,7 @@ export default function Conversations() {
             <DialogTitle className="flex items-center gap-2 text-xl font-bold">
               <Send className="w-5 h-5 text-indigo-300" /> New Message
             </DialogTitle>
-            <DialogDescription className="text-slate-400">Start an encrypted conversation with a contact.</DialogDescription>
+            <DialogDescription className="text-slate-400">Start an encrypted conversation.</DialogDescription>
           </DialogHeader>
           
           <div className="p-6 space-y-4 bg-white text-left">
