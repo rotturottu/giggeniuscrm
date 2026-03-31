@@ -200,16 +200,14 @@ def login():
         return jsonify({"message": "Login successful!"}), 200
     return jsonify({"error": "Invalid email or password"}), 401
 
-@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'OPTIONS'])
+@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
 def handle_me():
     if request.method == 'OPTIONS': 
         return jsonify({"status": "ok"}), 200
     
-    # Get email from the header
     user_email = request.headers.get('User-Email')
     
-    # If header is missing or invalid, return a 200 with authenticated: False 
-    # instead of a hard 401. This prevents the app from breaking.
+    # FIX: If header is missing/null, return a neutral response instead of 401
     if not user_email or user_email in ['null', 'undefined', '']:
         return jsonify({"authenticated": False, "message": "No active session"}), 200
     
@@ -217,22 +215,23 @@ def handle_me():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
     
-    c.execute("SELECT id, first_name, last_name, email, profile_picture FROM users WHERE email=?", (user_email,))
-    user_row = c.fetchone()
-    conn.close()
-    
-    if user_row:
-        u = dict(user_row)
-        return jsonify({
-            "id": u['id'], 
-            "firstName": u['first_name'], 
-            "lastName": u['last_name'],
-            "email": u['email'],
-            "authenticated": True
-        }), 200
-    
-    # If the email isn't in the DB, the session is "poisoned" from an old DB
-    return jsonify({"authenticated": False, "message": "User not found"}), 200
+    if request.method == 'GET':
+        c.execute("SELECT id, first_name, last_name, email, profile_picture FROM users WHERE email=?", (user_email,))
+        user_row = c.fetchone()
+        conn.close()
+        
+        if user_row:
+            u = dict(user_row)
+            return jsonify({
+                "id": u['id'], 
+                "firstName": u['first_name'], 
+                "lastName": u['last_name'],
+                "email": u['email'],
+                "profilePicture": u['profile_picture'],
+                "authenticated": True
+            }), 200
+        
+        return jsonify({"authenticated": False, "message": "User not found"}), 200
     
     if request.method == 'PUT':
         data = request.json
@@ -278,9 +277,10 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- 2. FIX: ROBUST PRIVACY LOCK (PARENTHeSES ARE KEY) ---
+        # --- REFINED PRIVACY LOGIC (GROUPS THE OR CONDITION) ---
         if entity_name in ['Conversation', 'Message']:
-            if user_email and user_email not in ['null', 'undefined']:
+            if user_email and user_email not in ['null', 'undefined', '']:
+                # The parentheses ensure the participant check is its own block
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
             else:
