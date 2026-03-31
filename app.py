@@ -264,26 +264,28 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- MODIFIED FOR PRIVACY ---
+        # --- REFINED PRIVACY LOGIC ---
         # For conversations/messages, user ONLY sees rows where they are sender OR recipient
+        # This prevents Person C from seeing chats between A and B
         if entity_name in ['Conversation', 'Message']:
             if user_email:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
+            else:
+                return jsonify([]), 200 # Reject if no email provided
         elif 'user_email' in db_cols and user_email:
             where_clauses.append("user_email = ?")
             params.append(user_email)
 
         for key, value in request.args.items():
-            # Don't allow sender/recipient filters from the URL to override the privacy lock
-            if key in db_cols and key not in ['sender_email', 'recipient_email']:
+            # Apply filters like conversation_id, but protect participant emails
+            if key in db_cols and key not in ['sender_email', 'recipient_email', 'user_email']:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
         
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
             
-        # Natural flow for messages, latest first for others
         order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
         
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
@@ -339,7 +341,7 @@ def handle_base44_single_item_action(entity_name, entity_id):
     c = conn.cursor()
 
     if request.method == 'DELETE':
-        # MODIFIED: Clear messages if conversation is deleted
+        # CASCADE: Clear messages if conversation is deleted
         if entity_name == 'Conversation':
             c.execute("DELETE FROM messages WHERE conversation_id = ?", (entity_id,))
             
