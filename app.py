@@ -42,23 +42,14 @@ def init_db():
                   phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # Updated Project Tasks
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  title TEXT, 
-                  description TEXT,
-                  list_name TEXT,
-                  status TEXT, 
-                  priority TEXT,
-                  assigned_to TEXT,
-                  start_date TEXT,
-                  due_date TEXT,
-                  subtasks TEXT,
-                  attachments TEXT,
-                  parent_task_id INTEGER, 
+                  title TEXT, description TEXT, list_name TEXT,
+                  status TEXT, priority TEXT, assigned_to TEXT,
+                  start_date TEXT, due_date TEXT, subtasks TEXT,
+                  attachments TEXT, parent_task_id INTEGER, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # UPDATED CONVERSATIONS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS conversations
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   contact_name TEXT, contact_email TEXT,
@@ -68,101 +59,50 @@ def init_db():
                   last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # NEW: MESSAGES TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS messages
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  conversation_id INTEGER,
-                  sender_email TEXT,
-                  recipient_email TEXT,
-                  sender_name TEXT,
-                  body TEXT,
-                  is_read INTEGER DEFAULT 0,
+                  conversation_id INTEGER, sender_email TEXT, recipient_email TEXT,
+                  sender_name TEXT, body TEXT, is_read INTEGER DEFAULT 0,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # PROJECTS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS projects
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  name TEXT, 
-                  assigned_person TEXT,
-                  start_date TEXT,
-                  end_date TEXT,
-                  description TEXT,
-                  budget REAL,
-                  currency TEXT,
-                  signed_contract TEXT,
-                  status TEXT DEFAULT 'active',
-                  user_email TEXT, 
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, assigned_person TEXT,
+                  start_date TEXT, end_date TEXT, description TEXT,
+                  budget REAL, currency TEXT, signed_contract TEXT,
+                  status TEXT DEFAULT 'active', user_email TEXT, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # LEAVE REQUESTS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS leave_requests
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT,
-                  employee_email TEXT,
-                  leave_type TEXT,
-                  start_date TEXT,
-                  end_date TEXT,
-                  days_count INTEGER,
-                  reason TEXT,
-                  status TEXT DEFAULT 'pending',
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT,
+                  employee_email TEXT, leave_type TEXT, start_date TEXT,
+                  end_date TEXT, days_count INTEGER, reason TEXT,
+                  status TEXT DEFAULT 'pending', created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+
+    c.execute('''CREATE TABLE IF NOT EXISTS payroll_records
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT, 
+                  employee_email TEXT, period_start TEXT, period_end TEXT,
+                  currency TEXT, base_salary REAL, net_pay REAL,
+                  status TEXT DEFAULT 'draft', user_email TEXT, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # PAYROLL RECORDS TABLE
-    c.execute('''CREATE TABLE IF NOT EXISTS payroll_records
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT, employee_email TEXT, period_start TEXT, period_end TEXT,
-                  currency TEXT, base_salary REAL, hours_worked REAL, overtime_hours REAL,
-                  overtime_pay REAL, bonuses REAL, deductions REAL, tax REAL, net_pay REAL,
-                  status TEXT DEFAULT 'draft', notes TEXT, paid_at TEXT,
+    c.execute('''CREATE TABLE IF NOT EXISTS performance_reviews
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT,
+                  employee_email TEXT, reviewer_email TEXT, status TEXT DEFAULT 'draft',
                   user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # PERFORMANCE REVIEWS TABLE
-    c.execute('''CREATE TABLE IF NOT EXISTS performance_reviews
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT,
-                  employee_email TEXT,
-                  reviewer_email TEXT,
-                  review_period TEXT,
-                  overall_rating INTEGER,
-                  goals_met TEXT,
-                   strengths TEXT,
-                  areas_of_improvement TEXT,
-                  goals_next_period TEXT,
-                  comments TEXT,
-                  status TEXT DEFAULT 'draft',
-                  user_email TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    # ONBOARDING TASKS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS onboarding_tasks
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT,
-                  employee_id TEXT,
-                  task_name TEXT,
-                  category TEXT,
-                  status TEXT DEFAULT 'pending',
-                  due_date TEXT,
-                  department TEXT,
-                  user_email TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT,
+                  task_name TEXT, status TEXT DEFAULT 'pending',
+                  user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # CAMPAIGNS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS campaigns
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, status TEXT DEFAULT 'Draft',
                   leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%',
                   user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # TIME ENTRIES TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS time_entries
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT, 
-                  employee_email TEXT, 
-                  type TEXT,
-                  date TEXT,
-                  clock_in TEXT, 
-                  clock_out TEXT,
-                  duration_minutes INTEGER, 
-                  status TEXT DEFAULT 'active',
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, employee_name TEXT, 
+                  type TEXT, date TEXT, status TEXT DEFAULT 'active',
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
@@ -202,12 +142,9 @@ def login():
 
 @app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
 def handle_me():
-    if request.method == 'OPTIONS': 
-        return jsonify({"status": "ok"}), 200
-    
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
     
-    # FIX: If header is missing/null, return a neutral response instead of 401
     if not user_email or user_email in ['null', 'undefined', '']:
         return jsonify({"authenticated": False, "message": "No active session"}), 200
     
@@ -219,18 +156,13 @@ def handle_me():
         c.execute("SELECT id, first_name, last_name, email, profile_picture FROM users WHERE email=?", (user_email,))
         user_row = c.fetchone()
         conn.close()
-        
         if user_row:
             u = dict(user_row)
-            return jsonify({
-                "id": u['id'], 
-                "firstName": u['first_name'], 
-                "lastName": u['last_name'],
-                "email": u['email'],
-                "profilePicture": u['profile_picture'],
-                "authenticated": True
-            }), 200
-        
+            u['authenticated'] = True
+            u['firstName'] = u['first_name']
+            u['lastName'] = u['last_name']
+            u['profilePicture'] = u['profile_picture']
+            return jsonify(u), 200
         return jsonify({"authenticated": False, "message": "User not found"}), 200
     
     if request.method == 'PUT':
@@ -272,7 +204,6 @@ def handle_base44_list_create(entity_name):
     if request.method == 'GET':
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        
         query = f"SELECT * FROM {table_name}"
         params = []
         where_clauses = []
@@ -280,7 +211,6 @@ def handle_base44_list_create(entity_name):
         # --- REFINED PRIVACY LOGIC (GROUPS THE OR CONDITION) ---
         if entity_name in ['Conversation', 'Message']:
             if user_email and user_email not in ['null', 'undefined', '']:
-                # The parentheses ensure the participant check is its own block
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
             else:
@@ -304,30 +234,23 @@ def handle_base44_list_create(entity_name):
         return jsonify(data), 200
 
     if request.method == 'POST':
-        request_data = request.json
-        items_to_process = request_data if isinstance(request_data, list) else [request_data]
+        item = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        results = []
-        try:
-            for item in items_to_process:
-                if 'user_email' in db_cols and 'user_email' not in item:
-                    item['user_email'] = user_email
-                if entity_name == 'Message' and 'created_date' not in item:
-                    item['created_date'] = datetime.now().isoformat()
+        
+        if 'user_email' in db_cols and 'user_email' not in item:
+            item['user_email'] = user_email
+        if entity_name == 'Message' and 'created_date' not in item:
+            item['created_date'] = datetime.now().isoformat()
 
-                cleaned_data = {k: v for k, v in item.items() if k in db_cols}
-                columns = ', '.join(cleaned_data.keys())
-                placeholders = ', '.join(['?'] * len(cleaned_data))
-                c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
-                cleaned_data['id'] = c.lastrowid
-                results.append(cleaned_data)
-            conn.commit()
-            return jsonify(results if isinstance(request_data, list) else results[0]), 201
-        except Exception as e:
-            return jsonify({"error": str(e)}), 400
-        finally:
-            conn.close()
+        cleaned_data = {k: v for k, v in item.items() if k in db_cols}
+        cols = ', '.join(cleaned_data.keys())
+        placeholders = ', '.join(['?'] * len(cleaned_data))
+        c.execute(f"INSERT INTO {table_name} ({cols}) VALUES ({placeholders})", tuple(cleaned_data.values()))
+        conn.commit()
+        cleaned_data['id'] = c.lastrowid
+        conn.close()
+        return jsonify(cleaned_data), 201
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item_action(entity_name, entity_id):
