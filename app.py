@@ -145,8 +145,10 @@ def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
     
+    # 1. FIX: RESILIENT IDENTITY CHECK
+    # Prevents 401 loop if user isn't logged in yet
     if not user_email or user_email in ['null', 'undefined', '']:
-        return jsonify({"authenticated": False, "message": "No active session"}), 200
+        return jsonify({"authenticated": False, "message": "No session"}), 200
     
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row
@@ -159,6 +161,7 @@ def handle_me():
         if user_row:
             u = dict(user_row)
             u['authenticated'] = True
+            # Map DB naming to Frontend naming
             u['firstName'] = u['first_name']
             u['lastName'] = u['last_name']
             u['profilePicture'] = u['profile_picture']
@@ -208,10 +211,10 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- FIX: GROUPED OR LOGIC ---
+        # --- 2. FIX: ROBUST PRIVACY LOCK ---
         if entity_name in ['Conversation', 'Message']:
             if user_email and user_email not in ['null', 'undefined', '']:
-                # Forces parentheses around the participant check so it works with other filters
+                # The parentheses around OR are critical for combining with other AND filters
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
             else:
