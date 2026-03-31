@@ -37,23 +37,35 @@ export default function ConversationDetail({ conversation, onDeleteSuccess }) {
       return Array.isArray(res) ? res : [];
     },
     refetchInterval: 3000, 
+    // Ensure data is considered stale immediately when switching conversations
+    cacheTime: 0,
+    staleTime: 0,
   });
 
-  // 3. Auto-scroll to Bottom
+  // 3. Clear Internal State and Cache when conversation changes
+  useEffect(() => {
+    setReply('');
+    // Explicitly wipe the messages cache for this ID to prevent Person A's data leaking to Person B
+    queryClient.setQueryData(['messages', conversation.id], []);
+  }, [conversation.id, queryClient]);
+
+  // 4. Auto-scroll to Bottom
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
 
-  // --- UPDATED: DELETE CONVERSATION MUTATION ---
+  // --- DELETE CONVERSATION MUTATION ---
   const deleteMutation = useMutation({
     mutationFn: () => base44.entities.Conversation.delete(conversation.id),
     onSuccess: () => {
+      // WIPE CACHE IMMEDIATELY
+      queryClient.removeQueries({ queryKey: ['messages', conversation.id] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      
       toast.success("Conversation deleted");
       
-      // Call the prop from Conversations.jsx to clear the selection
       if (onDeleteSuccess) {
         onDeleteSuccess();
       }
@@ -61,7 +73,7 @@ export default function ConversationDetail({ conversation, onDeleteSuccess }) {
     onError: () => toast.error("Failed to delete thread")
   });
 
-  // 4. Send Message
+  // 5. Send Message
   const sendMessageMutation = useMutation({
     mutationFn: async (content) => {
       const recipient = myEmail === conversation.sender_email 
