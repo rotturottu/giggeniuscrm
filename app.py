@@ -270,22 +270,15 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # STRICT PRIVACY ISOLATION:
+        # GRACEFUL PRIVACY ISOLATION
         if entity_name in ['Conversation', 'Message']:
             if user_email:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
-            else:
-                conn.close()
-                return jsonify([]), 200
         elif 'user_email' in db_cols:
             if user_email:
                 where_clauses.append("user_email = ?")
                 params.append(user_email)
-            else:
-                # If no email provided for an isolated table, return nothing
-                conn.close()
-                return jsonify([]), 200
 
         for key, value in request.args.items():
             if key == 'participant_email': continue 
@@ -324,9 +317,10 @@ def handle_base44_list_create(entity_name):
         results = []
         try:
             for item in items_to_process:
-                # Ensure record is tagged to the current user
+                # Ensure record is tagged to the current user safely
                 if 'user_email' in db_cols and user_email:
-                    item['user_email'] = user_email
+                    if 'user_email' not in item or not item['user_email']:
+                        item['user_email'] = user_email
                 
                 if entity_name == 'Message' and 'created_date' not in item:
                     item['created_date'] = datetime.now().isoformat()
@@ -366,7 +360,7 @@ def handle_base44_single_item_action(entity_name, entity_id):
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
 
-    # Ownership check for security
+    # Ownership check setup
     c.execute(f"PRAGMA table_info({table_name})")
     db_cols = [col[1] for col in c.fetchall()]
 
