@@ -31,18 +31,21 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS departments
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, head_email TEXT,
                   description TEXT, budget REAL, currency TEXT,
+                  user_email TEXT, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS employees
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, first_name TEXT, last_name TEXT,
-                  email TEXT UNIQUE, department TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                  email TEXT UNIQUE, department TEXT, 
+                  user_email TEXT,
+                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS contacts
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT,
                   phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # Updated Project Tasks
+    # Updated Project Tasks with user_email for isolation
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   title TEXT, 
@@ -56,6 +59,7 @@ def init_db():
                   subtasks TEXT,
                   attachments TEXT,
                   parent_task_id INTEGER, 
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # UPDATED CONVERSATIONS TABLE
@@ -68,7 +72,7 @@ def init_db():
                   last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # NEW: MESSAGES TABLE
+    # MESSAGES TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS messages
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   conversation_id INTEGER,
@@ -105,6 +109,7 @@ def init_db():
                   days_count INTEGER,
                   reason TEXT,
                   status TEXT DEFAULT 'pending',
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # PAYROLL RECORDS TABLE
@@ -125,7 +130,7 @@ def init_db():
                   review_period TEXT,
                   overall_rating INTEGER,
                   goals_met TEXT,
-                   strengths TEXT,
+                  strengths TEXT,
                   areas_of_improvement TEXT,
                   goals_next_period TEXT,
                   comments TEXT,
@@ -163,6 +168,7 @@ def init_db():
                   clock_out TEXT,
                   duration_minutes INTEGER, 
                   status TEXT DEFAULT 'active',
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
@@ -288,7 +294,6 @@ def handle_base44_list_create(entity_name):
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
 
-        # --- TASK TAB FIX (Ensures frontend doesn't crash) ---
         if entity_name in ['Task', 'ProjectTask']:
             for item in data:
                 if not item.get('subtasks'):
@@ -318,7 +323,6 @@ def handle_base44_list_create(entity_name):
                 if entity_name == 'Message' and 'created_date' not in item:
                     item['created_date'] = datetime.now().isoformat()
 
-                # Fix: Stringify subtasks for storage if they are lists
                 if entity_name in ['Task', 'ProjectTask'] and isinstance(item.get('subtasks'), list):
                     item['subtasks'] = json.dumps(item['subtasks'])
 
@@ -364,7 +368,6 @@ def handle_base44_single_item_action(entity_name, entity_id):
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
 
-        # Fix: Stringify subtasks for storage if they are lists
         if entity_name in ['Task', 'ProjectTask'] and isinstance(data.get('subtasks'), list):
             data['subtasks'] = json.dumps(data['subtasks'])
 
