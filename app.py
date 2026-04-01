@@ -208,7 +208,7 @@ def login():
 def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
-    if not user_email or user_email in ['null', 'undefined']: 
+    if not user_email or user_email in ['null', 'undefined', '']: 
         return jsonify({"authenticated": False, "error": "No user email provided"}), 200
     
     conn = sqlite3.connect('giggenius.db')
@@ -271,25 +271,22 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- STRICT ISOLATION LOGIC ---
+        # --- STRICT ISOLATION ---
         if entity_name in ['Conversation', 'Message']:
-            if user_email and user_email not in ['null', 'undefined']:
-                # For conversations/messages, show only if sender OR recipient
+            if user_email and user_email not in ['null', 'undefined', '']:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
             else:
                 return jsonify([]), 200 
         elif 'user_email' in db_cols:
-            if user_email and user_email not in ['null', 'undefined']:
-                # For all other tables, show only if owner
+            if user_email and user_email not in ['null', 'undefined', '']:
                 where_clauses.append("user_email = ?")
                 params.append(user_email)
             else:
-                # If no valid email, show nothing
                 return jsonify([]), 200
 
         for key, value in request.args.items():
-            if key == 'participant_email': continue 
+            if key in ['participant_email', 'user_email']: continue 
             if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
@@ -300,15 +297,6 @@ def handle_base44_list_create(entity_name):
         order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
-
-        # Subtasks safety for Tasks tab
-        if entity_name in ['Task', 'ProjectTask']:
-            for item in data:
-                if not item.get('subtasks'): item['subtasks'] = []
-                elif isinstance(item['subtasks'], str):
-                    try: item['subtasks'] = json.loads(item['subtasks'])
-                    except: item['subtasks'] = []
-
         conn.close()
         return jsonify(data), 200
 
@@ -322,15 +310,11 @@ def handle_base44_list_create(entity_name):
         results = []
         try:
             for i in items_to_process:
-                # Force current user identity on creation
+                # Force identity on creation
                 if 'user_email' in db_cols: i['user_email'] = user_email
-                
-                if entity_name == 'Message' and 'created_date' not in i:
+                if entity_name == 'Message':
                     i['created_date'] = datetime.now().isoformat()
                     i['sender_email'] = user_email
-
-                if entity_name in ['Task', 'ProjectTask'] and isinstance(i.get('subtasks'), list):
-                    i['subtasks'] = json.dumps(i['subtasks'])
 
                 cleaned_data = {k: v for k, v in i.items() if k in db_cols}
                 columns = ', '.join(cleaned_data.keys())
@@ -349,7 +333,6 @@ def handle_base44_list_create(entity_name):
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    user_email = request.headers.get('User-Email')
     
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
@@ -364,7 +347,6 @@ def handle_base44_single_item_action(entity_name, entity_id):
     c = conn.cursor()
 
     if request.method == 'DELETE':
-        # Isolation: Standardize delete behavior
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
@@ -374,10 +356,6 @@ def handle_base44_single_item_action(entity_name, entity_id):
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-
-        if entity_name in ['Task', 'ProjectTask'] and isinstance(data.get('subtasks'), list):
-            data['subtasks'] = json.dumps(data['subtasks'])
-
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
