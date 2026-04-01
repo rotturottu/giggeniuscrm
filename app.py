@@ -203,10 +203,10 @@ def login():
     user = c.fetchone()
     conn.close()
     if user and check_password_hash(user[4], data['password']):
-        # THE FIX: We MUST return the email here so the frontend can store it in localStorage!
+        # THE MISSING FIX IS ADDED HERE: Returning the email so the frontend can save it!
         return jsonify({
-            "message": "Login successful!", 
-            "email": user[3]  # user[3] is the email column in your database
+            "message": "Login successful!",
+            "email": user[3] 
         }), 200
     return jsonify({"error": "Invalid email or password"}), 401
 
@@ -214,6 +214,8 @@ def login():
 def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
+    
+    # This is what was causing the 401 in your screenshot because the browser sent a blank email
     if not user_email: return jsonify({"error": "No user email provided"}), 401
     
     conn = sqlite3.connect('giggenius.db')
@@ -250,6 +252,7 @@ def handle_base44_list_create(entity_name):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
 
     table_map = {
+        'User': 'users', # ADDED THIS to fix the 404 errors in your screenshot
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
@@ -274,7 +277,7 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # STRICT PRIVACY ISOLATION: User A cannot see User B's data
+        # PRIVATE ISOLATION LOGIC
         if entity_name in ['Conversation', 'Message']:
             if user_email:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
@@ -332,7 +335,7 @@ def handle_base44_list_create(entity_name):
                     if 'user_email' not in item or not item['user_email']:
                         item['user_email'] = user_email
                 
-                # TAGGING FOR CONVERSATIONS: Tag sender_email dynamically
+                # TAGGING FOR CONVERSATIONS
                 if entity_name in ['Conversation', 'Message'] and user_email:
                     if 'sender_email' not in item or not item['sender_email']:
                         item['sender_email'] = user_email
@@ -364,6 +367,7 @@ def handle_base44_single_item_action(entity_name, entity_id):
     user_email = request.headers.get('User-Email')
     
     table_map = {
+        'User': 'users',
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
         'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests',
@@ -382,7 +386,7 @@ def handle_base44_single_item_action(entity_name, entity_id):
         query = f"DELETE FROM {table_name} WHERE id = ?"
         params = [entity_id]
         
-        # ISOLATED DELETION: You can only delete what you own
+        # ISOLATED DELETION
         if 'user_email' in db_cols and user_email:
             query += " AND user_email = ?"
             params.append(user_email)
@@ -406,7 +410,7 @@ def handle_base44_single_item_action(entity_name, entity_id):
         query = f"UPDATE {table_name} SET {set_clause} WHERE id = ?"
         params = list(cleaned_data.values()) + [entity_id]
         
-        # ISOLATED UPDATING: You can only edit what you own
+        # ISOLATED UPDATING
         if 'user_email' in db_cols and user_email:
             query += " AND user_email = ?"
             params.append(user_email)
