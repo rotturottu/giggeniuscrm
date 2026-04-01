@@ -31,7 +31,7 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS departments
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, head_email TEXT,
                   description TEXT, budget REAL, currency TEXT,
-                  user_email TEXT, 
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS employees
@@ -45,7 +45,7 @@ def init_db():
                   phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # Updated Project Tasks with user_email for isolation
+    # Updated Project Tasks with user_email isolation
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   title TEXT, 
@@ -270,18 +270,25 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # PRIVACY ISOLATION FIX:
+        # STRICT PRIVACY ISOLATION:
         if entity_name in ['Conversation', 'Message']:
             if user_email:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
-        elif 'user_email' in db_cols and user_email:
-            where_clauses.append("user_email = ?")
-            params.append(user_email)
+            else:
+                conn.close()
+                return jsonify([]), 200
+        elif 'user_email' in db_cols:
+            if user_email:
+                where_clauses.append("user_email = ?")
+                params.append(user_email)
+            else:
+                # If no email provided for an isolated table, return nothing
+                conn.close()
+                return jsonify([]), 200
 
         for key, value in request.args.items():
-            if key == 'participant_email':
-                continue 
+            if key == 'participant_email': continue 
             if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
@@ -317,7 +324,8 @@ def handle_base44_list_create(entity_name):
         results = []
         try:
             for item in items_to_process:
-                if 'user_email' in db_cols and 'user_email' not in item:
+                # Ensure record is tagged to the current user
+                if 'user_email' in db_cols and user_email:
                     item['user_email'] = user_email
                 
                 if entity_name == 'Message' and 'created_date' not in item:
@@ -344,6 +352,7 @@ def handle_base44_list_create(entity_name):
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    user_email = request.headers.get('User-Email')
     
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
@@ -357,24 +366,38 @@ def handle_base44_single_item_action(entity_name, entity_id):
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
 
+    # Ownership check for security
+    c.execute(f"PRAGMA table_info({table_name})")
+    db_cols = [col[1] for col in c.fetchall()]
+
     if request.method == 'DELETE':
-        c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
+        query = f"DELETE FROM {table_name} WHERE id = ?"
+        params = [entity_id]
+        if 'user_email' in db_cols and user_email:
+            query += " AND user_email = ?"
+            params.append(user_email)
+            
+        c.execute(query, tuple(params))
         conn.commit()
         conn.close()
         return jsonify({"success": True}), 200
 
     if request.method == 'PUT':
         data = request.json
-        c.execute(f"PRAGMA table_info({table_name})")
-        db_cols = [col[1] for col in c.fetchall()]
-
         if entity_name in ['Task', 'ProjectTask'] and isinstance(data.get('subtasks'), list):
             data['subtasks'] = json.dumps(data['subtasks'])
 
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
-
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
-        c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
+        
+        query = f"UPDATE {table_name} SET {set_clause} WHERE id = ?"
+        params = list(cleaned_data.values()) + [entity_id]
+        
+        if 'user_email' in db_cols and user_email:
+            query += " AND user_email = ?"
+            params.append(user_email)
+
+        c.execute(query, tuple(params))
         conn.commit()
         conn.close()
         return jsonify(cleaned_data), 200
