@@ -208,9 +208,7 @@ def login():
 def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
-    
-    # SAFETY: Return authenticated: False instead of 401 to handle empty DBs gracefully
-    if not user_email or user_email in ['null', 'undefined', '']:
+    if not user_email or user_email in ['null', 'undefined', '']: 
         return jsonify({"authenticated": False, "error": "No user email provided"}), 200
     
     conn = sqlite3.connect('giggenius.db')
@@ -275,17 +273,15 @@ def handle_base44_list_create(entity_name):
 
         # --- STRICT ISOLATION LOGIC ---
         if entity_name in ['Conversation', 'Message']:
-            if user_email and user_email not in ['null', 'undefined', '']:
+            if user_email and user_email not in ['null', 'undefined']:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
-            else:
-                return jsonify([]), 200 
+            else: return jsonify([]), 200 
         elif 'user_email' in db_cols:
-            if user_email and user_email not in ['null', 'undefined', '']:
+            if user_email and user_email not in ['null', 'undefined']:
                 where_clauses.append("user_email = ?")
                 params.append(user_email)
-            else:
-                return jsonify([]), 200
+            else: return jsonify([]), 200
 
         for key, value in request.args.items():
             if key in ['participant_email', 'user_email']: continue 
@@ -299,24 +295,33 @@ def handle_base44_list_create(entity_name):
         order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
+
+        # --- FRONTEND SAFETY FIXES (Tasks/Campaigns) ---
+        for item in data:
+            if 'subtasks' in item:
+                if not item.get('subtasks'): item['subtasks'] = []
+                elif isinstance(item['subtasks'], str):
+                    try: item['subtasks'] = json.loads(item['subtasks'])
+                    except: item['subtasks'] = []
+            if 'leads' in item and item['leads'] is None: item['leads'] = 0
+
         conn.close()
         return jsonify(data), 200
 
     if request.method == 'POST':
         item = request.json
         items_to_process = item if isinstance(item, list) else [item]
-        
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        
         results = []
         try:
             for i in items_to_process:
-                # Force current user identity on creation
                 if 'user_email' in db_cols: i['user_email'] = user_email
-                if entity_name == 'Message':
+                if entity_name == 'Message' and 'created_date' not in i:
                     i['created_date'] = datetime.now().isoformat()
                     i['sender_email'] = user_email
+                if 'subtasks' in i and isinstance(i['subtasks'], list):
+                    i['subtasks'] = json.dumps(i['subtasks'])
 
                 cleaned_data = {k: v for k, v in i.items() if k in db_cols}
                 columns = ', '.join(cleaned_data.keys())
@@ -324,18 +329,15 @@ def handle_base44_list_create(entity_name):
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
                 cleaned_data['id'] = c.lastrowid
                 results.append(cleaned_data)
-            
             conn.commit()
             return jsonify(results if isinstance(item, list) else results[0]), 201
-        except Exception as e:
-            return jsonify({"error": str(e)}), 400
-        finally:
-            conn.close()
+        except Exception as e: return jsonify({"error": str(e)}), 400
+        finally: conn.close()
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    
+    user_email = request.headers.get('User-Email')
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
@@ -347,17 +349,17 @@ def handle_base44_single_item_action(entity_name, entity_id):
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
-
     if request.method == 'DELETE':
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
         return jsonify({"success": True}), 200
-
     if request.method == 'PUT':
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
+        if 'subtasks' in data and isinstance(data['subtasks'], list):
+            data['subtasks'] = json.dumps(data['subtasks'])
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
