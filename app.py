@@ -270,15 +270,21 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # GRACEFUL PRIVACY ISOLATION
+        # STRICT PRIVACY ISOLATION: User A cannot see User B's data
         if entity_name in ['Conversation', 'Message']:
             if user_email:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
+            else:
+                conn.close()
+                return jsonify([]), 200
         elif 'user_email' in db_cols:
             if user_email:
                 where_clauses.append("user_email = ?")
                 params.append(user_email)
+            else:
+                conn.close()
+                return jsonify([]), 200
 
         for key, value in request.args.items():
             if key == 'participant_email': continue 
@@ -317,10 +323,15 @@ def handle_base44_list_create(entity_name):
         results = []
         try:
             for item in items_to_process:
-                # Ensure record is tagged to the current user safely
+                # TAGGING: Automatically tag rows to the logged-in user
                 if 'user_email' in db_cols and user_email:
                     if 'user_email' not in item or not item['user_email']:
                         item['user_email'] = user_email
+                
+                # TAGGING FOR CONVERSATIONS: Tag sender_email dynamically
+                if entity_name in ['Conversation', 'Message'] and user_email:
+                    if 'sender_email' not in item or not item['sender_email']:
+                        item['sender_email'] = user_email
                 
                 if entity_name == 'Message' and 'created_date' not in item:
                     item['created_date'] = datetime.now().isoformat()
@@ -360,15 +371,19 @@ def handle_base44_single_item_action(entity_name, entity_id):
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
 
-    # Ownership check setup
     c.execute(f"PRAGMA table_info({table_name})")
     db_cols = [col[1] for col in c.fetchall()]
 
     if request.method == 'DELETE':
         query = f"DELETE FROM {table_name} WHERE id = ?"
         params = [entity_id]
+        
+        # ISOLATED DELETION: You can only delete what you own
         if 'user_email' in db_cols and user_email:
             query += " AND user_email = ?"
+            params.append(user_email)
+        elif entity_name in ['Conversation', 'Message'] and user_email:
+            query += " AND sender_email = ?"
             params.append(user_email)
             
         c.execute(query, tuple(params))
@@ -387,8 +402,12 @@ def handle_base44_single_item_action(entity_name, entity_id):
         query = f"UPDATE {table_name} SET {set_clause} WHERE id = ?"
         params = list(cleaned_data.values()) + [entity_id]
         
+        # ISOLATED UPDATING: You can only edit what you own
         if 'user_email' in db_cols and user_email:
             query += " AND user_email = ?"
+            params.append(user_email)
+        elif entity_name in ['Conversation', 'Message'] and user_email:
+            query += " AND sender_email = ?"
             params.append(user_email)
 
         c.execute(query, tuple(params))
