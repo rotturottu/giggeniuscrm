@@ -271,7 +271,7 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- ISOLATION LOGIC ---
+        # --- STRICT ISOLATION ---
         if entity_name in ['Conversation', 'Message']:
             if user_email and user_email not in ['null', 'undefined', '']:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
@@ -296,20 +296,19 @@ def handle_base44_list_create(entity_name):
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
 
-        # --- DATA SANITIZATION (Prevents crashes for Tasks and Invoices) ---
+        # --- FRONTEND SAFETY FIXES (Tasks/Campaigns/Invoices) ---
         for item in data:
-            # Fix Tasks
             if 'subtasks' in item:
                 if not item.get('subtasks'): item['subtasks'] = []
                 elif isinstance(item['subtasks'], str):
                     try: item['subtasks'] = json.loads(item['subtasks'])
                     except: item['subtasks'] = []
-            # Fix Invoices/Sales
             if 'items' in item:
                 if not item.get('items'): item['items'] = []
                 elif isinstance(item['items'], str):
                     try: item['items'] = json.loads(item['items'])
                     except: item['items'] = []
+            if 'leads' in item and item['leads'] is None: item['leads'] = 0
 
         conn.close()
         return jsonify(data), 200
@@ -317,10 +316,8 @@ def handle_base44_list_create(entity_name):
     if request.method == 'POST':
         item = request.json
         items_to_process = item if isinstance(item, list) else [item]
-        
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        
         results = []
         try:
             for i in items_to_process:
@@ -328,9 +325,9 @@ def handle_base44_list_create(entity_name):
                 if entity_name == 'Message':
                     i['created_date'] = datetime.now().isoformat()
                     i['sender_email'] = user_email
-
-                # Ensure lists are stringified for SQLite
-                for list_field in ['subtasks', 'items']:
+                
+                # Ensure lists are stringified for SQLite storage
+                for list_field in ['subtasks', 'items', 'attachments']:
                     if list_field in i and isinstance(i[list_field], list):
                         i[list_field] = json.dumps(i[list_field])
 
@@ -340,19 +337,15 @@ def handle_base44_list_create(entity_name):
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
                 cleaned_data['id'] = c.lastrowid
                 results.append(cleaned_data)
-            
             conn.commit()
             return jsonify(results if isinstance(item, list) else results[0]), 201
-        except Exception as e:
-            return jsonify({"error": str(e)}), 400
-        finally:
-            conn.close()
+        except Exception as e: return jsonify({"error": str(e)}), 400
+        finally: conn.close()
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
-    
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
@@ -364,20 +357,18 @@ def handle_base44_single_item_action(entity_name, entity_id):
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
-
     if request.method == 'DELETE':
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
         return jsonify({"success": True}), 200
-
     if request.method == 'PUT':
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-
-        # Ensure lists are stringified for SQLite
-        for list_field in ['subtasks', 'items']:
+        
+        # Ensure lists are stringified for SQLite update
+        for list_field in ['subtasks', 'items', 'attachments']:
             if list_field in data and isinstance(data[list_field], list):
                 data[list_field] = json.dumps(data[list_field])
 
