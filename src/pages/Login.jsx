@@ -47,9 +47,11 @@ export default function Login() {
       navigate('/Overview');
     } catch (err) {
       console.error("Login Error:", err);
-      // STRICT LINTER FIX: Safely extract the message
+      
+      // This safely checks if 'err' has a message before using it, which removes the red line!
       const errorMessage = err instanceof Error ? err.message : 'Invalid email or password.';
       setError(errorMessage);
+      
     } finally {
       setIsLoading(false);
     }
