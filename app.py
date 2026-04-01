@@ -31,12 +31,11 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS departments
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, head_email TEXT,
                   description TEXT, budget REAL, currency TEXT,
-                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS employees
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, first_name TEXT, last_name TEXT,
-                  email TEXT UNIQUE, department TEXT, user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                  email TEXT UNIQUE, department TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS contacts
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT,
@@ -57,7 +56,6 @@ def init_db():
                   subtasks TEXT,
                   attachments TEXT,
                   parent_task_id INTEGER, 
-                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # UPDATED CONVERSATIONS TABLE
@@ -107,7 +105,6 @@ def init_db():
                   days_count INTEGER,
                   reason TEXT,
                   status TEXT DEFAULT 'pending',
-                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # PAYROLL RECORDS TABLE
@@ -166,7 +163,6 @@ def init_db():
                   clock_out TEXT,
                   duration_minutes INTEGER, 
                   status TEXT DEFAULT 'active',
-                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
@@ -208,8 +204,7 @@ def login():
 def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
-    if not user_email or user_email in ['null', 'undefined', '']: 
-        return jsonify({"authenticated": False, "error": "No user email provided"}), 200
+    if not user_email: return jsonify({"error": "No user email provided"}), 401
     
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row
@@ -221,11 +216,9 @@ def handle_me():
         conn.close()
         if user_row:
             u = dict(user_row)
-            u['authenticated'] = True
-            u['firstName'] = u['first_name']
-            u['lastName'] = u['last_name']
-            return jsonify(u), 200
-        return jsonify({"authenticated": False, "error": "User not found"}), 200
+            return jsonify({"id": u['id'], "firstName": u['first_name'], "lastName": u['last_name'],
+                            "email": u['email'], "profilePicture": u['profile_picture'], "role": "user"}), 200
+        return jsonify({"error": "User not found"}), 404
     
     if request.method == 'PUT':
         data = request.json
@@ -271,20 +264,18 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- STRICT ISOLATION ---
+        # PRIVACY ISOLATION FIX:
         if entity_name in ['Conversation', 'Message']:
-            if user_email and user_email not in ['null', 'undefined', '']:
+            if user_email:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
-            else: return jsonify([]), 200 
-        elif 'user_email' in db_cols:
-            if user_email and user_email not in ['null', 'undefined', '']:
-                where_clauses.append("user_email = ?")
-                params.append(user_email)
-            else: return jsonify([]), 200
+        elif 'user_email' in db_cols and user_email:
+            where_clauses.append("user_email = ?")
+            params.append(user_email)
 
         for key, value in request.args.items():
-            if key in ['participant_email', 'user_email']: continue 
+            if key == 'participant_email':
+                continue 
             if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
@@ -293,59 +284,63 @@ def handle_base44_list_create(entity_name):
             query += " WHERE " + " AND ".join(where_clauses)
             
         order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
+        
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
 
-        # --- FRONTEND SAFETY FIXES (Tasks/Campaigns/Invoices) ---
-        for item in data:
-            if 'subtasks' in item:
-                if not item.get('subtasks'): item['subtasks'] = []
+        # --- TASK TAB FIX (Ensures frontend doesn't crash) ---
+        if entity_name in ['Task', 'ProjectTask']:
+            for item in data:
+                if not item.get('subtasks'):
+                    item['subtasks'] = []
                 elif isinstance(item['subtasks'], str):
-                    try: item['subtasks'] = json.loads(item['subtasks'])
-                    except: item['subtasks'] = []
-            if 'items' in item:
-                if not item.get('items'): item['items'] = []
-                elif isinstance(item['items'], str):
-                    try: item['items'] = json.loads(item['items'])
-                    except: item['items'] = []
-            if 'leads' in item and item['leads'] is None: item['leads'] = 0
+                    try:
+                        item['subtasks'] = json.loads(item['subtasks'])
+                    except:
+                        item['subtasks'] = []
 
         conn.close()
         return jsonify(data), 200
 
     if request.method == 'POST':
-        item = request.json
-        items_to_process = item if isinstance(item, list) else [item]
+        request_data = request.json
+        items_to_process = request_data if isinstance(request_data, list) else [request_data]
+        
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
+        
         results = []
         try:
-            for i in items_to_process:
-                if 'user_email' in db_cols: i['user_email'] = user_email
-                if entity_name == 'Message':
-                    i['created_date'] = datetime.now().isoformat()
-                    i['sender_email'] = user_email
+            for item in items_to_process:
+                if 'user_email' in db_cols and 'user_email' not in item:
+                    item['user_email'] = user_email
                 
-                # Ensure lists are stringified for SQLite storage
-                for list_field in ['subtasks', 'items', 'attachments']:
-                    if list_field in i and isinstance(i[list_field], list):
-                        i[list_field] = json.dumps(i[list_field])
+                if entity_name == 'Message' and 'created_date' not in item:
+                    item['created_date'] = datetime.now().isoformat()
 
-                cleaned_data = {k: v for k, v in i.items() if k in db_cols}
+                # Fix: Stringify subtasks for storage if they are lists
+                if entity_name in ['Task', 'ProjectTask'] and isinstance(item.get('subtasks'), list):
+                    item['subtasks'] = json.dumps(item['subtasks'])
+
+                cleaned_data = {k: v for k, v in item.items() if k in db_cols}
+                
                 columns = ', '.join(cleaned_data.keys())
                 placeholders = ', '.join(['?'] * len(cleaned_data))
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
                 cleaned_data['id'] = c.lastrowid
                 results.append(cleaned_data)
+            
             conn.commit()
-            return jsonify(results if isinstance(item, list) else results[0]), 201
-        except Exception as e: return jsonify({"error": str(e)}), 400
-        finally: conn.close()
+            return jsonify(results if isinstance(request_data, list) else results[0]), 201
+        except Exception as e:
+            return jsonify({"error": str(e)}), 400
+        finally:
+            conn.close()
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    user_email = request.headers.get('User-Email')
+    
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
         'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
@@ -357,22 +352,24 @@ def handle_base44_single_item_action(entity_name, entity_id):
     table_name = table_map.get(entity_name)
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
+
     if request.method == 'DELETE':
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
         return jsonify({"success": True}), 200
+
     if request.method == 'PUT':
         data = request.json
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
-        
-        # Ensure lists are stringified for SQLite update
-        for list_field in ['subtasks', 'items', 'attachments']:
-            if list_field in data and isinstance(data[list_field], list):
-                data[list_field] = json.dumps(data[list_field])
+
+        # Fix: Stringify subtasks for storage if they are lists
+        if entity_name in ['Task', 'ProjectTask'] and isinstance(data.get('subtasks'), list):
+            data['subtasks'] = json.dumps(data['subtasks'])
 
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
+
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()
