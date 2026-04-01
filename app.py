@@ -27,7 +27,7 @@ def init_db():
                   issue_date TEXT, notes TEXT, items TEXT, tax_rate REAL DEFAULT 0,
                   user_email TEXT, FOREIGN KEY(user_email) REFERENCES users(email))''')
                   
-    # 3. CRM TABLES
+    # 3. CRM TABLES (Surgically added user_email for privacy)
     c.execute('''CREATE TABLE IF NOT EXISTS departments
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, head_email TEXT,
                   description TEXT, budget REAL, currency TEXT,
@@ -45,7 +45,6 @@ def init_db():
                   phone TEXT, company TEXT, status TEXT, user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # Updated Project Tasks with user_email isolation
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   title TEXT, 
@@ -62,7 +61,6 @@ def init_db():
                   user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # UPDATED CONVERSATIONS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS conversations
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   contact_name TEXT, contact_email TEXT,
@@ -72,7 +70,6 @@ def init_db():
                   last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # MESSAGES TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS messages
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   conversation_id INTEGER,
@@ -83,7 +80,6 @@ def init_db():
                   is_read INTEGER DEFAULT 0,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # PROJECTS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS projects
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
                   name TEXT, 
@@ -98,7 +94,6 @@ def init_db():
                   user_email TEXT, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # LEAVE REQUESTS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS leave_requests
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
@@ -112,7 +107,6 @@ def init_db():
                   user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # PAYROLL RECORDS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS payroll_records
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT, employee_email TEXT, period_start TEXT, period_end TEXT,
@@ -121,7 +115,6 @@ def init_db():
                   status TEXT DEFAULT 'draft', notes TEXT, paid_at TEXT,
                   user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # PERFORMANCE REVIEWS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS performance_reviews
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
@@ -138,7 +131,6 @@ def init_db():
                   user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # ONBOARDING TASKS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS onboarding_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT,
@@ -151,13 +143,11 @@ def init_db():
                   user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # CAMPAIGNS TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS campaigns
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, status TEXT DEFAULT 'Draft',
                   leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%',
                   user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
-    # TIME ENTRIES TABLE
     c.execute('''CREATE TABLE IF NOT EXISTS time_entries
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   employee_name TEXT, 
@@ -203,7 +193,7 @@ def login():
     user = c.fetchone()
     conn.close()
     if user and check_password_hash(user[4], data['password']):
-        # THE MISSING FIX IS ADDED HERE: Returning the email so the frontend can save it!
+        # SURGICAL FIX: Returning the email so frontend can save it to localStorage
         return jsonify({
             "message": "Login successful!",
             "email": user[3] 
@@ -215,8 +205,9 @@ def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
     
-    # This is what was causing the 401 in your screenshot because the browser sent a blank email
-    if not user_email: return jsonify({"error": "No user email provided"}), 401
+    # SURGICAL FIX: Handle broken 'null' string literals from JS
+    if not user_email or user_email in ['null', 'undefined', '']: 
+        return jsonify({"error": "No valid user email provided"}), 401
     
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row
@@ -252,7 +243,7 @@ def handle_base44_list_create(entity_name):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
 
     table_map = {
-        'User': 'users', # ADDED THIS to fix the 404 errors in your screenshot
+        'User': 'users', # SURGICAL FIX: Added User to prevent 404s
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
         'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
@@ -262,7 +253,11 @@ def handle_base44_list_create(entity_name):
         'Message': 'messages'
     }
     table_name = table_map.get(entity_name)
-    if not table_name: return jsonify({"error": f"Table for {entity_name} not found"}), 404
+    
+    # SURGICAL FIX: Gracefully handle unknown tables (like SmartList) without breaking UI
+    if not table_name: 
+        if request.method == 'GET': return jsonify([]), 200
+        return jsonify({"error": f"Table for {entity_name} not found"}), 404
     
     user_email = request.headers.get('User-Email')
     conn = sqlite3.connect('giggenius.db')
@@ -277,16 +272,18 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # PRIVATE ISOLATION LOGIC
+        valid_email = user_email and user_email not in ['null', 'undefined', '']
+
+        # SURGICAL FIX: Strict Row-Level Privacy
         if entity_name in ['Conversation', 'Message']:
-            if user_email:
+            if valid_email:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
             else:
                 conn.close()
                 return jsonify([]), 200
         elif 'user_email' in db_cols:
-            if user_email:
+            if valid_email:
                 where_clauses.append("user_email = ?")
                 params.append(user_email)
             else:
@@ -328,15 +325,16 @@ def handle_base44_list_create(entity_name):
         db_cols = [col[1] for col in c.fetchall()]
         
         results = []
+        valid_email = user_email and user_email not in ['null', 'undefined', '']
+
         try:
             for item in items_to_process:
-                # TAGGING: Automatically tag rows to the logged-in user
-                if 'user_email' in db_cols and user_email:
+                # SURGICAL FIX: Silently tag new items with the user's email
+                if 'user_email' in db_cols and valid_email:
                     if 'user_email' not in item or not item['user_email']:
                         item['user_email'] = user_email
                 
-                # TAGGING FOR CONVERSATIONS
-                if entity_name in ['Conversation', 'Message'] and user_email:
+                if entity_name in ['Conversation', 'Message'] and valid_email:
                     if 'sender_email' not in item or not item['sender_email']:
                         item['sender_email'] = user_email
                 
@@ -376,21 +374,26 @@ def handle_base44_single_item_action(entity_name, entity_id):
         'TimeEntry': 'time_entries', 'Message': 'messages'
     }
     table_name = table_map.get(entity_name)
+    
+    # SURGICAL FIX: Prevent 404 crashes on single item actions
+    if not table_name: return jsonify({}), 200
+
     conn = sqlite3.connect('giggenius.db')
     c = conn.cursor()
 
     c.execute(f"PRAGMA table_info({table_name})")
     db_cols = [col[1] for col in c.fetchall()]
+    valid_email = user_email and user_email not in ['null', 'undefined', '']
 
     if request.method == 'DELETE':
         query = f"DELETE FROM {table_name} WHERE id = ?"
         params = [entity_id]
         
-        # ISOLATED DELETION
-        if 'user_email' in db_cols and user_email:
+        # SURGICAL FIX: Users can only delete their own data
+        if 'user_email' in db_cols and valid_email:
             query += " AND user_email = ?"
             params.append(user_email)
-        elif entity_name in ['Conversation', 'Message'] and user_email:
+        elif entity_name in ['Conversation', 'Message'] and valid_email:
             query += " AND sender_email = ?"
             params.append(user_email)
             
@@ -410,11 +413,11 @@ def handle_base44_single_item_action(entity_name, entity_id):
         query = f"UPDATE {table_name} SET {set_clause} WHERE id = ?"
         params = list(cleaned_data.values()) + [entity_id]
         
-        # ISOLATED UPDATING
-        if 'user_email' in db_cols and user_email:
+        # SURGICAL FIX: Users can only edit their own data
+        if 'user_email' in db_cols and valid_email:
             query += " AND user_email = ?"
             params.append(user_email)
-        elif entity_name in ['Conversation', 'Message'] and user_email:
+        elif entity_name in ['Conversation', 'Message'] and valid_email:
             query += " AND sender_email = ?"
             params.append(user_email)
 
