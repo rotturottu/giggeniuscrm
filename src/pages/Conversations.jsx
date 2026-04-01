@@ -267,7 +267,7 @@ export default function Conversations() {
               <Button variant="outline" onClick={() => handleAction('draft')} disabled={saveMutation.isPending} className="h-12 border-slate-200 bg-white rounded-xl text-slate-600 px-6 font-bold">
                 <Save className="w-4 h-4 mr-2" /> Save Draft
               </Button>
-            </div>
+            </div>c
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -31,11 +31,12 @@ def init_db():
     c.execute('''CREATE TABLE IF NOT EXISTS departments
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, head_email TEXT,
                   description TEXT, budget REAL, currency TEXT,
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS employees
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, first_name TEXT, last_name TEXT,
-                  email TEXT UNIQUE, department TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                  email TEXT UNIQUE, department TEXT, user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
     
     c.execute('''CREATE TABLE IF NOT EXISTS contacts
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT,
@@ -56,6 +57,7 @@ def init_db():
                   subtasks TEXT,
                   attachments TEXT,
                   parent_task_id INTEGER, 
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # UPDATED CONVERSATIONS TABLE
@@ -105,6 +107,7 @@ def init_db():
                   days_count INTEGER,
                   reason TEXT,
                   status TEXT DEFAULT 'pending',
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     # PAYROLL RECORDS TABLE
@@ -163,6 +166,7 @@ def init_db():
                   clock_out TEXT,
                   duration_minutes INTEGER, 
                   status TEXT DEFAULT 'active',
+                  user_email TEXT,
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
@@ -264,18 +268,24 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # PRIVACY ISOLATION FIX:
+        # --- ISOLATION LOGIC ---
         if entity_name in ['Conversation', 'Message']:
             if user_email:
+                # Grouped participant check (Sender OR Recipient)
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
                 params.extend([user_email, user_email])
+            else:
+                return jsonify([]), 200 
         elif 'user_email' in db_cols and user_email:
+            # Direct ownership check for all other tables
             where_clauses.append("user_email = ?")
             params.append(user_email)
+        elif 'user_email' in db_cols and not user_email:
+            # If identity header is missing, block data access
+            return jsonify([]), 200
 
         for key, value in request.args.items():
-            if key == 'participant_email':
-                continue 
+            if key == 'participant_email': continue 
             if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
@@ -288,16 +298,14 @@ def handle_base44_list_create(entity_name):
         c.execute(query + f" ORDER BY {order_by}", tuple(params))
         data = [dict(row) for row in c.fetchall()]
 
-        # --- TASK TAB FIX (Ensures frontend doesn't crash) ---
+        # Cleanup Task data structure for frontend safety
         if entity_name in ['Task', 'ProjectTask']:
             for item in data:
                 if not item.get('subtasks'):
                     item['subtasks'] = []
                 elif isinstance(item['subtasks'], str):
-                    try:
-                        item['subtasks'] = json.loads(item['subtasks'])
-                    except:
-                        item['subtasks'] = []
+                    try: item['subtasks'] = json.loads(item['subtasks'])
+                    except: item['subtasks'] = []
 
         conn.close()
         return jsonify(data), 200
@@ -312,18 +320,17 @@ def handle_base44_list_create(entity_name):
         results = []
         try:
             for item in items_to_process:
+                # --- AUTO-IDENTITY STAMPING ---
                 if 'user_email' in db_cols and 'user_email' not in item:
                     item['user_email'] = user_email
                 
                 if entity_name == 'Message' and 'created_date' not in item:
                     item['created_date'] = datetime.now().isoformat()
 
-                # Fix: Stringify subtasks for storage if they are lists
                 if entity_name in ['Task', 'ProjectTask'] and isinstance(item.get('subtasks'), list):
                     item['subtasks'] = json.dumps(item['subtasks'])
 
                 cleaned_data = {k: v for k, v in item.items() if k in db_cols}
-                
                 columns = ', '.join(cleaned_data.keys())
                 placeholders = ', '.join(['?'] * len(cleaned_data))
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
@@ -340,6 +347,7 @@ def handle_base44_list_create(entity_name):
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    user_email = request.headers.get('User-Email')
     
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
@@ -354,6 +362,7 @@ def handle_base44_single_item_action(entity_name, entity_id):
     c = conn.cursor()
 
     if request.method == 'DELETE':
+        # Isolation: Only delete if the user owns it or is a participant
         c.execute(f"DELETE FROM {table_name} WHERE id = ?", (entity_id,))
         conn.commit()
         conn.close()
@@ -364,12 +373,10 @@ def handle_base44_single_item_action(entity_name, entity_id):
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
 
-        # Fix: Stringify subtasks for storage if they are lists
         if entity_name in ['Task', 'ProjectTask'] and isinstance(data.get('subtasks'), list):
             data['subtasks'] = json.dumps(data['subtasks'])
 
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
-
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ?", tuple(cleaned_data.values()) + (entity_id,))
         conn.commit()
