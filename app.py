@@ -203,7 +203,11 @@ def login():
     user = c.fetchone()
     conn.close()
     if user and check_password_hash(user[4], data['password']):
-        return jsonify({"message": "Login successful!"}), 200
+        # THE FIX: We MUST return the email here so the frontend can store it in localStorage!
+        return jsonify({
+            "message": "Login successful!", 
+            "email": user[3]  # user[3] is the email column in your database
+        }), 200
     return jsonify({"error": "Invalid email or password"}), 401
 
 @app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
