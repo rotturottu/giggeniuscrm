@@ -28,7 +28,6 @@ export default function Login() {
     setError('');
 
     try {
-      // Clean fetch call using the relative path
       const response = await fetch(`${API_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -41,13 +40,16 @@ export default function Login() {
         throw new Error(data.error || 'Invalid email or password');
       }
 
+      // THE FIX: Use data.email from the database to guarantee a perfect match
       localStorage.setItem('gigGeniusAuth', 'true');
-      localStorage.setItem('userEmail', email);
+      localStorage.setItem('userEmail', data.email || email);
 
       navigate('/Overview');
     } catch (err) {
       console.error("Login Error:", err);
-      setError(err.message || 'Invalid email or password.');
+      // STRICT LINTER FIX: Safely extract the message
+      const errorMessage = err instanceof Error ? err.message : 'Invalid email or password.';
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
