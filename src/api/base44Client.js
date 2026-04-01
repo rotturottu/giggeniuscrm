@@ -28,7 +28,7 @@ base44.auth = {
     const savedEmail = localStorage.getItem('userEmail');
     
     // 1. If no local email, you aren't logged in
-    if (!savedEmail) {
+    if (!savedEmail || savedEmail === 'null') {
       console.warn("No userEmail found in localStorage.");
       return null;
     }
@@ -42,17 +42,13 @@ base44.auth = {
         }
       });
 
-      // 2. Handle 401 (Unauthorized) or 404 (User doesn't exist in new DB)
+      // 2. Handle errors
       if (!response.ok) {
         if (response.status === 401 || response.status === 404) {
-          console.error("Identity invalid or user not found in database. Resetting session...");
-          
-          // CRITICAL: Wipe local storage to stop the 401/404 loop
+          console.error("Identity invalid. Resetting session...");
           localStorage.removeItem('gigGeniusAuth');
           localStorage.removeItem('userEmail');
-          
-          // Redirect to login so the user can re-register or re-login
-          if (window.location.pathname !== '/login') {
+          if (window.location.pathname !== '/login' && window.location.pathname !== '/register') {
             window.location.href = '/login';
           }
         }
@@ -60,6 +56,12 @@ base44.auth = {
       }
 
       const data = await response.json();
+      
+      // Handle the fail-safe "authenticated: false" from backend
+      if (data && data.authenticated === false) {
+          return null;
+      }
+
       return data;
 
     } catch (error) {
@@ -88,7 +90,6 @@ base44.auth = {
 
     const result = await response.json();
 
-    // If you changed your email, update the local storage key
     if (data.email && data.email !== savedEmail) {
       localStorage.setItem('userEmail', data.email);
     }

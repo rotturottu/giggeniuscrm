@@ -208,7 +208,9 @@ def login():
 def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
-    if not user_email or user_email in ['null', 'undefined', '']: 
+    
+    # SAFETY: Return authenticated: False instead of 401 to handle empty DBs gracefully
+    if not user_email or user_email in ['null', 'undefined', '']:
         return jsonify({"authenticated": False, "error": "No user email provided"}), 200
     
     conn = sqlite3.connect('giggenius.db')
@@ -271,7 +273,7 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # --- STRICT ISOLATION ---
+        # --- STRICT ISOLATION LOGIC ---
         if entity_name in ['Conversation', 'Message']:
             if user_email and user_email not in ['null', 'undefined', '']:
                 where_clauses.append("(sender_email = ? OR recipient_email = ?)")
@@ -310,7 +312,7 @@ def handle_base44_list_create(entity_name):
         results = []
         try:
             for i in items_to_process:
-                # Force identity on creation
+                # Force current user identity on creation
                 if 'user_email' in db_cols: i['user_email'] = user_email
                 if entity_name == 'Message':
                     i['created_date'] = datetime.now().isoformat()
