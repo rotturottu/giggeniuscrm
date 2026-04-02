@@ -28,48 +28,32 @@ def init_db():
                   user_email TEXT, FOREIGN KEY(user_email) REFERENCES users(email))''')
                   
     # 3. CRM TABLES
-    c.execute('''CREATE TABLE IF NOT EXISTS departments
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, head_email TEXT,
-                  description TEXT, budget REAL, currency TEXT,
-                  user_email TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS employees
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, first_name TEXT, last_name TEXT,
-                  email TEXT UNIQUE, department TEXT, 
-                  user_email TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    tables = [
+        'departments', 'employees', 'contacts', 'project_tasks', 
+        'projects', 'campaigns', 'time_entries'
+    ]
     
-    c.execute('''CREATE TABLE IF NOT EXISTS contacts
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, email TEXT,
-                  phone TEXT, company TEXT, status TEXT, user_email TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  title TEXT, description TEXT, list_name TEXT, status TEXT, 
-                  priority TEXT, assigned_to TEXT, start_date TEXT, due_date TEXT,
-                  subtasks TEXT, attachments TEXT, parent_task_id INTEGER, 
-                  user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS projects
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  name TEXT, assigned_person TEXT, start_date TEXT, end_date TEXT,
-                  description TEXT, budget REAL, currency TEXT, signed_contract TEXT,
-                  status TEXT DEFAULT 'active', user_email TEXT, 
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS campaigns
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, status TEXT DEFAULT 'Draft',
-                  leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%',
-                  user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS time_entries
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT, employee_email TEXT, type TEXT,
-                  date TEXT, clock_in TEXT, clock_out TEXT,
-                  duration_minutes INTEGER, status TEXT DEFAULT 'active',
-                  user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+    # Generic table creation with user_email column for RLS
+    for table in tables:
+        # Note: Added user_email to every table for Row Level Security
+        if table == 'departments':
+            schema = "name TEXT, head_email TEXT, description TEXT, budget REAL, currency TEXT"
+        elif table == 'employees':
+            schema = "first_name TEXT, last_name TEXT, email TEXT UNIQUE, department TEXT"
+        elif table == 'contacts':
+            schema = "name TEXT, email TEXT, phone TEXT, company TEXT, status TEXT"
+        elif table == 'project_tasks':
+            schema = "title TEXT, description TEXT, list_name TEXT, status TEXT, priority TEXT, assigned_to TEXT, start_date TEXT, due_date TEXT, subtasks TEXT, attachments TEXT, parent_task_id INTEGER"
+        elif table == 'projects':
+            schema = "name TEXT, assigned_person TEXT, start_date TEXT, end_date TEXT, description TEXT, budget REAL, currency TEXT, signed_contract TEXT, status TEXT DEFAULT 'active'"
+        elif table == 'campaigns':
+            schema = "name TEXT, status TEXT DEFAULT 'Draft', leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%'"
+        elif table == 'time_entries':
+            schema = "employee_name TEXT, employee_email TEXT, type TEXT, date TEXT, clock_in TEXT, clock_out TEXT, duration_minutes INTEGER, status TEXT DEFAULT 'active'"
+            
+        c.execute(f'''CREATE TABLE IF NOT EXISTS {table}
+                     (id INTEGER PRIMARY KEY AUTOINCREMENT, {schema}, 
+                      user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
     conn.close()
@@ -150,6 +134,8 @@ def handle_base44_list_create(entity_name):
     if not table_name: return jsonify([]), 200
     
     user_email = request.headers.get('User-Email')
+    valid_email = user_email and user_email not in ['null', 'undefined', '']
+    
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row 
     c = conn.cursor()
@@ -162,10 +148,15 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        valid_email = user_email and user_email not in ['null', 'undefined', '']
-        if 'user_email' in db_cols and valid_email:
-            where_clauses.append("user_email = ?")
-            params.append(user_email)
+        # PRIVACY ENFORCEMENT: If table has user_email, ONLY show rows belonging to current user
+        if 'user_email' in db_cols:
+            if valid_email:
+                where_clauses.append("user_email = ?")
+                params.append(user_email)
+            else:
+                # Security: Unauthenticated users get nothing
+                conn.close()
+                return jsonify([]), 200
 
         for key, value in request.args.items():
             if key in db_cols:
@@ -188,15 +179,13 @@ def handle_base44_list_create(entity_name):
         db_cols = [col[1] for col in c.fetchall()]
         
         results = []
-        valid_email = user_email and user_email not in ['null', 'undefined', '']
 
         try:
             for item in items_to_process:
-                # CRITICAL FIX: Tag the new record with the current user's email
+                # STAMP DATA: Force the current user's email onto the record
                 if 'user_email' in db_cols and valid_email:
                     item['user_email'] = user_email
                 
-                # Cleanup data to match database columns
                 cleaned_data = {k: v for k, v in item.items() if k in db_cols}
                 
                 columns = ', '.join(cleaned_data.keys())
@@ -217,10 +206,12 @@ def handle_base44_list_create(entity_name):
 def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
+    valid_email = user_email and user_email not in ['null', 'undefined', '']
     
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'ProjectTask': 'project_tasks', 
-        'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries'
+        'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries',
+        'Employee': 'employees', 'Department': 'departments'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({}), 200
@@ -230,14 +221,20 @@ def handle_base44_single_item_action(entity_name, entity_id):
 
     c.execute(f"PRAGMA table_info({table_name})")
     db_cols = [col[1] for col in c.fetchall()]
-    valid_email = user_email and user_email not in ['null', 'undefined', '']
 
     if request.method == 'DELETE':
+        # PRIVACY ENFORCEMENT: Can only delete if ID matches AND user_email matches
         query = f"DELETE FROM {table_name} WHERE id = ?"
         params = [entity_id]
-        if 'user_email' in db_cols and valid_email:
-            query += " AND user_email = ?"
-            params.append(user_email)
+        
+        if 'user_email' in db_cols:
+            if valid_email:
+                query += " AND user_email = ?"
+                params.append(user_email)
+            else:
+                conn.close()
+                return jsonify({"error": "Unauthorized"}), 401
+                
         c.execute(query, tuple(params))
         conn.commit()
         conn.close()
@@ -246,12 +243,25 @@ def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'PUT':
         data = request.json
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
+        
+        # Ensure user doesn't try to change the owner of the record
+        if 'user_email' in cleaned_data:
+            cleaned_data['user_email'] = user_email
+
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
+        
+        # PRIVACY ENFORCEMENT: Can only update if ID matches AND user_email matches
         query = f"UPDATE {table_name} SET {set_clause} WHERE id = ?"
         params = list(cleaned_data.values()) + [entity_id]
-        if 'user_email' in db_cols and valid_email:
-            query += " AND user_email = ?"
-            params.append(user_email)
+        
+        if 'user_email' in db_cols:
+            if valid_email:
+                query += " AND user_email = ?"
+                params.append(user_email)
+            else:
+                conn.close()
+                return jsonify({"error": "Unauthorized"}), 401
+                
         c.execute(query, tuple(params))
         conn.commit()
         conn.close()
