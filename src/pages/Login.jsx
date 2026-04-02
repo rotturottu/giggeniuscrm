@@ -12,8 +12,6 @@ export default function Login() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  // BETTER: Use a relative path. 
-  // This tells the browser: "Use the current domain and current protocol (HTTPS)"
   const API_URL = import.meta.env.VITE_API_URL || '/api';
 
   const handleNativeLogin = async (e) => {
@@ -40,18 +38,16 @@ export default function Login() {
         throw new Error(data.error || 'Invalid email or password');
       }
 
-      // THE FIX: Use data.email from the database to guarantee a perfect match
+      // CRITICAL: Save both the auth state and the specific email
       localStorage.setItem('gigGeniusAuth', 'true');
       localStorage.setItem('userEmail', data.email || email);
 
+      // Redirect to the Overview page
       navigate('/Overview');
     } catch (err) {
       console.error("Login Error:", err);
-      
-      // This safely checks if 'err' has a message before using it, which removes the red line!
       const errorMessage = err instanceof Error ? err.message : 'Invalid email or password.';
       setError(errorMessage);
-      
     } finally {
       setIsLoading(false);
     }

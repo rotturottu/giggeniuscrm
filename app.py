@@ -33,9 +33,7 @@ def init_db():
         'projects', 'campaigns', 'time_entries'
     ]
     
-    # Generic table creation with user_email column for RLS
     for table in tables:
-        # Note: Added user_email to every table for Row Level Security
         if table == 'departments':
             schema = "name TEXT, head_email TEXT, description TEXT, budget REAL, currency TEXT"
         elif table == 'employees':
@@ -59,6 +57,13 @@ def init_db():
     conn.close()
 
 init_db()
+
+def get_valid_user_email(headers):
+    """Helper to validate the User-Email header against null/undefined strings."""
+    email = headers.get('User-Email')
+    if email in [None, '', 'null', 'undefined']:
+        return None
+    return email
 
 # --- AUTH ROUTES ---
 
@@ -93,8 +98,9 @@ def login():
 @app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
 def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    user_email = request.headers.get('User-Email')
-    if not user_email or user_email in ['null', 'undefined', '']: 
+    user_email = get_valid_user_email(request.headers)
+    
+    if not user_email: 
         return jsonify({"error": "No valid user email provided"}), 401
     
     conn = sqlite3.connect('giggenius.db')
@@ -133,8 +139,7 @@ def handle_base44_list_create(entity_name):
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify([]), 200
     
-    user_email = request.headers.get('User-Email')
-    valid_email = user_email and user_email not in ['null', 'undefined', '']
+    user_email = get_valid_user_email(request.headers)
     
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row 
@@ -148,13 +153,11 @@ def handle_base44_list_create(entity_name):
         params = []
         where_clauses = []
 
-        # PRIVACY ENFORCEMENT: If table has user_email, ONLY show rows belonging to current user
         if 'user_email' in db_cols:
-            if valid_email:
+            if user_email:
                 where_clauses.append("user_email = ?")
                 params.append(user_email)
             else:
-                # Security: Unauthenticated users get nothing
                 conn.close()
                 return jsonify([]), 200
 
@@ -182,9 +185,11 @@ def handle_base44_list_create(entity_name):
 
         try:
             for item in items_to_process:
-                # STAMP DATA: Force the current user's email onto the record
-                if 'user_email' in db_cols and valid_email:
-                    item['user_email'] = user_email
+                if 'user_email' in db_cols:
+                    if user_email:
+                        item['user_email'] = user_email
+                    else:
+                        raise Exception("Anonymous posting not allowed")
                 
                 cleaned_data = {k: v for k, v in item.items() if k in db_cols}
                 
@@ -205,8 +210,7 @@ def handle_base44_list_create(entity_name):
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
 def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    user_email = request.headers.get('User-Email')
-    valid_email = user_email and user_email not in ['null', 'undefined', '']
+    user_email = get_valid_user_email(request.headers)
     
     table_map = {
         'Invoice': 'invoices', 'Contact': 'contacts', 'ProjectTask': 'project_tasks', 
@@ -223,12 +227,11 @@ def handle_base44_single_item_action(entity_name, entity_id):
     db_cols = [col[1] for col in c.fetchall()]
 
     if request.method == 'DELETE':
-        # PRIVACY ENFORCEMENT: Can only delete if ID matches AND user_email matches
         query = f"DELETE FROM {table_name} WHERE id = ?"
         params = [entity_id]
         
         if 'user_email' in db_cols:
-            if valid_email:
+            if user_email:
                 query += " AND user_email = ?"
                 params.append(user_email)
             else:
@@ -244,18 +247,16 @@ def handle_base44_single_item_action(entity_name, entity_id):
         data = request.json
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
         
-        # Ensure user doesn't try to change the owner of the record
         if 'user_email' in cleaned_data:
             cleaned_data['user_email'] = user_email
 
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
         
-        # PRIVACY ENFORCEMENT: Can only update if ID matches AND user_email matches
         query = f"UPDATE {table_name} SET {set_clause} WHERE id = ?"
         params = list(cleaned_data.values()) + [entity_id]
         
         if 'user_email' in db_cols:
-            if valid_email:
+            if user_email:
                 query += " AND user_email = ?"
                 params.append(user_email)
             else:
