@@ -13,6 +13,7 @@ export const base44 = createClient({
 
   headers: () => {
     const savedEmail = localStorage.getItem('userEmail');
+    console.log("Current Auth Email:", savedEmail);
     return {
       'User-Email': savedEmail || '',
       'Content-Type': 'application/json'

@@ -6,7 +6,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 app = Flask(__name__)
-# Enable CORS for all routes and allow the User-Email header
+# Enable CORS and allow the User-Email header for cross-domain requests
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
 def init_db():
@@ -27,7 +27,7 @@ def init_db():
                   issue_date TEXT, notes TEXT, items TEXT, tax_rate REAL DEFAULT 0,
                   user_email TEXT, FOREIGN KEY(user_email) REFERENCES users(email))''')
                   
-    # 3. CRM TABLES (Surgically added user_email for privacy)
+    # 3. CRM TABLES
     c.execute('''CREATE TABLE IF NOT EXISTS departments
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT, head_email TEXT,
                   description TEXT, budget REAL, currency TEXT,
@@ -47,100 +47,16 @@ def init_db():
 
     c.execute('''CREATE TABLE IF NOT EXISTS project_tasks
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  title TEXT, 
-                  description TEXT,
-                  list_name TEXT,
-                  status TEXT, 
-                  priority TEXT,
-                  assigned_to TEXT,
-                  start_date TEXT,
-                  due_date TEXT,
-                  subtasks TEXT,
-                  attachments TEXT,
-                  parent_task_id INTEGER, 
-                  user_email TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS conversations
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  contact_name TEXT, contact_email TEXT,
-                  subject TEXT, last_message TEXT, platform TEXT DEFAULT 'crm',
-                  status TEXT DEFAULT 'active', unread_count INTEGER DEFAULT 0,
-                  sender_email TEXT, recipient_email TEXT,
-                  last_message_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS messages
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  conversation_id INTEGER,
-                  sender_email TEXT,
-                  recipient_email TEXT,
-                  sender_name TEXT,
-                  body TEXT,
-                  is_read INTEGER DEFAULT 0,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                  title TEXT, description TEXT, list_name TEXT, status TEXT, 
+                  priority TEXT, assigned_to TEXT, start_date TEXT, due_date TEXT,
+                  subtasks TEXT, attachments TEXT, parent_task_id INTEGER, 
+                  user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS projects
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, 
-                  name TEXT, 
-                  assigned_person TEXT,
-                  start_date TEXT,
-                  end_date TEXT,
-                  description TEXT,
-                  budget REAL,
-                  currency TEXT,
-                  signed_contract TEXT,
-                  status TEXT DEFAULT 'active',
-                  user_email TEXT, 
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS leave_requests
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT,
-                  employee_email TEXT,
-                  leave_type TEXT,
-                  start_date TEXT,
-                  end_date TEXT,
-                  days_count INTEGER,
-                  reason TEXT,
-                  status TEXT DEFAULT 'pending',
-                  user_email TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS payroll_records
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT, employee_email TEXT, period_start TEXT, period_end TEXT,
-                  currency TEXT, base_salary REAL, hours_worked REAL, overtime_hours REAL,
-                  overtime_pay REAL, bonuses REAL, deductions REAL, tax REAL, net_pay REAL,
-                  status TEXT DEFAULT 'draft', notes TEXT, paid_at TEXT,
-                  user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS performance_reviews
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT,
-                  employee_email TEXT,
-                  reviewer_email TEXT,
-                  review_period TEXT,
-                  overall_rating INTEGER,
-                  goals_met TEXT,
-                  strengths TEXT,
-                  areas_of_improvement TEXT,
-                  goals_next_period TEXT,
-                  comments TEXT,
-                  status TEXT DEFAULT 'draft',
-                  user_email TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
-
-    c.execute('''CREATE TABLE IF NOT EXISTS onboarding_tasks
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT,
-                  employee_id TEXT,
-                  task_name TEXT,
-                  category TEXT,
-                  status TEXT DEFAULT 'pending',
-                  due_date TEXT,
-                  department TEXT,
-                  user_email TEXT,
+                  name TEXT, assigned_person TEXT, start_date TEXT, end_date TEXT,
+                  description TEXT, budget REAL, currency TEXT, signed_contract TEXT,
+                  status TEXT DEFAULT 'active', user_email TEXT, 
                   created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     c.execute('''CREATE TABLE IF NOT EXISTS campaigns
@@ -150,16 +66,10 @@ def init_db():
 
     c.execute('''CREATE TABLE IF NOT EXISTS time_entries
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  employee_name TEXT, 
-                  employee_email TEXT, 
-                  type TEXT,
-                  date TEXT,
-                  clock_in TEXT, 
-                  clock_out TEXT,
-                  duration_minutes INTEGER, 
-                  status TEXT DEFAULT 'active',
-                  user_email TEXT,
-                  created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
+                  employee_name TEXT, employee_email TEXT, type TEXT,
+                  date TEXT, clock_in TEXT, clock_out TEXT,
+                  duration_minutes INTEGER, status TEXT DEFAULT 'active',
+                  user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)''')
 
     conn.commit()
     conn.close()
@@ -193,19 +103,13 @@ def login():
     user = c.fetchone()
     conn.close()
     if user and check_password_hash(user[4], data['password']):
-        # SURGICAL FIX: Returning the email so frontend can save it to localStorage
-        return jsonify({
-            "message": "Login successful!",
-            "email": user[3] 
-        }), 200
+        return jsonify({"message": "Login successful!", "email": user[3]}), 200
     return jsonify({"error": "Invalid email or password"}), 401
 
 @app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'PUT', 'OPTIONS'])
 def handle_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = request.headers.get('User-Email')
-    
-    # SURGICAL FIX: Handle broken 'null' string literals from JS
     if not user_email or user_email in ['null', 'undefined', '']: 
         return jsonify({"error": "No valid user email provided"}), 401
     
@@ -231,33 +135,19 @@ def handle_me():
         conn.close()
         return jsonify({"message": "Profile updated successfully"}), 200
 
-# --- ANALYTICS ROUTE ---
-@app.route('/api/apps/giggenius-crm/analytics/track/batch', methods=['POST', 'OPTIONS'])
-def handle_analytics():
-    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    return jsonify({"success": True}), 200
-
 # --- GENERIC ENTITY HANDLERS ---
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_list_create(entity_name):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
 
     table_map = {
-        'User': 'users', # SURGICAL FIX: Added User to prevent 404s
-        'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
-        'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
-        'Invoice': 'invoices', 'Conversation': 'conversations', 'Campaign': 'campaigns',
-        'Project': 'projects', 'LeaveRequest': 'leave_requests', 
-        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
-        'OnboardingTask': 'onboarding_tasks', 'TimeEntry': 'time_entries',
-        'Message': 'messages'
+        'User': 'users', 'Department': 'departments', 'Employee': 'employees', 
+        'Contact': 'contacts', 'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 
+        'Invoice': 'invoices', 'Campaign': 'campaigns', 'Project': 'projects', 
+        'TimeEntry': 'time_entries'
     }
     table_name = table_map.get(entity_name)
-    
-    # SURGICAL FIX: Gracefully handle unknown tables (like SmartList) without breaking UI
-    if not table_name: 
-        if request.method == 'GET': return jsonify([]), 200
-        return jsonify({"error": f"Table for {entity_name} not found"}), 404
+    if not table_name: return jsonify([]), 200
     
     user_email = request.headers.get('User-Email')
     conn = sqlite3.connect('giggenius.db')
@@ -273,25 +163,11 @@ def handle_base44_list_create(entity_name):
         where_clauses = []
 
         valid_email = user_email and user_email not in ['null', 'undefined', '']
-
-        # SURGICAL FIX: Strict Row-Level Privacy
-        if entity_name in ['Conversation', 'Message']:
-            if valid_email:
-                where_clauses.append("(sender_email = ? OR recipient_email = ?)")
-                params.extend([user_email, user_email])
-            else:
-                conn.close()
-                return jsonify([]), 200
-        elif 'user_email' in db_cols:
-            if valid_email:
-                where_clauses.append("user_email = ?")
-                params.append(user_email)
-            else:
-                conn.close()
-                return jsonify([]), 200
+        if 'user_email' in db_cols and valid_email:
+            where_clauses.append("user_email = ?")
+            params.append(user_email)
 
         for key, value in request.args.items():
-            if key == 'participant_email': continue 
             if key in db_cols:
                 where_clauses.append(f"{key} = ?")
                 params.append(value)
@@ -299,21 +175,8 @@ def handle_base44_list_create(entity_name):
         if where_clauses:
             query += " WHERE " + " AND ".join(where_clauses)
             
-        order_by = "created_date ASC" if entity_name == 'Message' else "id DESC"
-        
-        c.execute(query + f" ORDER BY {order_by}", tuple(params))
+        c.execute(query + " ORDER BY id DESC", tuple(params))
         data = [dict(row) for row in c.fetchall()]
-
-        if entity_name in ['Task', 'ProjectTask']:
-            for item in data:
-                if not item.get('subtasks'):
-                    item['subtasks'] = []
-                elif isinstance(item['subtasks'], str):
-                    try:
-                        item['subtasks'] = json.loads(item['subtasks'])
-                    except:
-                        item['subtasks'] = []
-
         conn.close()
         return jsonify(data), 200
 
@@ -329,25 +192,16 @@ def handle_base44_list_create(entity_name):
 
         try:
             for item in items_to_process:
-                # SURGICAL FIX: Silently tag new items with the user's email
+                # CRITICAL FIX: Tag the new record with the current user's email
                 if 'user_email' in db_cols and valid_email:
-                    if 'user_email' not in item or not item['user_email']:
-                        item['user_email'] = user_email
+                    item['user_email'] = user_email
                 
-                if entity_name in ['Conversation', 'Message'] and valid_email:
-                    if 'sender_email' not in item or not item['sender_email']:
-                        item['sender_email'] = user_email
-                
-                if entity_name == 'Message' and 'created_date' not in item:
-                    item['created_date'] = datetime.now().isoformat()
-
-                if entity_name in ['Task', 'ProjectTask'] and isinstance(item.get('subtasks'), list):
-                    item['subtasks'] = json.dumps(item['subtasks'])
-
+                # Cleanup data to match database columns
                 cleaned_data = {k: v for k, v in item.items() if k in db_cols}
                 
                 columns = ', '.join(cleaned_data.keys())
                 placeholders = ', '.join(['?'] * len(cleaned_data))
+                
                 c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned_data.values()))
                 cleaned_data['id'] = c.lastrowid
                 results.append(cleaned_data)
@@ -365,17 +219,10 @@ def handle_base44_single_item_action(entity_name, entity_id):
     user_email = request.headers.get('User-Email')
     
     table_map = {
-        'User': 'users',
-        'Invoice': 'invoices', 'Contact': 'contacts', 'Task': 'project_tasks', 
-        'ProjectTask': 'project_tasks', 'Conversation': 'conversations', 
-        'Campaign': 'campaigns', 'Project': 'projects', 'LeaveRequest': 'leave_requests',
-        'PayrollRecord': 'payroll_records', 'PerformanceReview': 'performance_reviews',
-        'OnboardingTask': 'onboarding_tasks', 'Employee': 'employees', 'Department': 'departments',
-        'TimeEntry': 'time_entries', 'Message': 'messages'
+        'Invoice': 'invoices', 'Contact': 'contacts', 'ProjectTask': 'project_tasks', 
+        'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries'
     }
     table_name = table_map.get(entity_name)
-    
-    # SURGICAL FIX: Prevent 404 crashes on single item actions
     if not table_name: return jsonify({}), 200
 
     conn = sqlite3.connect('giggenius.db')
@@ -388,15 +235,9 @@ def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'DELETE':
         query = f"DELETE FROM {table_name} WHERE id = ?"
         params = [entity_id]
-        
-        # SURGICAL FIX: Users can only delete their own data
         if 'user_email' in db_cols and valid_email:
             query += " AND user_email = ?"
             params.append(user_email)
-        elif entity_name in ['Conversation', 'Message'] and valid_email:
-            query += " AND sender_email = ?"
-            params.append(user_email)
-            
         c.execute(query, tuple(params))
         conn.commit()
         conn.close()
@@ -404,23 +245,13 @@ def handle_base44_single_item_action(entity_name, entity_id):
 
     if request.method == 'PUT':
         data = request.json
-        if entity_name in ['Task', 'ProjectTask'] and isinstance(data.get('subtasks'), list):
-            data['subtasks'] = json.dumps(data['subtasks'])
-
         cleaned_data = {k: v for k, v in data.items() if k in db_cols}
         set_clause = ', '.join([f"{k} = ?" for k in cleaned_data.keys()])
-        
         query = f"UPDATE {table_name} SET {set_clause} WHERE id = ?"
         params = list(cleaned_data.values()) + [entity_id]
-        
-        # SURGICAL FIX: Users can only edit their own data
         if 'user_email' in db_cols and valid_email:
             query += " AND user_email = ?"
             params.append(user_email)
-        elif entity_name in ['Conversation', 'Message'] and valid_email:
-            query += " AND sender_email = ?"
-            params.append(user_email)
-
         c.execute(query, tuple(params))
         conn.commit()
         conn.close()
