@@ -1,155 +1,232 @@
 import { base44 } from '@/api/base44Client';
+import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MessageSquare, Search, Plus, Send, Paperclip, X, FileIcon, FolderOpen, Save, Trash2, User } from 'lucide-react';
-import { useState, useRef } from 'react';
+import { MessageSquare, Search, Plus, Send, X, FolderOpen, Save, Trash2, Loader2 } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import ConversationDetail from '../components/conversations/ConversationDetail';
 import ConversationList from '../components/conversations/ConversationList';
 
 export default function Conversations() {
   const [selectedConversation, setSelectedConversation] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [platformFilter, setPlatformFilter] = useState('all');
+  const [platformFilter] = useState('all');
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeData, setComposeData] = useState({ to: '', subject: '', message: '', id: null });
-  const [attachedFile, setAttachedFile] = useState(null);
-  const fileInputRef = useRef(null);
   const queryClient = useQueryClient();
 
-  // 1. Fetch Active Conversations
-  const { data: conversations = [] } = useQuery({
-    queryKey: ['conversations', platformFilter],
-    queryFn: () => base44.entities.Conversation.filter({ status: 'active' }, '-last_message_at').catch(() => []),
+  const { data: me } = useQuery({
+    queryKey: ['user', 'me'],
+    queryFn: () => base44.auth.me(),
+    retry: false
   });
 
-  // 2. Fetch Drafts
+  const myEmail = me?.email || localStorage.getItem('userEmail');
+
+  // --- SESSION ISOLATION: Wipe everything if the user account changes ---
+  useEffect(() => {
+    setSelectedConversation(null);
+    queryClient.clear(); // Complete cache wipe to prevent cross-account leakage
+  }, [myEmail, queryClient]);
+
+  const { data: conversations = [], isLoading } = useQuery({
+    queryKey: ['conversations', platformFilter, myEmail],
+    queryFn: async () => {
+      const res = await base44.entities.Conversation.filter({ 
+        status: 'active',
+        participant_email: myEmail 
+      }, '-last_message_at');
+      return Array.isArray(res) ? res : [];
+    },
+    enabled: !!myEmail
+  });
+
   const { data: drafts = [] } = useQuery({
-    queryKey: ['conversations', 'drafts'],
-    queryFn: () => base44.entities.Conversation.filter({ status: 'draft' }, '-last_message_at').catch(() => []),
+    queryKey: ['conversations', 'drafts', myEmail],
+    queryFn: async () => {
+      const res = await base44.entities.Conversation.filter({ 
+        status: 'draft', 
+        sender_email: myEmail 
+      }, '-last_message_at');
+      return Array.isArray(res) ? res : [];
+    },
+    enabled: !!myEmail
   });
 
-  // 3. Fetch Contacts (FETCHING FROM CONTACTS TABLE)
   const { data: contacts = [] } = useQuery({
-    queryKey: ['contacts', 'all'],
+    queryKey: ['contacts', 'list'],
     queryFn: () => base44.entities.Contact.list().catch(() => []),
-    refetchOnWindowFocus: true
   });
 
   const saveMutation = useMutation({
-    mutationFn: (msg) => msg.id 
-      ? base44.entities.Conversation.update(msg.id, msg)
-      : base44.entities.Conversation.create(msg),
-    onSuccess: () => {
+    mutationFn: async (payload) => {
+      const conv = payload.id 
+        ? await base44.entities.Conversation.update(payload.id, payload)
+        : await base44.entities.Conversation.create(payload);
+      
+      if (payload.status === 'active') {
+        await base44.entities.Message.create({
+          conversation_id: conv.id,
+          sender_email: payload.sender_email,
+          sender_name: payload.sender_name,
+          recipient_email: payload.recipient_email,
+          body: payload.last_message,
+          created_date: new Date().toISOString()
+        });
+      }
+      return conv;
+    },
+    onSuccess: (newConv) => {
+      // 1. Force the detail window to close and PURGE the cache for this thread
+      setSelectedConversation(null);
+      queryClient.removeQueries({ queryKey: ['messages', newConv.id] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+
       setComposeOpen(false);
       setComposeData({ to: '', subject: '', message: '', id: null });
-      setAttachedFile(null);
+      
+      // 2. Open the fresh, empty-history window after a slight delay
+      setTimeout(() => setSelectedConversation(newConv), 100);
+      toast.success("New thread started!");
     }
   });
 
-  const deleteMutation = useMutation({
+  const deleteDraftMutation = useMutation({
     mutationFn: (id) => base44.entities.Conversation.delete(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['conversations'] })
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['conversations'] });
+        toast.success("Draft deleted");
+    }
   });
 
   const handleAction = (status = 'active') => {
-    if (!composeData.to) return alert("Please select a recipient");
-    
-    // Split the "Name <email>" string back into parts
-    const parts = composeData.to.split('<');
-    const name = parts[0].trim();
-    const email = parts[1] ? parts[1].replace('>', '') : name;
+    if (!composeData.to || !composeData.message) return toast.error("Check recipient and message content");
+    if (!myEmail) return toast.error("Session expired. Please log in.");
 
-    saveMutation.mutate({
-      ...composeData,
-      contact_name: name,
-      contact_email: email,
-      status: status,
-      platform: 'gmail',
+    const selectedContact = contacts.find(c => c.email === composeData.to);
+    const recipientName = selectedContact ? selectedContact.name : composeData.to;
+
+    const payload = {
+      contact_name: recipientName,
+      contact_email: composeData.to,
+      sender_email: myEmail,
+      recipient_email: composeData.to,
+      sender_name: me?.firstName ? `${me.firstName} ${me.lastName}` : myEmail,
+      subject: composeData.subject || "(No Subject)",
       last_message: composeData.message,
+      status: status,
+      platform: 'crm',
       last_message_at: new Date().toISOString()
-    });
+    };
+
+    if (composeData.id) payload.id = composeData.id;
+    saveMutation.mutate(payload);
   };
 
-  // Restoring Filter Logic
   const filteredConversations = conversations.filter(conv => {
-    const matchesSearch = (conv?.contact_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         (conv?.contact_email || '').toLowerCase().includes(searchTerm.toLowerCase());
-    if (platformFilter === 'all') return matchesSearch;
-    if (platformFilter === 'gmail') return matchesSearch && conv.platform === 'gmail';
-    if (platformFilter === 'social') return matchesSearch && (conv.platform === 'facebook' || conv.platform === 'instagram');
-    return matchesSearch;
+    const search = searchTerm.toLowerCase();
+    return (conv?.contact_name || '').toLowerCase().includes(search) || 
+           (conv?.contact_email || '').toLowerCase().includes(search);
   });
 
+  const handleConversationDeleted = () => {
+    // Hard wipe of messages cache when a window is deleted
+    if (selectedConversation) {
+      queryClient.removeQueries({ queryKey: ['messages', selectedConversation.id] });
+    }
+    setSelectedConversation(null);
+    queryClient.invalidateQueries({ queryKey: ['conversations'] });
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 p-3 sm:p-6">
+    <div className="min-h-screen bg-slate-50 p-3 sm:p-6 text-left">
       <div className="max-w-7xl mx-auto">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl sm:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">Conversations</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 flex items-center gap-3">
+             <MessageSquare className="text-indigo-600 w-8 h-8" /> Conversations
+          </h1>
           <div className="flex gap-2">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="outline" className="gap-2 border-gray-200 bg-white">
+                <Button variant="outline" className="gap-2 border-slate-200 bg-white font-bold">
                   <FolderOpen className="w-4 h-4 text-amber-500" /> Drafts ({drafts.length})
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                {drafts.length === 0 ? <p className="p-4 text-center text-xs text-gray-400">No drafts</p> : 
+              <DropdownMenuContent align="end" className="w-64 p-2 shadow-xl border-slate-100">
+                {drafts.length === 0 ? <p className="p-4 text-center text-xs text-gray-400 font-bold">No drafts</p> : 
                   drafts.map(d => (
-                    <div key={d.id} className="flex items-center hover:bg-gray-50 px-2 border-b last:border-0">
-                      <DropdownMenuItem className="flex-1 cursor-pointer py-3" onClick={() => {
-                        setComposeData({ id: d.id, to: `${d.contact_name} <${d.contact_email}>`, subject: d.subject, message: d.last_message });
+                    <div key={d.id} className="flex items-center hover:bg-slate-50 rounded-lg px-2 group">
+                      <DropdownMenuItem className="flex-1 cursor-pointer py-3 border-none outline-none" onClick={() => {
+                        setSelectedConversation(null); // Wipe UI before opening draft
+                        setComposeData({ id: d.id, to: d.contact_email, subject: d.subject, message: d.last_message });
                         setComposeOpen(true);
                       }}>
-                        <div className="flex flex-col text-left"><span className="text-sm font-bold truncate">{d.subject || '(No Subject)'}</span><span className="text-[10px] text-gray-400">{d.contact_name}</span></div>
+                        <div className="flex flex-col text-left">
+                           <span className="text-sm font-bold truncate">{d.subject || '(No Subject)'}</span>
+                           <span className="text-[10px] text-gray-400 font-bold">To: {d.contact_name}</span>
+                        </div>
                       </DropdownMenuItem>
-                      <Trash2 className="w-3 h-3 text-gray-300 hover:text-red-500 cursor-pointer" onClick={() => deleteMutation.mutate(d.id)} />
+                      <Trash2 className="w-4 h-4 text-slate-300 hover:text-red-500 cursor-pointer transition-colors" onClick={(e) => { e.stopPropagation(); deleteDraftMutation.mutate(d.id); }} />
                     </div>
                   ))
                 }
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button onClick={() => setComposeOpen(true)} className="gap-2 bg-indigo-600 px-6 shadow-md hover:bg-indigo-700">
-              <Plus className="w-5 h-5" /> <MessageSquare className="w-4 h-4 mr-1" /> Compose
+            <Button onClick={() => { 
+              setSelectedConversation(null); 
+              setComposeData({ to: '', subject: '', message: '', id: null }); 
+              setComposeOpen(true); 
+            }} className="gap-2 bg-indigo-600 px-6 font-bold shadow-indigo-200 shadow-xl hover:bg-indigo-700 transition-all active:scale-95">
+              <Plus className="w-4 h-4" /> Compose
             </Button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-4">
-            <Card className="p-4 shadow-sm border-gray-100 bg-white/80 backdrop-blur">
+            <Card className="p-4 border-none shadow-sm bg-white rounded-2xl">
               <div className="space-y-4">
                 <div className="relative">
                   <Search className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
-                  <Input placeholder="Search messages..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 border-gray-200 focus:ring-indigo-500" />
+                  <Input placeholder="Search threads..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10 h-11 border-slate-100 bg-slate-50 font-bold rounded-xl" />
                 </div>
-
-                <Tabs value={platformFilter} onValueChange={setPlatformFilter} className="w-full">
-                  <TabsList className="grid grid-cols-4 w-full h-9 bg-gray-100/50">
-                    <TabsTrigger value="all" className="text-[10px] sm:text-xs">All</TabsTrigger>
-                    <TabsTrigger value="gmail" className="text-[10px] sm:text-xs">Email</TabsTrigger>
-                    <TabsTrigger value="name" className="text-[10px] sm:text-xs">Name</TabsTrigger>
-                    <TabsTrigger value="social" className="text-[10px] sm:text-xs">Social</TabsTrigger>
-                  </TabsList>
-                </Tabs>
-
-                <ConversationList conversations={filteredConversations} selectedId={selectedConversation?.id} onSelect={setSelectedConversation} />
+                {isLoading ? <div className="flex justify-center py-20"><Loader2 className="animate-spin text-indigo-500" /></div> : 
+                    <ConversationList 
+                        conversations={filteredConversations} 
+                        selectedId={selectedConversation?.id} 
+                        onSelect={(c) => {
+                            // FORCE CLEARANCE ON SELECTION
+                            setSelectedConversation(null);
+                            setTimeout(() => setSelectedConversation(c), 20);
+                        }} 
+                    />
+                }
               </div>
             </Card>
           </div>
+          
           <div className="lg:col-span-8">
-            {selectedConversation ? <ConversationDetail conversation={selectedConversation} /> : (
-              <Card className="h-full min-h-[500px] flex items-center justify-center bg-white shadow-sm border-gray-100">
-                <div className="text-center text-gray-400">
-                  <MessageSquare className="w-16 h-16 mx-auto mb-4 opacity-20 text-indigo-500" />
-                  <p className="font-medium">Select a conversation to view history</p>
+            {selectedConversation ? (
+              <ConversationDetail 
+                key={selectedConversation.id} // CRITICAL: This destroys the component when switching users
+                conversation={selectedConversation} 
+                onDeleteSuccess={handleConversationDeleted}
+              />
+            ) : (
+              <Card className="h-full min-h-[550px] flex items-center justify-center bg-white border-none shadow-sm text-center p-8 rounded-2xl">
+                <div className="max-w-xs space-y-3">
+                  <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-100">
+                    <MessageSquare className="w-10 h-10 text-slate-200" />
+                  </div>
+                  <p className="font-bold text-slate-600 text-lg">Identity Verified</p>
+                  <p className="text-sm text-slate-400">Your messages are strictly private and isolated. Select a thread to view history.</p>
                 </div>
               </Card>
             )}
@@ -158,56 +235,39 @@ export default function Conversations() {
       </div>
 
       <Dialog open={composeOpen} onOpenChange={setComposeOpen}>
-        <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden rounded-xl border-none shadow-2xl">
-          <div className="bg-gray-900 text-white p-4 flex justify-between items-center">
-            <span className="text-sm font-bold tracking-tight">New Message</span>
-            <X className="w-4 h-4 cursor-pointer opacity-70 hover:opacity-100" onClick={() => setComposeOpen(false)} />
-          </div>
-          <div className="p-4 space-y-3 bg-white">
-            <div className="flex border-b border-gray-100 pb-2 items-center">
-              <span className="text-gray-400 text-sm w-12 pt-0">To:</span>
-              <select 
-                className="flex-1 text-sm outline-none bg-transparent py-2 font-medium" 
-                value={composeData.to} 
-                onChange={(e) => setComposeData({...composeData, to: e.target.value})}
-              >
-                <option value="">Choose a contact from list...</option>
-                {contacts.length > 0 ? (
-                  contacts.sort((a,b) => (a.name||"").localeCompare(b.name||"")).map(c => (
-                    <option key={c.id} value={`${c.name} <${c.email}>`}>
-                      {c.name} ({c.email})
-                    </option>
-                  ))
-                ) : (
-                  <option disabled>No contacts found. Please add them in Contacts tab.</option>
-                )}
+        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden rounded-3xl border-none shadow-2xl">
+          <DialogHeader className="bg-slate-900 text-white p-6">
+            <DialogTitle className="flex items-center gap-2 text-xl font-bold">
+              <Send className="w-5 h-5 text-indigo-400" /> Secure Message
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 font-medium">Messages are isolated per user account.</DialogDescription>
+          </DialogHeader>
+          <div className="p-6 space-y-4 bg-white text-left">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Recipient</Label>
+              <select className="w-full h-11 px-3 rounded-xl border border-slate-100 bg-slate-50 text-sm font-bold outline-none ring-offset-white focus:ring-2 focus:ring-indigo-500/20" value={composeData.to} onChange={(e) => setComposeData({...composeData, to: e.target.value})}>
+                <option value="">Select a teammate...</option>
+                {contacts.map(c => <option key={c.id} value={c.email}>{c.name} ({c.email})</option>)}
               </select>
             </div>
-            <Input placeholder="Subject" className="border-none shadow-none focus-visible:ring-0 text-sm border-b border-gray-100 rounded-none p-0 h-10 font-medium" value={composeData.subject} onChange={(e) => setComposeData({...composeData, subject: e.target.value})} />
-            <Textarea placeholder="Message body..." className="border-none shadow-none focus-visible:ring-0 min-h-[250px] p-0 pt-2 text-sm resize-none" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
-            
-            {attachedFile && (
-              <div className="flex items-center gap-2 p-2 bg-indigo-50 rounded border border-indigo-100 text-xs text-indigo-700">
-                <FileIcon className="w-3 h-3" />
-                <span className="flex-1 truncate">{attachedFile.name}</span>
-                <X className="w-3 h-3 cursor-pointer" onClick={() => setAttachedFile(null)} />
-              </div>
-            )}
-          </div>
-          <DialogFooter className="p-4 bg-gray-50 border-t border-gray-100">
-            <div className="flex gap-2 w-full">
-              <Button onClick={() => handleAction('active')} className="bg-blue-600 hover:bg-blue-700 px-8 font-bold rounded-full shadow-lg">
-                Send <Send className="w-4 h-4 ml-2" />
-              </Button>
-              <Button variant="outline" onClick={() => handleAction('draft')} className="gap-2 border-gray-200 bg-white rounded-full text-gray-600 px-6">
-                <Save className="w-4 h-4" /> Save Draft
-              </Button>
-              
-              <input type="file" ref={fileInputRef} className="hidden" onChange={(e) => setAttachedFile(e.target.files[0])} />
-              <Button variant="ghost" size="icon" className="ml-auto hover:bg-gray-200 rounded-full" onClick={() => fileInputRef.current.click()}>
-                <Paperclip className="w-5 h-5 text-gray-500" />
-              </Button>
+            <div className="space-y-1.5">
+               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Subject</Label>
+               <Input placeholder="Thread topic" className="h-11 border-slate-100 bg-slate-50 font-bold px-4 rounded-xl" value={composeData.subject} onChange={(e) => setComposeData({...composeData, subject: e.target.value})} />
             </div>
+            <div className="space-y-1.5">
+               <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Initial Message</Label>
+               <Textarea placeholder="Type your first message..." className="min-h-[180px] border-slate-100 bg-slate-50 p-4 rounded-xl resize-none text-sm font-medium" value={composeData.message} onChange={(e) => setComposeData({...composeData, message: e.target.value})} />
+            </div>
+          </div>
+          <DialogFooter className="p-6 bg-slate-50/50 border-t border-slate-100">
+            <div className="flex gap-3 w-full">
+              <Button onClick={() => handleAction('active')} disabled={saveMutation.isPending} className="flex-1 bg-indigo-600 hover:bg-indigo-700 h-12 font-bold rounded-xl shadow-lg shadow-indigo-100">
+                {saveMutation.isPending ? <Loader2 className="animate-spin w-4 h-4" /> : "Send Message"}
+              </Button>
+              <Button variant="outline" onClick={() => handleAction('draft')} disabled={saveMutation.isPending} className="h-12 border-slate-200 bg-white rounded-xl text-slate-600 px-6 font-bold">
+                <Save className="w-4 h-4 mr-2" /> Save Draft
+              </Button>
+            </div>c
           </DialogFooter>
         </DialogContent>
       </Dialog>
