@@ -12,7 +12,9 @@ export const base44 = createClient({
   requiresAuth: false,
 
   headers: () => {
-    const email = window.localStorage.getItem('userEmail');
+    const email = localStorage.getItem('userEmail') || 
+                  localStorage.getItem('email') || 
+                  localStorage.getItem('user_email');
     console.log("Outgoing Header Email:", email); 
     return {
       'User-Email': email || '',
