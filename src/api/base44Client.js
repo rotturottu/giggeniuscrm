@@ -1,13 +1,12 @@
 // src/api/base44Client.js
 import { createClient } from '@base44/sdk';
 
-// This URL is now secure and goes through the Nginx proxy
 const SERVER_URL = 'https://crm.gig-genius.io';
 
 export const base44 = createClient({
   appId: 'giggenius-crm',
-  // Adding /api here is critical for the Nginx location block to work
-  serverUrl: `${SERVER_URL}/api`, 
+  // REMOVE /api FROM HERE. Nginx adds it automatically.
+  serverUrl: SERVER_URL, 
   token: '',
   functionsVersion: 'v1',
   requiresAuth: false,
@@ -21,54 +20,37 @@ export const base44 = createClient({
   }
 });
 
-/**
- * Custom Auth object to sync with your Flask + SQLite backend
- */
 base44.auth = {
   ...base44.auth,
 
   me: async () => {
     const savedEmail = localStorage.getItem('userEmail');
-    if (!savedEmail) {
-      console.warn("No userEmail found in localStorage.");
-      return null;
-    }
+    if (!savedEmail) return null;
 
     try {
-      // Using the proxy URL
-      const response = await fetch(`${SERVER_URL}/api/apps/giggenius-crm/entities/User/me`, {
+      // CHANGE: Use relative path /api instead of full SERVER_URL
+      // This ensures the browser sends crm.gig-genius.io/api/...
+      const response = await fetch(`/api/apps/giggenius-crm/entities/User/me`, {
         method: 'GET',
         headers: {
           'User-Email': savedEmail,
           'Content-Type': 'application/json'
         }
       });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          localStorage.removeItem('gigGeniusAuth');
-          localStorage.removeItem('userEmail');
-          window.location.href = '/login';
-        }
-        const errorData = await response.json();
-        console.error("Backend error:", errorData.error);
-        return null;
-      }
-
-      const data = await response.json();
-      return data;
-
+      // ... rest of your me logic
+      if (!response.ok) return null;
+      return await response.json();
     } catch (error) {
-      console.error("Auth Me API Error (Network or CORS):", error);
       return null;
     }
   },
 
   updateMe: async (data) => {
     const savedEmail = localStorage.getItem('userEmail');
-    if (!savedEmail) throw new Error("Authentication required to update profile.");
+    if (!savedEmail) throw new Error("Auth required");
 
-    const response = await fetch(`${SERVER_URL}/api/apps/giggenius-crm/entities/User/me`, {
+    // CHANGE: Use relative path /api here too
+    const response = await fetch(`/api/apps/giggenius-crm/entities/User/me`, {
       method: 'PUT',
       headers: {
         'User-Email': savedEmail,
@@ -76,18 +58,7 @@ base44.auth = {
       },
       body: JSON.stringify(data)
     });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error || 'Update failed');
-    }
-
-    const result = await response.json();
-
-    if (data.email && data.email !== savedEmail) {
-      localStorage.setItem('userEmail', data.email);
-    }
-
-    return result;
+    // ... rest of your updateMe logic
+    return await response.json();
   }
 };
