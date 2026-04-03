@@ -16,7 +16,7 @@ export const base44 = createClient({
                   localStorage.getItem('user_email') || 
                   localStorage.getItem('email') ||
                   localStorage.getItem('useremail');
-    
+    if (!email) console.error("CRITICAL: SDK could not find userEmail in storage!");
     console.log("FINAL SDK ATTEMPT - Email found:", email);
 
     return {
