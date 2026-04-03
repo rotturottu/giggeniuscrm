@@ -75,7 +75,10 @@ export default function Layout({ children }) {
   const handleLogout = () => {
     localStorage.removeItem('gigGeniusAuth');
     localStorage.removeItem('userEmail');
+    localStorage.removeItem('email');
+    localStorage.removeItem('user_email');
     window.location.href = '/login';
+    sessionStorage.clear();
   };
 
   const displayName = formatDisplayName(user?.firstName, user?.lastName, savedEmail);
