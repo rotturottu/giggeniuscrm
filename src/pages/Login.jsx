@@ -41,6 +41,8 @@ export default function Login() {
       // CRITICAL: Save both the auth state and the specific email
       localStorage.setItem('gigGeniusAuth', 'true');
       localStorage.setItem('userEmail', data.email || email);
+      localStorage.setItem('userEmail', data.email || email);
+      localStorage.setItem('user_email', data.email || email);
 
       // Redirect to the Overview page
       navigate('/Overview');

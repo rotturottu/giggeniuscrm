@@ -13,9 +13,12 @@ export const base44 = createClient({
 
   headers: () => {
     const email = localStorage.getItem('userEmail') || 
-                  localStorage.getItem('email') || 
-                  localStorage.getItem('user_email');
-    console.log("Outgoing Header Email:", email); 
+                  localStorage.getItem('user_email') || 
+                  localStorage.getItem('email') ||
+                  localStorage.getItem('useremail');
+    
+    console.log("FINAL SDK ATTEMPT - Email found:", email);
+
     return {
       'User-Email': email || '',
       'Content-Type': 'application/json'
