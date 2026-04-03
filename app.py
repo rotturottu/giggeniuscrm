@@ -65,6 +65,33 @@ def login():
         return jsonify({"message": "Login successful!", "email": user[3]}), 200
     return jsonify({"error": "Invalid email or password"}), 401
 
+@app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
+def register():
+    # Handle the browser's security pre-flight check
+    if request.method == 'OPTIONS': 
+        return jsonify({"status": "ok"}), 200
+        
+    try:
+        data = request.json
+        hashed_pw = generate_password_hash(data['password'])
+        
+        conn = sqlite3.connect('giggenius.db')
+        c = conn.cursor()
+        c.execute("INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)",
+                  (data['firstName'], data['lastName'], data['email'], hashed_pw))
+        conn.commit()
+        return jsonify({"message": "User created successfully!"}), 201
+        
+    except sqlite3.IntegrityError:
+        # If the email is already in the database
+        return jsonify({"error": "An account with this email already exists."}), 400
+    except Exception as e:
+        # If anything else crashes, return JSON instead of an HTML page
+        return jsonify({"error": str(e)}), 500
+    finally:
+        if 'conn' in locals():
+            conn.close()
+
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_list_create(entity_name):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
