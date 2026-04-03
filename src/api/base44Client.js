@@ -15,10 +15,23 @@ export const base44 = createClient({
   }
 });
 
-// ADD THIS: This forces the email into the BODY of every "create" call
+/** * BODY INJECTION INTERCEPTOR
+ * This overrides the default create and update methods to ensure
+ * the email is ALWAYS inside the data packet.
+ */
+
 const originalCreate = base44.entities.create;
 base44.entities.create = async (entityName, data) => {
   const email = localStorage.getItem('userEmail');
+  // Inject email into the JSON body
   const enrichedData = { ...data, user_email: email };
   return originalCreate(entityName, enrichedData);
+};
+
+const originalUpdate = base44.entities.update;
+base44.entities.update = async (entityName, entityId, data) => {
+  const email = localStorage.getItem('userEmail');
+  // Inject email into the JSON body
+  const enrichedData = { ...data, user_email: email };
+  return originalUpdate(entityName, entityId, enrichedData);
 };
