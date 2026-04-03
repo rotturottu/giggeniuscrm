@@ -59,8 +59,21 @@ def init_db():
 init_db()
 
 def get_valid_user_email(headers):
-    """Helper to validate the User-Email header against null/undefined strings."""
+    # 1. Try the Header first
     email = headers.get('User-Email')
+    
+    # 2. If Header is empty, look inside the actual data being sent (The Body)
+    if email in [None, '', 'null', 'undefined']:
+        try:
+            if request.is_json:
+                data = request.get_json(silent=True)
+                if data:
+                    # Look for the email in ANY of these common fields
+                    email = data.get('user_email') or data.get('employee_email') or data.get('email')
+        except:
+            pass
+
+    # 3. Final check
     if email in [None, '', 'null', 'undefined']:
         return None
     return email
