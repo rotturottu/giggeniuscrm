@@ -115,20 +115,20 @@ export default function InvoicesList() {
   });
 
   return (
-    <div className="space-y-6 text-left relative">
+    <div className="space-y-6 text-left relative pointer-events-auto">
       {/* 1. THE MAIN CONTENT CARD */}
       <Card className="border-none shadow-md relative z-10">
         <CardHeader className="bg-gray-50/50 rounded-t-xl">
           <div className="flex justify-between items-center">
             <CardTitle className="text-xl font-bold text-gray-800">Sales & Documents Management</CardTitle>
-            <div className="flex gap-3">
+            <div className="flex gap-3 relative z-[9999]">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="bg-white border-gray-200 font-bold">
+                  <Button variant="outline" className="bg-white border-gray-200 font-bold pointer-events-auto">
                     <FolderOpen className="w-4 h-4 mr-2 text-indigo-500" /> Drafts ({drafts.length}) <ChevronDown className="w-4 h-4 ml-1 opacity-50" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 z-[50]">
+                <DropdownMenuContent align="end" className="w-80 z-[10000]">
                   {drafts.length === 0 ? <p className="p-4 text-center text-xs text-gray-400">No drafts found</p> :
                     drafts.map((d) => (
                       <div key={d.id} className="flex items-center p-1 group">
@@ -144,7 +144,8 @@ export default function InvoicesList() {
               <Button 
                 onClick={(e) => {
                   e.preventDefault();
-                  console.log("CLICK: Add Button");
+                  e.stopPropagation();
+                  console.log("CRITICAL: Add Button Clicked!");
                   setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: '', details: '' });
                   if (typeFilter === 'template') {
                     setShowNDAModal(true);
@@ -152,7 +153,7 @@ export default function InvoicesList() {
                     setShowCreateModal(true);
                   }
                 }} 
-                className="bg-indigo-600 hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-100"
+                className="bg-indigo-600 hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-200 relative z-[1000] pointer-events-auto cursor-pointer"
               >
                 <Plus className="w-4 h-4 mr-2" /> {typeFilter === 'template' ? 'Add Custom Template' : `New ${typeFilter}`}
               </Button>
@@ -174,16 +175,16 @@ export default function InvoicesList() {
             </div>
 
             {typeFilter === 'template' && (
-              <div className="mb-10 grid grid-cols-1 md:grid-cols-4 gap-6">
+              <div className="mb-10 grid grid-cols-1 md:grid-cols-4 gap-6 pointer-events-auto">
                 <Card 
                   onClick={() => {
-                    console.log("CLICK: Blank Card");
+                    console.log("CRITICAL: Blank Card Clicked!");
                     setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: '', details: '' });
                     setShowNDAModal(true);
                   }} 
-                  className="hover:border-indigo-500 transition-all cursor-pointer border-dashed border-2 bg-indigo-50/20 group shadow-sm"
+                  className="hover:border-indigo-500 transition-all cursor-pointer border-dashed border-2 bg-indigo-50/20 group shadow-sm relative z-10"
                 >
-                  <CardContent className="p-6 text-center">
+                  <CardContent className="p-6 text-center pointer-events-none">
                     <FilePlus className="w-12 h-12 text-indigo-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
                     <h3 className="font-bold text-indigo-900">Blank Document</h3>
                     <p className="text-xs text-gray-500 mt-2">Start a unique template</p>
@@ -194,13 +195,13 @@ export default function InvoicesList() {
                   <Card 
                     key={key} 
                     onClick={() => {
-                      console.log(`CLICK: ${key} Card`);
+                      console.log(`CRITICAL: ${key} Clicked!`);
                       setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: data.title, details: '' });
                       setShowNDAModal(true);
                     }} 
-                    className="hover:border-indigo-500 transition-all cursor-pointer border-dashed border-2 bg-indigo-50/20 group shadow-sm"
+                    className="hover:border-indigo-500 transition-all cursor-pointer border-dashed border-2 bg-indigo-50/20 group shadow-sm relative z-10"
                   >
-                    <CardContent className="p-6 text-center">
+                    <CardContent className="p-6 text-center pointer-events-none">
                       <FileCheck className="w-12 h-12 text-indigo-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
                       <h3 className="font-bold text-indigo-900">{data.title}</h3>
                       <p className="text-xs text-gray-500 mt-2">{data.desc}</p>
@@ -235,7 +236,7 @@ export default function InvoicesList() {
                           <Badge className="bg-green-50 text-green-600 border-green-100 px-3 py-0.5 rounded-md font-bold text-[10px]">ACTIVE</Badge>
                           <p className="font-black text-lg text-gray-800">{currencySymbols[inv.currency || 'PHP']}{inv.total?.toLocaleString() || '0'}</p>
                         </div>
-                        <Button variant="ghost" size="icon" className="text-gray-300 hover:text-red-500 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); if(confirm('Delete?')) deleteMutation.mutate(inv.id) }}><Trash2 className="w-4 h-4"/></Button>
+                        <Button variant="ghost" size="icon" className="text-gray-300 hover:text-red-500 hover:bg-red-50 pointer-events-auto" onClick={(e) => { e.stopPropagation(); if(confirm('Delete?')) deleteMutation.mutate(inv.id) }}><Trash2 className="w-4 h-4"/></Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -246,7 +247,7 @@ export default function InvoicesList() {
         </CardContent>
       </Card>
 
-      {/* 2. THE MODALS (Moved outside the card to prevent z-index clipping) */}
+      {/* MODALS: Wrapped in Portal by default, but placed here for logic flow */}
       <Dialog open={showNDAModal} onOpenChange={setShowNDAModal}>
         <DialogContent className="max-w-3xl overflow-y-auto max-h-[95vh] text-left">
           <DialogHeader className="border-b pb-4">
