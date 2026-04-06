@@ -18,7 +18,7 @@ def init_db():
                   first_name TEXT, last_name TEXT, email TEXT UNIQUE,
                   password TEXT, profile_picture TEXT)''')
     
-    # Invoices Table
+    # Invoices Table (Used by Documents Tab)
     c.execute('''CREATE TABLE IF NOT EXISTS invoices
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   invoice_number TEXT UNIQUE, client_name TEXT, type TEXT,
@@ -58,7 +58,6 @@ def init_db():
 init_db()
 
 def get_valid_user_email(headers):
-    """Checks Headers first, then peeks inside the JSON body."""
     email = headers.get('User-Email')
     if email in [None, '', 'null', 'undefined']:
         try:
@@ -100,29 +99,20 @@ def register():
     finally:
         if 'conn' in locals(): conn.close()
 
-# --- ANALYTICS ROUTE FOR DASHBOARD STATS ---
-@app.route('/api/apps/giggenius-crm/analytics/CustomDashboard', methods=['GET', 'OPTIONS'])
-def get_dashboard_analytics():
+# FIX: Added Profile endpoint to stop 405 error
+@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'OPTIONS'])
+def get_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = get_valid_user_email(request.headers)
-    if not user_email: return jsonify({}), 401
+    if not user_email: return jsonify({"error": "Unauthorized"}), 401
     
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
-    
-    # Get all deals to calculate stats
-    c.execute("SELECT value, stage FROM deals WHERE user_email = ?", (user_email,))
-    deals = c.fetchall()
-    
-    total_pipeline = sum(d['value'] or 0 for d in deals)
-    won_monthly = sum(d['value'] or 0 for d in deals if d['stage'] == 'closed_won')
-    
-    return jsonify({
-        "pipelineValue": total_pipeline,
-        "totalDeals": len(deals),
-        "wonMonthly": won_monthly
-    }), 200
+    c.execute("SELECT first_name, last_name, email FROM users WHERE email = ?", (user_email,))
+    user = c.fetchone()
+    conn.close()
+    return jsonify(dict(user)) if user else jsonify({"error": "Not found"}), 404
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_list_create(entity_name):
@@ -145,7 +135,18 @@ def handle_base44_list_create(entity_name):
 
     if request.method == 'GET':
         if not user_email: return jsonify([]), 200
-        c.execute(f"SELECT * FROM {table_name} WHERE user_email = ? ORDER BY id DESC", (user_email,))
+        # Check if there are filter params in the URL (e.g. ?type=contract)
+        filters = request.args.to_dict()
+        query = f"SELECT * FROM {table_name} WHERE user_email = ?"
+        params = [user_email]
+        
+        for key, value in filters.items():
+            if key != 'user_email' and key != '_sort':
+                query += f" AND {key} = ?"
+                params.append(value)
+        
+        query += " ORDER BY id DESC"
+        c.execute(query, tuple(params))
         return jsonify([dict(row) for row in c.fetchall()]), 200
 
     if request.method == 'POST':
