@@ -30,7 +30,7 @@ def init_db():
     tables = [
         'departments', 'employees', 'contacts', 'project_tasks', 
         'projects', 'campaigns', 'time_entries', 'deals', 
-        'leave_requests', 'payroll'
+        'leave_requests', 'payroll', 'performance_reviews', 'onboarding_tasks'
     ]
     
     for table in tables:
@@ -52,9 +52,13 @@ def init_db():
             schema = "name TEXT, value REAL, stage TEXT, owner_email TEXT, expected_close_date TEXT, description TEXT, contact_id INTEGER"
         elif table == 'leave_requests':
             schema = "employee_name TEXT, employee_email TEXT, leave_type TEXT, start_date TEXT, end_date TEXT, reason TEXT, days_count INTEGER, status TEXT DEFAULT 'pending'"
-        # NEW: PAYROLL SCHEMA
         elif table == 'payroll':
             schema = "employee_name TEXT, employee_email TEXT, period_start TEXT, period_end TEXT, currency TEXT, base_salary REAL, hours_worked REAL, overtime_hours REAL, overtime_pay REAL, bonuses REAL, deductions REAL, tax REAL, net_pay REAL, status TEXT DEFAULT 'draft', notes TEXT, paid_at TEXT"
+        elif table == 'performance_reviews':
+            schema = "employee_name TEXT, employee_email TEXT, reviewer_email TEXT, review_period TEXT, overall_rating INTEGER, goals_met TEXT, strengths TEXT, areas_of_improvement TEXT, goals_next_period TEXT, comments TEXT, status TEXT DEFAULT 'draft'"
+        # NEW: ONBOARDING TASKS SCHEMA
+        elif table == 'onboarding_tasks':
+            schema = "employee_name TEXT, employee_id TEXT, task_name TEXT, category TEXT, assigned_to TEXT, due_date TEXT, status TEXT DEFAULT 'pending', notes TEXT, department TEXT"
             
         c.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY AUTOINCREMENT, {schema}, user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)")
 
@@ -135,7 +139,8 @@ def handle_base44_list_create(entity_name):
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 'Invoice': 'invoices', 
         'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries',
         'Deal': 'deals', 'LeaveRequest': 'leave_requests', 
-        'PayrollRecord': 'payroll' # ADDED Payroll mapping
+        'PayrollRecord': 'payroll', 'PerformanceReview': 'performance_reviews',
+        'OnboardingTask': 'onboarding_tasks' # ADDED Onboarding mapping
     }
     
     table_name = table_map.get(entity_name)
@@ -174,8 +179,8 @@ def handle_base44_single_item_action(entity_name, entity_id):
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
         'Invoice': 'invoices', 'TimeEntry': 'time_entries', 'ProjectTask': 'project_tasks', 
         'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals',
-        'LeaveRequest': 'leave_requests', 
-        'PayrollRecord': 'payroll' # ADDED Payroll mapping
+        'LeaveRequest': 'leave_requests', 'PayrollRecord': 'payroll',
+        'PerformanceReview': 'performance_reviews', 'OnboardingTask': 'onboarding_tasks' # ADDED Onboarding mapping
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": "Entity not found"}), 404
