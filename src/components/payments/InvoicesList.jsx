@@ -20,19 +20,18 @@ const templateFieldsConfig = {
   independent: { 
     title: 'Independent Contractor Agreement', 
     desc: 'Professional B2B services contract', 
-    fields: [{ key: 'scope', label: 'Scope of Work', type: 'textarea' }] 
+    fields: [{ key: 'details', label: 'Scope of Work', type: 'textarea' }] 
   },
   service: { 
     title: 'Service Agreement', 
     desc: 'Maintenance/SLA contract', 
-    fields: [{ key: 'services', label: 'Services Provided', type: 'textarea' }] 
+    fields: [{ key: 'details', label: 'Services Provided', type: 'textarea' }] 
   },
   companyContract: { 
     title: 'Contract Agreement (Job/Company)', 
     desc: 'Formal Employment Contract', 
     fields: [
-      { key: 'position', label: 'Position Title', type: 'text' }, 
-      { key: 'salary', label: 'Compensation', type: 'text' }
+      { key: 'details', label: 'Position & Compensation Details', type: 'textarea' }
     ] 
   }
 };
@@ -53,16 +52,16 @@ export default function InvoicesList() {
     queryKey: ['invoices', typeFilter],
     queryFn: async () => {
         const dbType = typeFilter === 'template' ? 'contract' : typeFilter;
-        const res = await base44.entities.Invoice.filter({ type: dbType, status: 'active' }, '-created_date');
-        return Array.isArray(res) ? res : [];
+        const res = await base44.entities.Invoice.list('-created_date');
+        return Array.isArray(res) ? res.filter(inv => inv.type === dbType && inv.status === 'active') : [];
     },
   });
 
   const { data: drafts = [] } = useQuery({
     queryKey: ['invoices', 'drafts'],
     queryFn: async () => {
-        const res = await base44.entities.Invoice.filter({ status: 'draft' }, '-created_date');
-        return Array.isArray(res) ? res : [];
+        const res = await base44.entities.Invoice.list('-created_date');
+        return Array.isArray(res) ? res.filter(inv => inv.status === 'draft') : [];
     }
   });
 
@@ -92,7 +91,7 @@ export default function InvoicesList() {
   });
 
   const handleSaveCustom = (isDraft = false) => {
-    if (!templateFormData.document_name?.trim()) return setError('Contract Name is required.');
+    if (!templateFormData.document_name?.trim()) return setError('Document Title is required.');
     
     saveMutation.mutate({
       ...templateFormData,
@@ -101,7 +100,7 @@ export default function InvoicesList() {
       status: isDraft ? 'draft' : 'active',
       issue_date: templateFormData.signing_date || new Date().toISOString(),
       invoice_number: templateFormData.invoice_number || `CTR-${Math.floor(1000 + Math.random() * 9000)}`,
-      notes: `Duration: ${templateFormData.duration_val || 'N/A'} ${templateFormData.duration_unit}. Details: ${templateFormData.details || ''}`
+      notes: `Duration: ${templateFormData.duration_val || 'N/A'} ${templateFormData.duration_unit}. Content: ${templateFormData.details || ''}`
     });
   };
 
@@ -117,10 +116,8 @@ export default function InvoicesList() {
   };
 
   const filteredInvoices = invoices.filter(inv => {
-    const targetType = typeFilter === 'template' ? 'contract' : typeFilter;
-    const matchesType = inv.type === targetType;
     const matchesSearch = (inv.client_name || inv.document_name || '').toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesType && matchesSearch;
+    return matchesSearch;
   });
 
   return (
@@ -151,7 +148,7 @@ export default function InvoicesList() {
 
               <Button 
                 onClick={() => {
-                  setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: '' });
+                  setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: '', details: '' });
                   if (typeFilter === 'template') {
                     setShowNDAModal(true);
                   } else {
@@ -180,12 +177,11 @@ export default function InvoicesList() {
             </div>
 
             {typeFilter === 'template' && (
-              <div className="mb-10">
+              <div className="mb-10 animate-in slide-in-from-top duration-300">
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  {/* Blank Option */}
                   <Card 
                     onClick={() => {
-                      setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: '' });
+                      setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: '', details: '' });
                       setShowNDAModal(true);
                     }} 
                     className="hover:border-indigo-500 transition-all cursor-pointer border-dashed border-2 bg-indigo-50/20 group"
@@ -193,7 +189,7 @@ export default function InvoicesList() {
                     <CardContent className="p-6 text-center">
                       <FilePlus className="w-12 h-12 text-indigo-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
                       <h3 className="font-bold text-indigo-900">Blank Document</h3>
-                      <p className="text-xs text-gray-500 mt-2">Create custom from scratch</p>
+                      <p className="text-xs text-gray-500 mt-2">Start a unique template</p>
                     </CardContent>
                   </Card>
 
@@ -202,7 +198,12 @@ export default function InvoicesList() {
                       key={key} 
                       onClick={() => {
                         setSelectedTemplate(key);
-                        setTemplateFormData(p => ({...p, document_name: data.title}));
+                        setTemplateFormData({
+                           currency: 'PHP', 
+                           duration_unit: 'Years', 
+                           document_name: data.title,
+                           details: '' 
+                        });
                         setShowNDAModal(true);
                       }} 
                       className="hover:border-indigo-500 transition-all cursor-pointer border-dashed border-2 bg-indigo-50/20 group"
@@ -223,7 +224,7 @@ export default function InvoicesList() {
               {filteredInvoices.length === 0 ? (
                 <div className="text-center py-20 border-2 border-dashed rounded-3xl bg-gray-50/50">
                   <FileSpreadsheet className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                  <p className="text-gray-400 font-medium">No active {typeFilter} files found</p>
+                  <p className="text-gray-400 font-medium">No active {typeFilter} records found</p>
                 </div>
               ) : (
                 filteredInvoices.map(inv => (
@@ -254,58 +255,110 @@ export default function InvoicesList() {
         </CardContent>
       </Card>
 
-      {/* FINALIZATION MODAL */}
+      {/* FULLY CUSTOMIZABLE WINDOW (NDA/CUSTOM MODAL) */}
       <Dialog open={showNDAModal} onOpenChange={setShowNDAModal}>
-        <DialogContent className="max-w-2xl overflow-y-auto max-h-[90vh] text-left">
+        <DialogContent className="max-w-3xl overflow-y-auto max-h-[95vh] text-left">
           <DialogHeader className="border-b pb-4">
-            <DialogTitle className="text-2xl font-bold text-gray-800">Create Custom Document</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <FilePlus className="w-6 h-6 text-indigo-600" />
+              Document Customization Window
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-5 py-6">
-            <div className="grid grid-cols-2 gap-4">
+          
+          <div className="space-y-6 py-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
-                <Label className="font-bold text-gray-600">Document Title *</Label>
-                <Input placeholder="e.g. Partnership Agreement" value={templateFormData.document_name || ''} onChange={e => setTemplateFormData(p => ({...p, document_name: e.target.value}))}/>
+                <Label className="font-bold text-gray-700">Document Title *</Label>
+                <Input 
+                  placeholder="e.g. Unique Partnership Agreement" 
+                  className="h-12 border-indigo-100 focus:ring-indigo-500"
+                  value={templateFormData.document_name || ''} 
+                  onChange={e => setTemplateFormData(p => ({...p, document_name: e.target.value}))}
+                />
               </div>
               <div className="space-y-2">
-                <Label className="font-bold text-gray-600">Signing Date</Label>
-                <div className="relative"><Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400" /><Input type="date" className="pl-10" value={templateFormData.signing_date || ''} onChange={e => setTemplateFormData(p => ({...p, signing_date: e.target.value}))}/></div>
+                <Label className="font-bold text-gray-700">Signing Date</Label>
+                <div className="relative">
+                  <Calendar className="absolute left-3 top-4 w-4 h-4 text-gray-400" />
+                  <Input 
+                    type="date" 
+                    className="pl-10 h-12 border-indigo-100" 
+                    value={templateFormData.signing_date || ''} 
+                    onChange={e => setTemplateFormData(p => ({...p, signing_date: e.target.value}))}
+                  />
+                </div>
               </div>
             </div>
             
             <div className="space-y-2">
-              <Label className="font-bold text-gray-600">Full Content / Terms</Label>
-              <Textarea className="min-h-[200px] bg-gray-50/30" placeholder="Type or paste the full text of your document here..." value={templateFormData.details || ''} onChange={e => setTemplateFormData(p => ({...p, details: e.target.value}))}/>
+              <Label className="font-bold text-gray-700">Document Body & Terms</Label>
+              <Textarea 
+                className="min-h-[250px] bg-gray-50/50 border-indigo-50 focus:bg-white transition-all text-sm leading-relaxed" 
+                placeholder="Compose your unique document terms, clauses, and obligations here..." 
+                value={templateFormData.details || ''} 
+                onChange={e => setTemplateFormData(p => ({...p, details: e.target.value}))}
+              />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label className="font-bold text-gray-600">Validity Value</Label><Input type="number" placeholder="1" value={templateFormData.duration_val || ''} onChange={e => setTemplateFormData(p => ({...p, duration_val: e.target.value}))}/></div>
-              <div className="space-y-2"><Label className="font-bold text-gray-600">Unit</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="font-bold text-gray-700">Contract Validity</Label>
+                <Input 
+                  type="number" 
+                  placeholder="Value (e.g. 1)" 
+                  className="h-12 border-indigo-100"
+                  value={templateFormData.duration_val || ''} 
+                  onChange={e => setTemplateFormData(p => ({...p, duration_val: e.target.value}))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold text-gray-700">Time Unit</Label>
                 <Select value={templateFormData.duration_unit} onValueChange={v => setTemplateFormData(p => ({...p, duration_unit: v}))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent><SelectItem value="Months">Months</SelectItem><SelectItem value="Years">Years</SelectItem><SelectItem value="Indefinite">Indefinite</SelectItem></SelectContent>
-                </Select></div>
+                  <SelectTrigger className="h-12 border-indigo-100">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Months">Months</SelectItem>
+                    <SelectItem value="Years">Years</SelectItem>
+                    <SelectItem value="Indefinite">Indefinite</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="p-6 border-2 border-dashed rounded-2xl bg-gray-50 text-center">
+            <div className="p-8 border-2 border-dashed rounded-2xl bg-indigo-50/30 text-center hover:bg-indigo-50 transition-colors border-indigo-200">
               <Label className="cursor-pointer">
-                <UploadCloud className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
-                <span className="text-xs text-gray-500 font-bold block">Upload Signed PDF/Scan</span>
+                <UploadCloud className="w-10 h-10 text-indigo-500 mx-auto mb-3" />
+                <span className="text-sm text-indigo-900 font-bold block">Attach Supporting Files</span>
+                <span className="text-xs text-gray-500">PDF, PNG, or JPEG allowed</span>
                 <Input type="file" className="hidden" onChange={(e) => setUploadedFileName(e.target.files[0]?.name)} />
-                {uploadedFileName && <Badge className="mt-2 bg-indigo-100 text-indigo-700">{uploadedFileName}</Badge>}
+                {uploadedFileName && <Badge className="mt-3 bg-indigo-600 text-white px-4 py-1">{uploadedFileName}</Badge>}
               </Label>
             </div>
-            {error && <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100">{error}</div>}
+
+            {error && <div className="p-4 bg-red-50 text-red-700 text-xs font-bold rounded-xl border border-red-100 animate-pulse">{error}</div>}
           </div>
-          <DialogFooter className="border-t pt-4 flex gap-3">
-            <Button variant="outline" onClick={() => handleSaveCustom(true)} className="flex-1 h-11 font-bold"><Save className="w-4 h-4 mr-2" /> Save as Draft</Button>
-            <Button onClick={() => handleSaveCustom(false)} disabled={saveMutation.isPending} className="flex-1 h-11 bg-indigo-600 font-bold">
-              {saveMutation.isPending ? 'Saving...' : 'Register Document'}
+
+          <DialogFooter className="border-t pt-6 flex gap-4">
+            <Button 
+              variant="ghost" 
+              onClick={() => handleSaveCustom(true)} 
+              className="flex-1 h-12 font-bold text-gray-500 hover:text-indigo-600"
+            >
+              <Save className="w-4 h-4 mr-2" /> Save Draft
+            </Button>
+            <Button 
+              onClick={() => handleSaveCustom(false)} 
+              disabled={saveMutation.isPending} 
+              className="flex-1 h-12 bg-indigo-600 hover:bg-indigo-700 font-bold shadow-lg shadow-indigo-200"
+            >
+              {saveMutation.isPending ? 'Syncing...' : 'Register Final Document'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* STANDARD MODAL */}
+      {/* STANDARD FORMS */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent className="max-w-xl text-left">
           <DialogHeader className="border-b pb-4">
@@ -314,20 +367,20 @@ export default function InvoicesList() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-6">
-            <div className="space-y-2"><Label className="font-bold text-gray-600">Client Name *</Label><Input value={templateFormData.client_name || ''} onChange={e => setTemplateFormData(p => ({...p, client_name: e.target.value}))}/></div>
+            <div className="space-y-2"><Label className="font-bold text-gray-600">Entity/Client Name *</Label><Input className="h-11" value={templateFormData.client_name || ''} onChange={e => setTemplateFormData(p => ({...p, client_name: e.target.value}))}/></div>
             <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-2"><Label className="font-bold text-gray-600">Total Value</Label><Input type="number" placeholder="0.00" value={templateFormData.total || ''} onChange={e => setTemplateFormData(p => ({...p, total: e.target.value}))}/></div>
+               <div className="space-y-2"><Label className="font-bold text-gray-600">Total Value</Label><Input className="h-11" type="number" placeholder="0.00" value={templateFormData.total || ''} onChange={e => setTemplateFormData(p => ({...p, total: e.target.value}))}/></div>
                <div className="space-y-2"><Label className="font-bold text-gray-600">Currency</Label>
                  <Select value={templateFormData.currency} onValueChange={v => setTemplateFormData(p => ({...p, currency: v}))}>
-                   <SelectTrigger><SelectValue /></SelectTrigger>
+                   <SelectTrigger className="h-11"><SelectValue /></SelectTrigger>
                    <SelectContent>{Object.keys(currencySymbols).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                  </Select></div>
             </div>
-            <div className="space-y-2"><Label className="font-bold text-gray-600">Notes</Label><Input placeholder="Internal notes..." value={templateFormData.notes || ''} onChange={e => setTemplateFormData(p => ({...p, notes: e.target.value}))}/></div>
+            <div className="space-y-2"><Label className="font-bold text-gray-600">Internal Notes</Label><Input className="h-11" placeholder="Reference notes..." value={templateFormData.notes || ''} onChange={e => setTemplateFormData(p => ({...p, notes: e.target.value}))}/></div>
           </div>
           <DialogFooter className="border-t pt-4">
-            <Button onClick={handleSaveStandard} disabled={saveMutation.isPending} className="w-full bg-indigo-600 h-11 font-bold">
-              {saveMutation.isPending ? 'Saving...' : `Create ${typeFilter}`}
+            <Button onClick={handleSaveStandard} disabled={saveMutation.isPending} className="w-full bg-indigo-600 h-12 font-bold">
+              {saveMutation.isPending ? 'Registering...' : `Create ${typeFilter}`}
             </Button>
           </DialogFooter>
         </DialogContent>
