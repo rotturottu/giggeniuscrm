@@ -29,7 +29,7 @@ def init_db():
     # Entity Tables
     tables = [
         'departments', 'employees', 'contacts', 'project_tasks', 
-        'projects', 'campaigns', 'time_entries', 'deals'
+        'projects', 'campaigns', 'time_entries', 'deals', 'leave_requests'
     ]
     
     for table in tables:
@@ -49,6 +49,9 @@ def init_db():
             schema = "employee_name TEXT, employee_email TEXT, type TEXT, date TEXT, clock_in TEXT, clock_out TEXT, duration_minutes INTEGER, status TEXT DEFAULT 'active'"
         elif table == 'deals': 
             schema = "name TEXT, value REAL, stage TEXT, owner_email TEXT, expected_close_date TEXT, description TEXT, contact_id INTEGER"
+        # NEW: LEAVE REQUESTS SCHEMA
+        elif table == 'leave_requests':
+            schema = "employee_name TEXT, employee_email TEXT, leave_type TEXT, start_date TEXT, end_date TEXT, reason TEXT, days_count INTEGER, status TEXT DEFAULT 'pending'"
             
         c.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY AUTOINCREMENT, {schema}, user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)")
 
@@ -100,7 +103,6 @@ def register():
     finally:
         if 'conn' in locals(): conn.close()
 
-# --- ANALYTICS ROUTE FOR DASHBOARD STATS ---
 @app.route('/api/apps/giggenius-crm/analytics/CustomDashboard', methods=['GET', 'OPTIONS'])
 def get_dashboard_analytics():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
@@ -111,7 +113,6 @@ def get_dashboard_analytics():
     conn.row_factory = sqlite3.Row
     c = conn.cursor()
     
-    # Get all deals to calculate stats
     c.execute("SELECT value, stage FROM deals WHERE user_email = ?", (user_email,))
     deals = c.fetchall()
     
@@ -132,7 +133,7 @@ def handle_base44_list_create(entity_name):
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts', 
         'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 'Invoice': 'invoices', 
         'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries',
-        'Deal': 'deals'
+        'Deal': 'deals', 'LeaveRequest': 'leave_requests' # ADDED LeaveRequest
     }
     
     table_name = table_map.get(entity_name)
@@ -170,7 +171,8 @@ def handle_base44_single_item_action(entity_name, entity_id):
     table_map = {
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
         'Invoice': 'invoices', 'TimeEntry': 'time_entries', 'ProjectTask': 'project_tasks', 
-        'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals'
+        'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals',
+        'LeaveRequest': 'leave_requests' # ADDED LeaveRequest
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": "Entity not found"}), 404
