@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Trash2, FileCheck, Receipt, UploadCloud, ChevronDown, FileText, Plus, Save, FolderOpen, X, Search, Calendar, FileDigit, Briefcase, FileSpreadsheet } from 'lucide-react';
+import { ArrowLeft, Trash2, FileCheck, Receipt, UploadCloud, ChevronDown, FileText, Plus, Save, FolderOpen, X, Search, Calendar, FileDigit, Briefcase, FileSpreadsheet, FilePlus } from 'lucide-react';
 import { useState } from 'react';
 import toast from 'react-hot-toast';
 
@@ -48,7 +48,6 @@ export default function InvoicesList() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // 1. Queries - The API call includes the type, but we add the frontend filter below for 100% isolation
   const { data: invoices = [] } = useQuery({
     queryKey: ['invoices', typeFilter],
     queryFn: async () => {
@@ -66,7 +65,6 @@ export default function InvoicesList() {
     }
   });
 
-  // 2. Mutations
   const saveMutation = useMutation({
     mutationFn: (data) => data.id ? base44.entities.Invoice.update(data.id, data) : base44.entities.Invoice.create(data),
     onSuccess: () => {
@@ -91,7 +89,6 @@ export default function InvoicesList() {
     }
   });
 
-  // 3. Logic
   const handleSaveCustom = (isDraft = false) => {
     if (!templateFormData.document_name?.trim()) return setError('Contract Name is required.');
     
@@ -105,8 +102,8 @@ export default function InvoicesList() {
 
     saveMutation.mutate({
       ...templateFormData,
-      type: 'contract', // Templates are isolated to the 'contract' (Documents) type
-      client_name: templateFormData.document_name, // Map name for list display
+      type: 'contract', 
+      client_name: templateFormData.document_name, 
       status: isDraft ? 'draft' : 'active',
       issue_date: templateFormData.signing_date || new Date().toISOString(),
       invoice_number: templateFormData.invoice_number || `CTR-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -118,14 +115,13 @@ export default function InvoicesList() {
     if (!templateFormData.client_name?.trim()) return setError('Required fields missing.');
     saveMutation.mutate({
       ...templateFormData,
-      type: typeFilter, // This ensures a 'job' tab creates a 'job' type record
+      type: typeFilter, 
       status: 'active',
       issue_date: new Date().toISOString(),
       invoice_number: `${typeFilter.toUpperCase().slice(0,3)}-${Math.floor(1000 + Math.random() * 9000)}`,
     });
   };
 
-  // ISOLATION FILTER: Filters the current results to ensure only the active tab's type is shown
   const filteredInvoices = invoices.filter(inv => {
     const targetType = typeFilter === 'template' ? 'contract' : typeFilter;
     const matchesType = inv.type === targetType;
@@ -158,7 +154,17 @@ export default function InvoicesList() {
                     ))}
                 </DropdownMenuContent>
               </DropdownMenu>
-              <Button onClick={() => typeFilter === 'template' ? setSelectedTemplate(null) : setShowCreateModal(true)} className="bg-indigo-600 hover:bg-indigo-700 font-bold">
+
+              {/* FIXED: "Add Custom Template" now triggers a blank creation state */}
+              <Button onClick={() => {
+                  if (typeFilter === 'template') {
+                    setSelectedTemplate('custom_blank');
+                    setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: 'New Custom Template' });
+                    setShowNDAModal(true);
+                  } else {
+                    setShowCreateModal(true);
+                  }
+                }} className="bg-indigo-600 hover:bg-indigo-700 font-bold">
                 <Plus className="w-4 h-4 mr-2" /> {typeFilter === 'template' ? 'Add Custom Template' : `New ${typeFilter}`}
               </Button>
             </div>
@@ -173,17 +179,31 @@ export default function InvoicesList() {
               ))}
             </TabsList>
 
-            {/* SEARCH AREA */}
             <div className="relative mb-6">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input placeholder={`Filter ${typeFilter} records...`} className="pl-10 h-11 border-gray-200" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
 
-            {/* TEMPLATE SECTION */}
             {typeFilter === 'template' && (
               <div className="mb-10">
                 {!selectedTemplate ? (
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                    {/* Added a Fourth Card for Blank Document */}
+                    <Card 
+                      onClick={() => {
+                        setSelectedTemplate('custom_blank');
+                        setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: 'Custom Document' });
+                        setShowNDAModal(true);
+                      }} 
+                      className="hover:border-indigo-500 transition-all cursor-pointer border-dashed border-2 bg-indigo-50/20 group"
+                    >
+                      <CardContent className="p-6 text-center">
+                        <FilePlus className="w-12 h-12 text-indigo-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
+                        <h3 className="font-bold text-indigo-900">Blank Template</h3>
+                        <p className="text-xs text-gray-500 mt-2">Start from scratch</p>
+                      </CardContent>
+                    </Card>
+
                     {Object.entries(templateFieldsConfig).map(([key, data]) => (
                       <Card 
                         key={key} 
@@ -209,16 +229,18 @@ export default function InvoicesList() {
                           <ArrowLeft className="w-4 h-4 mr-1" /> Back to Templates
                         </Button>
                         <div>
-                          <CardTitle className="text-lg text-indigo-900">{templateFieldsConfig[selectedTemplate].title}</CardTitle>
+                          <CardTitle className="text-lg text-indigo-900">
+                            {templateFieldsConfig[selectedTemplate]?.title || "Custom Document"}
+                          </CardTitle>
                           <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Template Configuration</p>
                         </div>
                       </div>
                       <Button onClick={() => setShowNDAModal(true)} className="bg-indigo-600 font-bold shadow-lg shadow-indigo-100">
-                         Proceed to Finalize <FileText className="w-4 h-4 ml-2" />
+                          Proceed to Finalize <FileText className="w-4 h-4 ml-2" />
                       </Button>
                     </CardHeader>
                     <CardContent className="py-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {templateFieldsConfig[selectedTemplate].fields.map((field) => (
+                      {templateFieldsConfig[selectedTemplate]?.fields.map((field) => (
                         <div key={field.key} className={field.type === 'textarea' ? "md:col-span-2 space-y-2" : "space-y-2"}>
                           <Label className="text-indigo-900 font-bold text-xs uppercase">{field.label}</Label>
                           {field.type === 'textarea' ? (
@@ -244,7 +266,6 @@ export default function InvoicesList() {
               </div>
             )}
 
-            {/* SAVED RECORDS LIST */}
             <div className="space-y-4 mt-8">
               <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-gray-400 mb-4 px-2">Saved {typeFilter} Records</h4>
               {filteredInvoices.length === 0 ? (
@@ -281,7 +302,6 @@ export default function InvoicesList() {
         </CardContent>
       </Card>
 
-      {/* MODALS REMAIN THE SAME */}
       <Dialog open={showNDAModal} onOpenChange={setShowNDAModal}>
         <DialogContent className="max-w-2xl overflow-y-auto max-h-[90vh] text-left">
           <DialogHeader className="border-b pb-4">
