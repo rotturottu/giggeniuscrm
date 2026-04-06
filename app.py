@@ -18,12 +18,14 @@ def init_db():
                   first_name TEXT, last_name TEXT, email TEXT UNIQUE,
                   password TEXT, profile_picture TEXT)''')
     
-    # Invoices Table
+    # UPDATED Invoices Table: Added document_name, signing_date, and details
     c.execute('''CREATE TABLE IF NOT EXISTS invoices
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  invoice_number TEXT UNIQUE, client_name TEXT, type TEXT,
-                  total REAL, currency TEXT DEFAULT 'PHP', status TEXT DEFAULT 'draft',
-                  issue_date TEXT, notes TEXT, items TEXT, tax_rate REAL DEFAULT 0,
+                  invoice_number TEXT UNIQUE, client_name TEXT, 
+                  document_name TEXT, signing_date TEXT, details TEXT,
+                  type TEXT, total REAL, currency TEXT DEFAULT 'PHP', 
+                  status TEXT DEFAULT 'draft', issue_date TEXT, notes TEXT, 
+                  items TEXT, tax_rate REAL DEFAULT 0,
                   user_email TEXT, FOREIGN KEY(user_email) REFERENCES users(email))''')
 
     # Entity Tables
@@ -56,7 +58,6 @@ def init_db():
             schema = "employee_name TEXT, employee_email TEXT, period_start TEXT, period_end TEXT, currency TEXT, base_salary REAL, hours_worked REAL, overtime_hours REAL, overtime_pay REAL, bonuses REAL, deductions REAL, tax REAL, net_pay REAL, status TEXT DEFAULT 'draft', notes TEXT, paid_at TEXT"
         elif table == 'performance_reviews':
             schema = "employee_name TEXT, employee_email TEXT, reviewer_email TEXT, review_period TEXT, overall_rating INTEGER, goals_met TEXT, strengths TEXT, areas_of_improvement TEXT, goals_next_period TEXT, comments TEXT, status TEXT DEFAULT 'draft'"
-        # NEW: ONBOARDING TASKS SCHEMA
         elif table == 'onboarding_tasks':
             schema = "employee_name TEXT, employee_id TEXT, task_name TEXT, category TEXT, assigned_to TEXT, due_date TEXT, status TEXT DEFAULT 'pending', notes TEXT, department TEXT"
             
@@ -140,7 +141,7 @@ def handle_base44_list_create(entity_name):
         'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries',
         'Deal': 'deals', 'LeaveRequest': 'leave_requests', 
         'PayrollRecord': 'payroll', 'PerformanceReview': 'performance_reviews',
-        'OnboardingTask': 'onboarding_tasks' # ADDED Onboarding mapping
+        'OnboardingTask': 'onboarding_tasks'
     }
     
     table_name = table_map.get(entity_name)
@@ -153,7 +154,18 @@ def handle_base44_list_create(entity_name):
 
     if request.method == 'GET':
         if not user_email: return jsonify([]), 200
-        c.execute(f"SELECT * FROM {table_name} WHERE user_email = ? ORDER BY id DESC", (user_email,))
+        # Generic filter support for different document types
+        query = f"SELECT * FROM {table_name} WHERE user_email = ?"
+        params = [user_email]
+        
+        # If the URL has filters like ?type=contract
+        for key, value in request.args.items():
+            if key not in ['_sort', '_order', '_limit', '_page']:
+                query += f" AND {key} = ?"
+                params.append(value)
+
+        query += " ORDER BY id DESC"
+        c.execute(query, tuple(params))
         return jsonify([dict(row) for row in c.fetchall()]), 200
 
     if request.method == 'POST':
@@ -180,7 +192,7 @@ def handle_base44_single_item_action(entity_name, entity_id):
         'Invoice': 'invoices', 'TimeEntry': 'time_entries', 'ProjectTask': 'project_tasks', 
         'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals',
         'LeaveRequest': 'leave_requests', 'PayrollRecord': 'payroll',
-        'PerformanceReview': 'performance_reviews', 'OnboardingTask': 'onboarding_tasks' # ADDED Onboarding mapping
+        'PerformanceReview': 'performance_reviews', 'OnboardingTask': 'onboarding_tasks'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": "Entity not found"}), 404
