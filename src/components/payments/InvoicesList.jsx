@@ -48,6 +48,7 @@ export default function InvoicesList() {
   const [error, setError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Queries
   const { data: invoices = [] } = useQuery({
     queryKey: ['invoices', typeFilter],
     queryFn: async () => {
@@ -65,6 +66,7 @@ export default function InvoicesList() {
     }
   });
 
+  // Mutations
   const saveMutation = useMutation({
     mutationFn: (data) => data.id ? base44.entities.Invoice.update(data.id, data) : base44.entities.Invoice.create(data),
     onSuccess: () => {
@@ -92,14 +94,6 @@ export default function InvoicesList() {
   const handleSaveCustom = (isDraft = false) => {
     if (!templateFormData.document_name?.trim()) return setError('Contract Name is required.');
     
-    const customFields = templateFieldsConfig[selectedTemplate]?.fields || [];
-    let extraDetails = "";
-    customFields.forEach(f => {
-        if (templateFormData[f.key]) {
-            extraDetails += `${f.label}: ${templateFormData[f.key]} | `;
-        }
-    });
-
     saveMutation.mutate({
       ...templateFormData,
       type: 'contract', 
@@ -107,7 +101,7 @@ export default function InvoicesList() {
       status: isDraft ? 'draft' : 'active',
       issue_date: templateFormData.signing_date || new Date().toISOString(),
       invoice_number: templateFormData.invoice_number || `CTR-${Math.floor(1000 + Math.random() * 9000)}`,
-      notes: `${extraDetails} Duration: ${templateFormData.duration_val || 'N/A'} ${templateFormData.duration_unit}. Details: ${templateFormData.details || ''}`
+      notes: `Duration: ${templateFormData.duration_val || 'N/A'} ${templateFormData.duration_unit}. Details: ${templateFormData.details || ''}`
     });
   };
 
@@ -155,16 +149,17 @@ export default function InvoicesList() {
                 </DropdownMenuContent>
               </DropdownMenu>
 
-              {/* FIXED: "Add Custom Template" now triggers a blank creation state */}
-              <Button onClick={() => {
+              <Button 
+                onClick={() => {
+                  setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: '' });
                   if (typeFilter === 'template') {
-                    setSelectedTemplate('custom_blank');
-                    setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: 'New Custom Template' });
                     setShowNDAModal(true);
                   } else {
                     setShowCreateModal(true);
                   }
-                }} className="bg-indigo-600 hover:bg-indigo-700 font-bold">
+                }} 
+                className="bg-indigo-600 hover:bg-indigo-700 font-bold"
+              >
                 <Plus className="w-4 h-4 mr-2" /> {typeFilter === 'template' ? 'Add Custom Template' : `New ${typeFilter}`}
               </Button>
             </div>
@@ -186,83 +181,40 @@ export default function InvoicesList() {
 
             {typeFilter === 'template' && (
               <div className="mb-10">
-                {!selectedTemplate ? (
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                    {/* Added a Fourth Card for Blank Document */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                  {/* Blank Option */}
+                  <Card 
+                    onClick={() => {
+                      setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: '' });
+                      setShowNDAModal(true);
+                    }} 
+                    className="hover:border-indigo-500 transition-all cursor-pointer border-dashed border-2 bg-indigo-50/20 group"
+                  >
+                    <CardContent className="p-6 text-center">
+                      <FilePlus className="w-12 h-12 text-indigo-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
+                      <h3 className="font-bold text-indigo-900">Blank Document</h3>
+                      <p className="text-xs text-gray-500 mt-2">Create custom from scratch</p>
+                    </CardContent>
+                  </Card>
+
+                  {Object.entries(templateFieldsConfig).map(([key, data]) => (
                     <Card 
+                      key={key} 
                       onClick={() => {
-                        setSelectedTemplate('custom_blank');
-                        setTemplateFormData({ currency: 'PHP', duration_unit: 'Years', document_name: 'Custom Document' });
+                        setSelectedTemplate(key);
+                        setTemplateFormData(p => ({...p, document_name: data.title}));
                         setShowNDAModal(true);
                       }} 
                       className="hover:border-indigo-500 transition-all cursor-pointer border-dashed border-2 bg-indigo-50/20 group"
                     >
                       <CardContent className="p-6 text-center">
-                        <FilePlus className="w-12 h-12 text-indigo-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
-                        <h3 className="font-bold text-indigo-900">Blank Template</h3>
-                        <p className="text-xs text-gray-500 mt-2">Start from scratch</p>
+                        <FileCheck className="w-12 h-12 text-indigo-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
+                        <h3 className="font-bold text-indigo-900">{data.title}</h3>
+                        <p className="text-xs text-gray-500 mt-2">{data.desc}</p>
                       </CardContent>
                     </Card>
-
-                    {Object.entries(templateFieldsConfig).map(([key, data]) => (
-                      <Card 
-                        key={key} 
-                        onClick={() => {
-                          setSelectedTemplate(key);
-                          setTemplateFormData(p => ({...p, document_name: data.title}));
-                        }} 
-                        className="hover:border-indigo-500 transition-all cursor-pointer border-dashed border-2 bg-indigo-50/20 group"
-                      >
-                        <CardContent className="p-6 text-center">
-                          <FileCheck className="w-12 h-12 text-indigo-400 mx-auto mb-4 group-hover:scale-110 transition-transform" />
-                          <h3 className="font-bold text-indigo-900">{data.title}</h3>
-                          <p className="text-xs text-gray-500 mt-2">{data.desc}</p>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                ) : (
-                  <Card className="border-indigo-100 bg-indigo-50/10 shadow-inner">
-                    <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
-                      <div className="flex items-center gap-3">
-                        <Button variant="ghost" size="sm" onClick={() => setSelectedTemplate(null)} className="text-indigo-600">
-                          <ArrowLeft className="w-4 h-4 mr-1" /> Back to Templates
-                        </Button>
-                        <div>
-                          <CardTitle className="text-lg text-indigo-900">
-                            {templateFieldsConfig[selectedTemplate]?.title || "Custom Document"}
-                          </CardTitle>
-                          <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Template Configuration</p>
-                        </div>
-                      </div>
-                      <Button onClick={() => setShowNDAModal(true)} className="bg-indigo-600 font-bold shadow-lg shadow-indigo-100">
-                          Proceed to Finalize <FileText className="w-4 h-4 ml-2" />
-                      </Button>
-                    </CardHeader>
-                    <CardContent className="py-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {templateFieldsConfig[selectedTemplate]?.fields.map((field) => (
-                        <div key={field.key} className={field.type === 'textarea' ? "md:col-span-2 space-y-2" : "space-y-2"}>
-                          <Label className="text-indigo-900 font-bold text-xs uppercase">{field.label}</Label>
-                          {field.type === 'textarea' ? (
-                            <Textarea 
-                              placeholder={`Enter ${field.label.toLowerCase()}...`}
-                              value={templateFormData[field.key] || ''}
-                              onChange={(e) => setTemplateFormData(p => ({...p, [field.key]: e.target.value}))}
-                              className="bg-white border-indigo-100 min-h-[100px]"
-                            />
-                          ) : (
-                            <Input 
-                              placeholder={`Enter ${field.label.toLowerCase()}`}
-                              value={templateFormData[field.key] || ''}
-                              onChange={(e) => setTemplateFormData(p => ({...p, [field.key]: e.target.value}))}
-                              className="bg-white border-indigo-100 h-11"
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </CardContent>
-                  </Card>
-                )}
+                  ))}
+                </div>
               </div>
             )}
 
@@ -291,7 +243,7 @@ export default function InvoicesList() {
                           <Badge className="bg-green-50 text-green-600 border-green-100 px-3 py-0.5 rounded-md font-bold text-[10px]">ACTIVE</Badge>
                           <p className="font-black text-lg text-gray-800">{currencySymbols[inv.currency || 'PHP']}{inv.total?.toLocaleString() || '0'}</p>
                         </div>
-                        <Button variant="ghost" size="icon" className="text-gray-300 hover:text-red-500 hover:bg-red-50" onClick={() => { if(confirm('Delete this record?')) deleteMutation.mutate(inv.id) }}><Trash2 className="w-4 h-4"/></Button>
+                        <Button variant="ghost" size="icon" className="text-gray-300 hover:text-red-500 hover:bg-red-50" onClick={(e) => { e.stopPropagation(); if(confirm('Delete this record?')) deleteMutation.mutate(inv.id) }}><Trash2 className="w-4 h-4"/></Button>
                       </div>
                     </CardContent>
                   </Card>
@@ -302,29 +254,42 @@ export default function InvoicesList() {
         </CardContent>
       </Card>
 
+      {/* FINALIZATION MODAL */}
       <Dialog open={showNDAModal} onOpenChange={setShowNDAModal}>
         <DialogContent className="max-w-2xl overflow-y-auto max-h-[90vh] text-left">
           <DialogHeader className="border-b pb-4">
-            <DialogTitle className="text-2xl font-bold text-gray-800">Finalize Document</DialogTitle>
+            <DialogTitle className="text-2xl font-bold text-gray-800">Create Custom Document</DialogTitle>
           </DialogHeader>
           <div className="space-y-5 py-6">
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label className="font-bold text-gray-600">Contract Name/Title *</Label><Input placeholder="e.g. Master Service Agreement" value={templateFormData.document_name || ''} onChange={e => setTemplateFormData(p => ({...p, document_name: e.target.value}))}/></div>
-              <div className="space-y-2"><Label className="font-bold text-gray-600">Date of Signing</Label><div className="relative"><Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400" /><Input type="date" className="pl-10" value={templateFormData.signing_date || ''} onChange={e => setTemplateFormData(p => ({...p, signing_date: e.target.value}))}/></div></div>
+              <div className="space-y-2">
+                <Label className="font-bold text-gray-600">Document Title *</Label>
+                <Input placeholder="e.g. Partnership Agreement" value={templateFormData.document_name || ''} onChange={e => setTemplateFormData(p => ({...p, document_name: e.target.value}))}/>
+              </div>
+              <div className="space-y-2">
+                <Label className="font-bold text-gray-600">Signing Date</Label>
+                <div className="relative"><Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400" /><Input type="date" className="pl-10" value={templateFormData.signing_date || ''} onChange={e => setTemplateFormData(p => ({...p, signing_date: e.target.value}))}/></div>
+              </div>
             </div>
-            <div className="space-y-2"><Label className="font-bold text-gray-600">General Notes / Details</Label><Textarea className="min-h-[100px] bg-gray-50/30" placeholder="Scope, terms, and obligations..." value={templateFormData.details || ''} onChange={e => setTemplateFormData(p => ({...p, details: e.target.value}))}/></div>
+            
+            <div className="space-y-2">
+              <Label className="font-bold text-gray-600">Full Content / Terms</Label>
+              <Textarea className="min-h-[200px] bg-gray-50/30" placeholder="Type or paste the full text of your document here..." value={templateFormData.details || ''} onChange={e => setTemplateFormData(p => ({...p, details: e.target.value}))}/>
+            </div>
+
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label className="font-bold text-gray-600">Duration Value</Label><Input type="number" placeholder="12" value={templateFormData.duration_val || ''} onChange={e => setTemplateFormData(p => ({...p, duration_val: e.target.value}))}/></div>
-              <div className="space-y-2"><Label className="font-bold text-gray-600">Duration Unit</Label>
+              <div className="space-y-2"><Label className="font-bold text-gray-600">Validity Value</Label><Input type="number" placeholder="1" value={templateFormData.duration_val || ''} onChange={e => setTemplateFormData(p => ({...p, duration_val: e.target.value}))}/></div>
+              <div className="space-y-2"><Label className="font-bold text-gray-600">Unit</Label>
                 <Select value={templateFormData.duration_unit} onValueChange={v => setTemplateFormData(p => ({...p, duration_unit: v}))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent><SelectItem value="Months">Months</SelectItem><SelectItem value="Years">Years</SelectItem><SelectItem value="Indefinite">Indefinite</SelectItem></SelectContent>
                 </Select></div>
             </div>
+
             <div className="p-6 border-2 border-dashed rounded-2xl bg-gray-50 text-center">
               <Label className="cursor-pointer">
                 <UploadCloud className="w-8 h-8 text-indigo-400 mx-auto mb-2" />
-                <span className="text-xs text-gray-500 font-bold block">Attach Signed Copy (PDF/IMG)</span>
+                <span className="text-xs text-gray-500 font-bold block">Upload Signed PDF/Scan</span>
                 <Input type="file" className="hidden" onChange={(e) => setUploadedFileName(e.target.files[0]?.name)} />
                 {uploadedFileName && <Badge className="mt-2 bg-indigo-100 text-indigo-700">{uploadedFileName}</Badge>}
               </Label>
@@ -332,38 +297,37 @@ export default function InvoicesList() {
             {error && <div className="p-3 bg-red-50 text-red-600 text-xs font-bold rounded-lg border border-red-100">{error}</div>}
           </div>
           <DialogFooter className="border-t pt-4 flex gap-3">
-            <Button variant="outline" onClick={() => handleSaveCustom(true)} className="flex-1 h-11 font-bold"><Save className="w-4 h-4 mr-2" /> Save Draft</Button>
+            <Button variant="outline" onClick={() => handleSaveCustom(true)} className="flex-1 h-11 font-bold"><Save className="w-4 h-4 mr-2" /> Save as Draft</Button>
             <Button onClick={() => handleSaveCustom(false)} disabled={saveMutation.isPending} className="flex-1 h-11 bg-indigo-600 font-bold">
-              {saveMutation.isPending ? 'Processing...' : 'Finalize & Register'}
+              {saveMutation.isPending ? 'Saving...' : 'Register Document'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* STANDARD MODAL */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent className="max-w-xl text-left">
           <DialogHeader className="border-b pb-4">
             <DialogTitle className="capitalize flex items-center gap-2 font-bold text-xl">
-              {typeFilter === 'quote' && <FileDigit className="text-blue-500" />}
-              {typeFilter === 'job' && <Briefcase className="text-orange-500" />}
               New {typeFilter} Form
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-6">
-            <div className="space-y-2"><Label className="font-bold text-gray-600">Client/Business Name *</Label><Input value={templateFormData.client_name || ''} onChange={e => setTemplateFormData(p => ({...p, client_name: e.target.value}))}/></div>
+            <div className="space-y-2"><Label className="font-bold text-gray-600">Client Name *</Label><Input value={templateFormData.client_name || ''} onChange={e => setTemplateFormData(p => ({...p, client_name: e.target.value}))}/></div>
             <div className="grid grid-cols-2 gap-4">
-               <div className="space-y-2"><Label className="font-bold text-gray-600">Total Amount</Label><Input type="number" placeholder="0.00" value={templateFormData.total || ''} onChange={e => setTemplateFormData(p => ({...p, total: e.target.value}))}/></div>
+               <div className="space-y-2"><Label className="font-bold text-gray-600">Total Value</Label><Input type="number" placeholder="0.00" value={templateFormData.total || ''} onChange={e => setTemplateFormData(p => ({...p, total: e.target.value}))}/></div>
                <div className="space-y-2"><Label className="font-bold text-gray-600">Currency</Label>
                  <Select value={templateFormData.currency} onValueChange={v => setTemplateFormData(p => ({...p, currency: v}))}>
                    <SelectTrigger><SelectValue /></SelectTrigger>
                    <SelectContent>{Object.keys(currencySymbols).map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
                  </Select></div>
             </div>
-            <div className="space-y-2"><Label className="font-bold text-gray-600">{typeFilter === 'quote' ? 'Validity Period' : 'Terms/Deadlines'}</Label><Input placeholder="e.g. Valid for 30 days" value={templateFormData.notes || ''} onChange={e => setTemplateFormData(p => ({...p, notes: e.target.value}))}/></div>
+            <div className="space-y-2"><Label className="font-bold text-gray-600">Notes</Label><Input placeholder="Internal notes..." value={templateFormData.notes || ''} onChange={e => setTemplateFormData(p => ({...p, notes: e.target.value}))}/></div>
           </div>
           <DialogFooter className="border-t pt-4">
             <Button onClick={handleSaveStandard} disabled={saveMutation.isPending} className="w-full bg-indigo-600 h-11 font-bold">
-              {saveMutation.isPending ? 'Saving...' : `Register ${typeFilter.toUpperCase()}`}
+              {saveMutation.isPending ? 'Saving...' : `Create ${typeFilter}`}
             </Button>
           </DialogFooter>
         </DialogContent>
