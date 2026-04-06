@@ -83,45 +83,55 @@ def login():
 
 @app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
 def register():
-    # Handle the browser's security pre-flight check
-    if request.method == 'OPTIONS': 
-        return jsonify({"status": "ok"}), 200
-        
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     try:
         data = request.json
         hashed_pw = generate_password_hash(data['password'])
-        
         conn = sqlite3.connect('giggenius.db')
         c = conn.cursor()
         c.execute("INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)",
                   (data['firstName'], data['lastName'], data['email'], hashed_pw))
         conn.commit()
         return jsonify({"message": "User created successfully!"}), 201
-        
     except sqlite3.IntegrityError:
-        # If the email is already in the database
         return jsonify({"error": "An account with this email already exists."}), 400
     except Exception as e:
-        # If anything else crashes, return JSON instead of an HTML page
         return jsonify({"error": str(e)}), 500
     finally:
-        if 'conn' in locals():
-            conn.close()
+        if 'conn' in locals(): conn.close()
+
+# --- ANALYTICS ROUTE FOR DASHBOARD STATS ---
+@app.route('/api/apps/giggenius-crm/analytics/CustomDashboard', methods=['GET', 'OPTIONS'])
+def get_dashboard_analytics():
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    user_email = get_valid_user_email(request.headers)
+    if not user_email: return jsonify({}), 401
+    
+    conn = sqlite3.connect('giggenius.db')
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    
+    # Get all deals to calculate stats
+    c.execute("SELECT value, stage FROM deals WHERE user_email = ?", (user_email,))
+    deals = c.fetchall()
+    
+    total_pipeline = sum(d['value'] or 0 for d in deals)
+    won_monthly = sum(d['value'] or 0 for d in deals if d['stage'] == 'closed_won')
+    
+    return jsonify({
+        "pipelineValue": total_pipeline,
+        "totalDeals": len(deals),
+        "wonMonthly": won_monthly
+    }), 200
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_list_create(entity_name):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     
     table_map = {
-        'Department': 'departments', 
-        'Employee': 'employees', 
-        'Contact': 'contacts', 
-        'Task': 'project_tasks', 
-        'ProjectTask': 'project_tasks', 
-        'Invoice': 'invoices', 
-        'Campaign': 'campaigns', 
-        'Project': 'projects', 
-        'TimeEntry': 'time_entries',
+        'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts', 
+        'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 'Invoice': 'invoices', 
+        'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries',
         'Deal': 'deals'
     }
     
@@ -158,15 +168,9 @@ def handle_base44_single_item_action(entity_name, entity_id):
     if not user_email: return jsonify({"error": "Unauthorized"}), 401
     
     table_map = {
-        'Department': 'departments',
-        'Employee': 'employees',
-        'Contact': 'contacts',
-        'Invoice': 'invoices',
-        'TimeEntry': 'time_entries', 
-        'ProjectTask': 'project_tasks', 
-        'Campaign': 'campaigns', 
-        'Project': 'projects',
-        'Deal': 'deals'
+        'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
+        'Invoice': 'invoices', 'TimeEntry': 'time_entries', 'ProjectTask': 'project_tasks', 
+        'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": "Entity not found"}), 404
