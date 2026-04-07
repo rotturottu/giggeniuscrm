@@ -18,14 +18,12 @@ def init_db():
                   first_name TEXT, last_name TEXT, email TEXT UNIQUE,
                   password TEXT, profile_picture TEXT)''')
     
-    # UPDATED: Invoices Table now includes document_name, signing_date, and details
+    # Invoices Table
     c.execute('''CREATE TABLE IF NOT EXISTS invoices
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  invoice_number TEXT UNIQUE, client_name TEXT, 
-                  document_name TEXT, signing_date TEXT, details TEXT,
-                  type TEXT, total REAL, currency TEXT DEFAULT 'PHP', 
-                  status TEXT DEFAULT 'draft', issue_date TEXT, notes TEXT, 
-                  items TEXT, tax_rate REAL DEFAULT 0,
+                  invoice_number TEXT UNIQUE, client_name TEXT, type TEXT,
+                  total REAL, currency TEXT DEFAULT 'PHP', status TEXT DEFAULT 'draft',
+                  issue_date TEXT, notes TEXT, items TEXT, tax_rate REAL DEFAULT 0,
                   user_email TEXT, FOREIGN KEY(user_email) REFERENCES users(email))''')
 
     # Entity Tables
@@ -110,18 +108,6 @@ def register():
         if 'conn' in locals():
             conn.close()
 
-# NEW FUNCTION: Profile endpoint to stop 405 errors blocking the UI
-@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'OPTIONS'])
-def get_me_profile():
-    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    user_email = get_valid_user_email(request.headers)
-    if not user_email: return jsonify({"error": "Unauthorized"}), 401
-    conn = sqlite3.connect('giggenius.db')
-    conn.row_factory = sqlite3.Row
-    user = conn.execute("SELECT first_name, last_name, email FROM users WHERE email = ?", (user_email,)).fetchone()
-    conn.close()
-    return jsonify(dict(user)) if user else jsonify({"error": "Not found"}), 404
-
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_list_create(entity_name):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
@@ -149,15 +135,7 @@ def handle_base44_list_create(entity_name):
 
     if request.method == 'GET':
         if not user_email: return jsonify([]), 200
-        # MODIFIED: Logic to handle URL filters like ?type=contract for the tabs
-        query = f"SELECT * FROM {table_name} WHERE user_email = ?"
-        params = [user_email]
-        for key, value in request.args.items():
-            if key not in ['_sort', '_order', '_limit', '_page']:
-                query += f" AND {key} = ?"
-                params.append(value)
-        query += " ORDER BY id DESC"
-        c.execute(query, tuple(params))
+        c.execute(f"SELECT * FROM {table_name} WHERE user_email = ? ORDER BY id DESC", (user_email,))
         return jsonify([dict(row) for row in c.fetchall()]), 200
 
     if request.method == 'POST':
