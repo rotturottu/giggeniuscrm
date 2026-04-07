@@ -18,12 +18,14 @@ def init_db():
                   first_name TEXT, last_name TEXT, email TEXT UNIQUE,
                   password TEXT, profile_picture TEXT)''')
     
-    # Invoices Table
+    # UPDATED Invoices Table: Added document_name, signing_date, and details
     c.execute('''CREATE TABLE IF NOT EXISTS invoices
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  invoice_number TEXT UNIQUE, client_name TEXT, type TEXT,
-                  total REAL, currency TEXT DEFAULT 'PHP', status TEXT DEFAULT 'draft',
-                  issue_date TEXT, notes TEXT, items TEXT, tax_rate REAL DEFAULT 0,
+                  invoice_number TEXT UNIQUE, client_name TEXT, 
+                  document_name TEXT, signing_date TEXT, details TEXT,
+                  type TEXT, total REAL, currency TEXT DEFAULT 'PHP', 
+                  status TEXT DEFAULT 'draft', issue_date TEXT, notes TEXT, 
+                  items TEXT, tax_rate REAL DEFAULT 0,
                   user_email TEXT, FOREIGN KEY(user_email) REFERENCES users(email))''')
 
     # Entity Tables
@@ -56,7 +58,6 @@ def init_db():
             schema = "employee_name TEXT, employee_email TEXT, period_start TEXT, period_end TEXT, currency TEXT, base_salary REAL, hours_worked REAL, overtime_hours REAL, overtime_pay REAL, bonuses REAL, deductions REAL, tax REAL, net_pay REAL, status TEXT DEFAULT 'draft', notes TEXT, paid_at TEXT"
         elif table == 'performance_reviews':
             schema = "employee_name TEXT, employee_email TEXT, reviewer_email TEXT, review_period TEXT, overall_rating INTEGER, goals_met TEXT, strengths TEXT, areas_of_improvement TEXT, goals_next_period TEXT, comments TEXT, status TEXT DEFAULT 'draft'"
-        # NEW: ONBOARDING TASKS SCHEMA
         elif table == 'onboarding_tasks':
             schema = "employee_name TEXT, employee_id TEXT, task_name TEXT, category TEXT, assigned_to TEXT, due_date TEXT, status TEXT DEFAULT 'pending', notes TEXT, department TEXT"
             
@@ -109,26 +110,17 @@ def register():
     finally:
         if 'conn' in locals(): conn.close()
 
-@app.route('/api/apps/giggenius-crm/analytics/CustomDashboard', methods=['GET', 'OPTIONS'])
-def get_dashboard_analytics():
+# FIX: Added User Profile endpoint to stop 405 errors
+@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'OPTIONS'])
+def get_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = get_valid_user_email(request.headers)
-    if not user_email: return jsonify({}), 401
-    
+    if not user_email: return jsonify({"error": "Unauthorized"}), 401
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-    c.execute("SELECT value, stage FROM deals WHERE user_email = ?", (user_email,))
-    deals = c.fetchall()
-    
-    total_pipeline = sum(d['value'] or 0 for d in deals)
-    won_monthly = sum(d['value'] or 0 for d in deals if d['stage'] == 'closed_won')
-    
-    return jsonify({
-        "pipelineValue": total_pipeline,
-        "totalDeals": len(deals),
-        "wonMonthly": won_monthly
-    }), 200
+    user = conn.execute("SELECT first_name, last_name, email FROM users WHERE email = ?", (user_email,)).fetchone()
+    conn.close()
+    return jsonify(dict(user)) if user else jsonify({"error": "Not found"}), 404
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_list_create(entity_name):
@@ -140,7 +132,7 @@ def handle_base44_list_create(entity_name):
         'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries',
         'Deal': 'deals', 'LeaveRequest': 'leave_requests', 
         'PayrollRecord': 'payroll', 'PerformanceReview': 'performance_reviews',
-        'OnboardingTask': 'onboarding_tasks' # ADDED Onboarding mapping
+        'OnboardingTask': 'onboarding_tasks'
     }
     
     table_name = table_map.get(entity_name)
@@ -153,8 +145,17 @@ def handle_base44_list_create(entity_name):
 
     if request.method == 'GET':
         if not user_email: return jsonify([]), 200
-        c.execute(f"SELECT * FROM {table_name} WHERE user_email = ? ORDER BY id DESC", (user_email,))
-        return jsonify([dict(row) for row in c.fetchall()]), 200
+        # Support for URL filters like ?type=contract
+        query = f"SELECT * FROM {table_name} WHERE user_email = ?"
+        params = [user_email]
+        for key, value in request.args.items():
+            if key not in ['_sort', '_order', '_limit', '_page']:
+                query += f" AND {key} = ?"
+                params.append(value)
+        query += " ORDER BY id DESC"
+        data = conn.execute(query, tuple(params)).fetchall()
+        conn.close()
+        return jsonify([dict(row) for row in data]), 200
 
     if request.method == 'POST':
         item = request.json
@@ -167,6 +168,7 @@ def handle_base44_list_create(entity_name):
         c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned.values()))
         conn.commit()
         cleaned['id'] = c.lastrowid
+        conn.close()
         return jsonify(cleaned), 201
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
@@ -180,7 +182,7 @@ def handle_base44_single_item_action(entity_name, entity_id):
         'Invoice': 'invoices', 'TimeEntry': 'time_entries', 'ProjectTask': 'project_tasks', 
         'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals',
         'LeaveRequest': 'leave_requests', 'PayrollRecord': 'payroll',
-        'PerformanceReview': 'performance_reviews', 'OnboardingTask': 'onboarding_tasks' # ADDED Onboarding mapping
+        'PerformanceReview': 'performance_reviews', 'OnboardingTask': 'onboarding_tasks'
     }
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify({"error": "Entity not found"}), 404
@@ -196,11 +198,13 @@ def handle_base44_single_item_action(entity_name, entity_id):
         set_clause = ', '.join([f"{k} = ?" for k in cleaned.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ? AND user_email = ?", list(cleaned.values()) + [entity_id, user_email])
         conn.commit()
+        conn.close()
         return jsonify({"success": True}), 200
 
     if request.method == 'DELETE':
-        c.execute(f"DELETE FROM {table_name} WHERE id = ? AND user_email = ?", (entity_id, user_email))
+        conn.execute(f"DELETE FROM {table_name} WHERE id = ? AND user_email = ?", (entity_id, user_email))
         conn.commit()
+        conn.close()
         return jsonify({"success": True}), 200
 
 if __name__ == '__main__':
