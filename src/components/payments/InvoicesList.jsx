@@ -29,8 +29,9 @@ export default function InvoicesList() {
     queryKey: ['invoices', typeFilter],
     queryFn: async () => {
         const dbType = typeFilter === 'template' ? 'contract' : typeFilter;
-        const res = await base44.entities.Invoice.list('-created_date');
-        return Array.isArray(res) ? res.filter(inv => inv.type === dbType && inv.status === 'active') : [];
+        // Updated to use filter query param support in backend
+        const res = await base44.entities.Invoice.list(`-created_date&type=${dbType}`);
+        return Array.isArray(res) ? res.filter(inv => inv.status === 'active') : [];
     },
   });
 
@@ -65,7 +66,6 @@ export default function InvoicesList() {
             <CardTitle className="text-xl font-bold text-gray-800">Sales & Documents</CardTitle>
             <Button 
               onClick={() => {
-                console.log("Button clicked!");
                 if (typeFilter === 'template') setShowNDAModal(true);
                 else setShowCreateModal(true);
               }} 
@@ -74,7 +74,7 @@ export default function InvoicesList() {
               <Plus className="w-4 h-4 mr-2" /> {typeFilter === 'template' ? 'Add Custom Template' : `New ${typeFilter}`}
             </Button>
           </div>
-        </HeaderHeader>
+        </CardHeader>
         
         <CardContent className="pt-6">
           <Tabs value={typeFilter} onValueChange={setTypeFilter}>
@@ -84,7 +84,6 @@ export default function InvoicesList() {
               ))}
             </TabsList>
 
-            {/* List View */}
             <div className="space-y-4">
               {invoices.length === 0 ? (
                 <div className="text-center py-20 border-2 border-dashed rounded-3xl bg-gray-50/50">
@@ -99,10 +98,13 @@ export default function InvoicesList() {
                         <FileText className="w-5 h-5 text-indigo-500" />
                         <div>
                           <p className="font-bold text-gray-900">{inv.invoice_number}</p>
-                          <p className="text-sm text-gray-500">{inv.client_name}</p>
+                          <p className="text-sm text-gray-500">{inv.document_name || inv.client_name}</p>
                         </div>
                       </div>
-                      <p className="font-black text-lg">{currencySymbols[inv.currency || 'PHP']}{inv.total || 0}</p>
+                      <div className="flex items-center gap-6">
+                         <p className="font-black text-lg">{currencySymbols[inv.currency || 'PHP']}{inv.total || 0}</p>
+                         <Button variant="ghost" size="icon" className="text-gray-300 hover:text-red-500" onClick={() => base44.entities.Invoice.delete(inv.id).then(() => qc.invalidateQueries(['invoices']))}><Trash2 className="w-4 h-4" /></Button>
+                      </div>
                     </CardContent>
                   </Card>
                 ))
@@ -112,31 +114,36 @@ export default function InvoicesList() {
         </CardContent>
       </Card>
 
-      {/* CUSTOMIZER MODAL */}
       <Dialog open={showNDAModal} onOpenChange={setShowNDAModal}>
-        <DialogContent className="max-w-3xl overflow-y-auto max-h-[90vh]">
+        <DialogContent className="max-w-3xl overflow-y-auto max-h-[90vh] text-left">
           <DialogHeader>
-            <DialogTitle>Document Customizer</DialogTitle>
-            <DialogDescription>Create a fully custom document for your records.</DialogDescription>
+            <DialogTitle className="text-2xl font-bold flex items-center gap-2">
+              <FilePlus className="w-6 h-6 text-indigo-600" />
+              Document Customizer
+            </DialogTitle>
+            <DialogDescription>Create a fully custom document for your records. This will be saved as a Contract type.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label>Document Title</Label>
-                <Input value={templateFormData.document_name || ''} onChange={e => setTemplateFormData(p => ({...p, document_name: e.target.value}))} />
+                <Label>Document Title *</Label>
+                <Input placeholder="e.g., NDA, MOU" value={templateFormData.document_name || ''} onChange={e => setTemplateFormData(p => ({...p, document_name: e.target.value}))} />
               </div>
               <div className="space-y-1">
-                <Label>Date</Label>
+                <Label>Signing Date</Label>
                 <Input type="date" value={templateFormData.signing_date || ''} onChange={e => setTemplateFormData(p => ({...p, signing_date: e.target.value}))} />
               </div>
             </div>
             <div className="space-y-1">
-              <Label>Document Content</Label>
-              <Textarea className="min-h-[200px]" value={templateFormData.details || ''} onChange={e => setTemplateFormData(p => ({...p, details: e.target.value}))} />
+              <Label>Document Content / Details</Label>
+              <Textarea className="min-h-[200px]" placeholder="Type terms and conditions..." value={templateFormData.details || ''} onChange={e => setTemplateFormData(p => ({...p, details: e.target.value}))} />
             </div>
           </div>
+          {error && <p className="text-red-500 text-sm font-bold mb-2">{error}</p>}
           <DialogFooter>
-            <Button onClick={() => handleSaveCustom(false)} className="bg-indigo-600 w-full">Save Document</Button>
+            <Button onClick={() => handleSaveCustom(false)} disabled={saveMutation.isPending} className="bg-indigo-600 w-full font-bold">
+              {saveMutation.isPending ? "Saving..." : "Save Final Document"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

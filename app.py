@@ -18,37 +18,36 @@ def init_db():
                   first_name TEXT, last_name TEXT, email TEXT UNIQUE,
                   password TEXT, profile_picture TEXT)''')
     
-    # Invoices Table
+    # UPDATED Invoices Table: Added document_name, signing_date, and details
     c.execute('''CREATE TABLE IF NOT EXISTS invoices
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  invoice_number TEXT UNIQUE, client_name TEXT, type TEXT,
-                  total REAL, currency TEXT DEFAULT 'PHP', status TEXT DEFAULT 'draft',
-                  issue_date TEXT, notes TEXT, items TEXT, tax_rate REAL DEFAULT 0,
+                  invoice_number TEXT UNIQUE, client_name TEXT, 
+                  document_name TEXT, signing_date TEXT, details TEXT,
+                  type TEXT, total REAL, currency TEXT DEFAULT 'PHP', 
+                  status TEXT DEFAULT 'draft', issue_date TEXT, notes TEXT, 
+                  items TEXT, tax_rate REAL DEFAULT 0,
                   user_email TEXT, FOREIGN KEY(user_email) REFERENCES users(email))''')
 
     # Entity Tables
     tables = [
         'departments', 'employees', 'contacts', 'project_tasks', 
-        'projects', 'campaigns', 'time_entries', 'deals'
+        'projects', 'campaigns', 'time_entries', 'deals', 
+        'leave_requests', 'payroll', 'performance_reviews', 'onboarding_tasks'
     ]
     
     for table in tables:
-        if table == 'departments': 
-            schema = "name TEXT, head_email TEXT, description TEXT, budget REAL, currency TEXT"
-        elif table == 'employees': 
-            schema = "first_name TEXT, last_name TEXT, email TEXT UNIQUE, department TEXT"
-        elif table == 'contacts': 
-            schema = "name TEXT, email TEXT, phone TEXT, company TEXT, status TEXT"
-        elif table == 'project_tasks': 
-            schema = "title TEXT, description TEXT, list_name TEXT, status TEXT, priority TEXT, assigned_to TEXT, start_date TEXT, due_date TEXT, subtasks TEXT, attachments TEXT, parent_task_id INTEGER"
-        elif table == 'projects': 
-            schema = "name TEXT, assigned_person TEXT, start_date TEXT, end_date TEXT, description TEXT, budget REAL, currency TEXT, signed_contract TEXT, status TEXT DEFAULT 'active'"
-        elif table == 'campaigns': 
-            schema = "name TEXT, status TEXT DEFAULT 'Draft', leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%'"
-        elif table == 'time_entries': 
-            schema = "employee_name TEXT, employee_email TEXT, type TEXT, date TEXT, clock_in TEXT, clock_out TEXT, duration_minutes INTEGER, status TEXT DEFAULT 'active'"
-        elif table == 'deals': 
-            schema = "name TEXT, value REAL, stage TEXT, owner_email TEXT, expected_close_date TEXT, description TEXT, contact_id INTEGER"
+        if table == 'departments': schema = "name TEXT, head_email TEXT, description TEXT, budget REAL, currency TEXT"
+        elif table == 'employees': schema = "first_name TEXT, last_name TEXT, email TEXT UNIQUE, department TEXT"
+        elif table == 'contacts': schema = "name TEXT, email TEXT, phone TEXT, company TEXT, status TEXT"
+        elif table == 'project_tasks': schema = "title TEXT, description TEXT, list_name TEXT, status TEXT, priority TEXT, assigned_to TEXT, start_date TEXT, due_date TEXT, subtasks TEXT, attachments TEXT, parent_task_id INTEGER"
+        elif table == 'projects': schema = "name TEXT, assigned_person TEXT, start_date TEXT, end_date TEXT, description TEXT, budget REAL, currency TEXT, signed_contract TEXT, status TEXT DEFAULT 'active'"
+        elif table == 'campaigns': schema = "name TEXT, status TEXT DEFAULT 'Draft', leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%'"
+        elif table == 'time_entries': schema = "employee_name TEXT, employee_email TEXT, type TEXT, date TEXT, clock_in TEXT, clock_out TEXT, duration_minutes INTEGER, status TEXT DEFAULT 'active'"
+        elif table == 'deals': schema = "name TEXT, value REAL, stage TEXT, owner_email TEXT, expected_close_date TEXT, description TEXT, contact_id INTEGER"
+        elif table == 'leave_requests': schema = "employee_name TEXT, employee_email TEXT, leave_type TEXT, start_date TEXT, end_date TEXT, reason TEXT, days_count INTEGER, status TEXT DEFAULT 'pending'"
+        elif table == 'payroll': schema = "employee_name TEXT, employee_email TEXT, period_start TEXT, period_end TEXT, currency TEXT, base_salary REAL, hours_worked REAL, overtime_hours REAL, overtime_pay REAL, bonuses REAL, deductions REAL, tax REAL, net_pay REAL, status TEXT DEFAULT 'draft', notes TEXT, paid_at TEXT"
+        elif table == 'performance_reviews': schema = "employee_name TEXT, employee_email TEXT, reviewer_email TEXT, review_period TEXT, overall_rating INTEGER, goals_met TEXT, strengths TEXT, areas_of_improvement TEXT, goals_next_period TEXT, comments TEXT, status TEXT DEFAULT 'draft'"
+        elif table == 'onboarding_tasks': schema = "employee_name TEXT, employee_id TEXT, task_name TEXT, category TEXT, assigned_to TEXT, due_date TEXT, status TEXT DEFAULT 'pending', notes TEXT, department TEXT"
             
         c.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY AUTOINCREMENT, {schema}, user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)")
 
@@ -58,14 +57,12 @@ def init_db():
 init_db()
 
 def get_valid_user_email(headers):
-    """Checks Headers first, then peeks inside the JSON body."""
     email = headers.get('User-Email')
     if email in [None, '', 'null', 'undefined']:
         try:
             if request.is_json:
                 data = request.get_json(silent=True)
-                if data:
-                    email = data.get('user_email') or data.get('employee_email') or data.get('email')
+                if data: email = data.get('user_email') or data.get('employee_email') or data.get('email')
         except: pass
     return email if email not in [None, '', 'null', 'undefined'] else None
 
@@ -83,51 +80,47 @@ def login():
 
 @app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
 def register():
-    # Handle the browser's security pre-flight check
-    if request.method == 'OPTIONS': 
-        return jsonify({"status": "ok"}), 200
-        
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     try:
         data = request.json
         hashed_pw = generate_password_hash(data['password'])
-        
         conn = sqlite3.connect('giggenius.db')
         c = conn.cursor()
         c.execute("INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)",
                   (data['firstName'], data['lastName'], data['email'], hashed_pw))
         conn.commit()
         return jsonify({"message": "User created successfully!"}), 201
-        
     except sqlite3.IntegrityError:
-        # If the email is already in the database
         return jsonify({"error": "An account with this email already exists."}), 400
     except Exception as e:
-        # If anything else crashes, return JSON instead of an HTML page
         return jsonify({"error": str(e)}), 500
     finally:
-        if 'conn' in locals():
-            conn.close()
+        if 'conn' in locals(): conn.close()
+
+# PROFILE ENDPOINT TO FIX 405 ERRORS
+@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'OPTIONS'])
+def get_me():
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    user_email = get_valid_user_email(request.headers)
+    if not user_email: return jsonify({"error": "Unauthorized"}), 401
+    conn = sqlite3.connect('giggenius.db')
+    conn.row_factory = sqlite3.Row
+    user = conn.execute("SELECT first_name, last_name, email FROM users WHERE email = ?", (user_email,)).fetchone()
+    conn.close()
+    return jsonify(dict(user)) if user else jsonify({"error": "Not found"}), 404
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_list_create(entity_name):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    
     table_map = {
-        'Department': 'departments', 
-        'Employee': 'employees', 
-        'Contact': 'contacts', 
-        'Task': 'project_tasks', 
-        'ProjectTask': 'project_tasks', 
-        'Invoice': 'invoices', 
-        'Campaign': 'campaigns', 
-        'Project': 'projects', 
-        'TimeEntry': 'time_entries',
-        'Deal': 'deals'
+        'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts', 
+        'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 'Invoice': 'invoices', 
+        'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries',
+        'Deal': 'deals', 'LeaveRequest': 'leave_requests', 'PayrollRecord': 'payroll',
+        'PerformanceReview': 'performance_reviews', 'OnboardingTask': 'onboarding_tasks'
     }
-    
     table_name = table_map.get(entity_name)
     if not table_name: return jsonify([]), 200
-    
     user_email = get_valid_user_email(request.headers)
     conn = sqlite3.connect('giggenius.db')
     conn.row_factory = sqlite3.Row 
@@ -135,7 +128,15 @@ def handle_base44_list_create(entity_name):
 
     if request.method == 'GET':
         if not user_email: return jsonify([]), 200
-        c.execute(f"SELECT * FROM {table_name} WHERE user_email = ? ORDER BY id DESC", (user_email,))
+        query = f"SELECT * FROM {table_name} WHERE user_email = ?"
+        params = [user_email]
+        # Support for filtering (e.g., ?type=contract)
+        for key, value in request.args.items():
+            if key not in ['_sort', '_order', '_limit', '_page']:
+                query += f" AND {key} = ?"
+                params.append(value)
+        query += " ORDER BY id DESC"
+        c.execute(query, tuple(params))
         return jsonify([dict(row) for row in c.fetchall()]), 200
 
     if request.method == 'POST':
@@ -156,38 +157,29 @@ def handle_base44_single_item_action(entity_name, entity_id):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
     user_email = get_valid_user_email(request.headers)
     if not user_email: return jsonify({"error": "Unauthorized"}), 401
-    
     table_map = {
-        'Department': 'departments',
-        'Employee': 'employees',
-        'Contact': 'contacts',
-        'Invoice': 'invoices',
-        'TimeEntry': 'time_entries', 
-        'ProjectTask': 'project_tasks', 
-        'Campaign': 'campaigns', 
-        'Project': 'projects',
-        'Deal': 'deals'
+        'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts',
+        'Invoice': 'invoices', 'TimeEntry': 'time_entries', 'ProjectTask': 'project_tasks', 
+        'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals',
+        'LeaveRequest': 'leave_requests', 'PayrollRecord': 'payroll',
+        'PerformanceReview': 'performance_reviews', 'OnboardingTask': 'onboarding_tasks'
     }
     table_name = table_map.get(entity_name)
-    if not table_name: return jsonify({"error": "Entity not found"}), 404
-    
     conn = sqlite3.connect('giggenius.db')
-    c = conn.cursor()
-
     if request.method == 'PUT':
         data = request.json
+        c = conn.cursor()
         c.execute(f"PRAGMA table_info({table_name})")
         db_cols = [col[1] for col in c.fetchall()]
         cleaned = {k: v for k, v in data.items() if k in db_cols and k != 'id'}
         set_clause = ', '.join([f"{k} = ?" for k in cleaned.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ? AND user_email = ?", list(cleaned.values()) + [entity_id, user_email])
         conn.commit()
-        return jsonify({"success": True}), 200
-
     if request.method == 'DELETE':
-        c.execute(f"DELETE FROM {table_name} WHERE id = ? AND user_email = ?", (entity_id, user_email))
+        conn.execute(f"DELETE FROM {table_name} WHERE id = ? AND user_email = ?", (entity_id, user_email))
         conn.commit()
-        return jsonify({"success": True}), 200
+    conn.close()
+    return jsonify({"success": True}), 200
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True, port=5000)
