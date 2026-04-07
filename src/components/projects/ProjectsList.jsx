@@ -17,24 +17,28 @@ export default function ProjectsList() {
   const [searchTerm, setSearchTerm] = useState('');
   const qc = useQueryClient();
 
-  // Fetch 'active' projects
-  const { data: projects = [] } = useQuery({
+  // Helper to ensure we always have an array
+  const safeArray = (data) => Array.isArray(data) ? data : [];
+
+  const { data: projectsRaw = [] } = useQuery({
     queryKey: ['projects', 'active'],
     queryFn: () => base44.entities.Project.filter({ status: 'active' }, '-created_date'),
   });
 
-  // Fetch 'draft' projects
-  const { data: drafts = [] } = useQuery({
+  const { data: draftsRaw = [] } = useQuery({
     queryKey: ['projects', 'drafts'],
     queryFn: () => base44.entities.Project.filter({ status: 'draft' }, '-created_date'),
   });
+
+  const projects = safeArray(projectsRaw);
+  const drafts = safeArray(draftsRaw);
 
   const deleteMutation = useMutation({
     mutationFn: (id) => base44.entities.Project.delete(id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['projects'] })
   });
 
-  const filteredProjects = (Array.isArray(projects) ? projects : []).filter(p => 
+  const filteredProjects = projects.filter(p => 
     (p.name || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -46,11 +50,6 @@ export default function ProjectsList() {
 
   const handleEdit = (project) => {
     setEditingProject(project);
-    setIsModalOpen(true);
-  };
-
-  const handleNewProject = () => {
-    setEditingProject(null); // CRITICAL: Reset the edit state
     setIsModalOpen(true);
   };
 
@@ -93,8 +92,8 @@ export default function ProjectsList() {
               </DropdownMenu>
 
               <Button 
-                className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-md hover:opacity-95 transition-all"
-                onClick={handleNewProject}
+                className="bg-gradient-to-r from-blue-600 to-purple-600 shadow-md"
+                onClick={() => { setEditingProject(null); setIsModalOpen(true); }}
               >
                 <Plus className="w-4 h-4 mr-2" />
                 New Project
@@ -105,7 +104,7 @@ export default function ProjectsList() {
             <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
             <Input 
               placeholder="Search by project title..." 
-              className="pl-10 h-11 bg-gray-50/50 border-gray-200 focus:ring-purple-500" 
+              className="pl-10 h-11 bg-gray-50/50 border-gray-200" 
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
             />
@@ -127,35 +126,29 @@ export default function ProjectsList() {
                 >
                   <CardContent className="pt-6">
                     <div className="flex justify-between items-start mb-4">
-                      <h3 className="font-extrabold text-lg text-gray-800 group-hover:text-blue-600 transition-colors truncate pr-2">
-                        {project.name}
-                      </h3>
-                      <Badge className={`${statusColors[project.status] || 'bg-indigo-50 text-indigo-600'} border-none px-3 capitalize shadow-none`}>
+                      <h3 className="font-extrabold text-lg text-gray-800 truncate pr-2">{project.name}</h3>
+                      <Badge className={`${statusColors[project.status] || 'bg-indigo-50 text-indigo-600'} border-none px-3 capitalize`}>
                         {project.status || 'Active'}
                       </Badge>
                     </div>
-                    
-                    <div className="space-y-2 mb-4 border-l-2 border-indigo-100 pl-3">
-                      <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <div className="space-y-2 mb-4 border-l-2 border-indigo-100 pl-3 text-sm text-gray-500">
+                      <div className="flex items-center gap-2">
                         <User className="w-3.5 h-3.5 text-indigo-400" /> 
-                        <span className="font-medium text-gray-700">
-                          {project.assigned_person || 'No lead assigned'}
-                        </span>
+                        <span className="font-medium text-gray-700">{project.assigned_person || 'No lead assigned'}</span>
                       </div>
                       <div className="flex items-center gap-2 text-xs text-gray-400">
                         <Calendar className="w-3.5 h-3.5 text-indigo-400" /> 
-                        {project.start_date ? `${project.start_date} to ${project.end_date}` : 'Timeline not set'}
+                        <span>{project.start_date || 'N/A'} to {project.end_date || 'N/A'}</span>
                       </div>
                     </div>
-
                     <div className="flex justify-between items-center pt-3 border-t border-gray-50">
-                      <div className="flex items-center text-green-600 font-bold">
+                      <div className="text-green-600 font-bold">
                         {currencySymbols[project.currency || 'PHP']} {parseFloat(project.budget || 0).toLocaleString()}
                       </div>
                       <Button 
                         variant="ghost" 
                         size="icon" 
-                        className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50"
+                        className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100"
                         onClick={(e) => { e.stopPropagation(); deleteMutation.mutate(project.id); }}
                       >
                         <Trash2 className="w-4 h-4"/>
