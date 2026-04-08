@@ -151,6 +151,13 @@ export default function TaskListView({ tasks, onEdit, isPaidUser }) {
         {parentTasks.map(task => {
           const subs = subtaskMap[task.id] || [];
           const expanded = expandedTasks[task.id];
+          
+          // SAFETY PARSER for attachments
+          let safeAttachments = [];
+          try {
+            safeAttachments = typeof task.attachments === 'string' ? JSON.parse(task.attachments) : (task.attachments || []);
+          } catch (e) { safeAttachments = []; }
+
           return (
             <div key={task.id}>
               <div
@@ -191,9 +198,9 @@ export default function TaskListView({ tasks, onEdit, isPaidUser }) {
                     </span>
                   )}
 
-                  {task.attachments?.length > 0 && (
+                  {safeAttachments.length > 0 && (
                     <span className="text-xs text-gray-500 flex items-center gap-1">
-                      <Paperclip className="w-3 h-3" /> {task.attachments.length}
+                      <Paperclip className="w-3 h-3" /> {safeAttachments.length}
                     </span>
                   )}
 
