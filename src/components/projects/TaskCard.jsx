@@ -76,6 +76,18 @@ export default function TaskCard({ task, onEdit, onStatusChange, isPaidUser }) {
     });
   };
 
+  // --- SAFETY NET --- 
+  // Forces the SQLite string back into a JS Array to prevent the .filter crash
+  let safeSubtasks = [];
+  try {
+    safeSubtasks = typeof task.subtasks === 'string' ? JSON.parse(task.subtasks) : (task.subtasks || []);
+  } catch (e) { safeSubtasks = []; }
+
+  let safeAttachments = [];
+  try {
+    safeAttachments = typeof task.attachments === 'string' ? JSON.parse(task.attachments) : (task.attachments || []);
+  } catch (e) { safeAttachments = []; }
+
   return (
     <Card className="hover:shadow-md transition-all cursor-pointer" onClick={() => onEdit(task)}>
       <CardContent className="p-3">
@@ -91,9 +103,10 @@ export default function TaskCard({ task, onEdit, onStatusChange, isPaidUser }) {
             <p className="text-xs text-gray-600 line-clamp-2">{task.description}</p>
           )}
 
-          {task.subtasks?.length > 0 && (
+          {/* UPDATED: Using safeSubtasks instead of task.subtasks */}
+          {safeSubtasks.length > 0 && (
             <div className="text-xs text-gray-500">
-              ✓ {task.subtasks.filter(s => s.completed).length}/{task.subtasks.length} subtasks
+              ✓ {safeSubtasks.filter(s => s.completed).length}/{safeSubtasks.length} subtasks
             </div>
           )}
 
@@ -111,10 +124,11 @@ export default function TaskCard({ task, onEdit, onStatusChange, isPaidUser }) {
                 {task.assigned_to.split('@')[0]}
               </div>
             )}
-            {task.attachments?.length > 0 && (
+            {/* UPDATED: Using safeAttachments instead of task.attachments */}
+            {safeAttachments.length > 0 && (
               <div className="flex items-center gap-1">
                 <Paperclip className="w-3 h-3" />
-                {task.attachments.length}
+                {safeAttachments.length}
               </div>
             )}
           </div>
