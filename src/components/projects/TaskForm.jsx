@@ -29,14 +29,14 @@ export default function TaskForm({ open, onClose, task }) {
     assigned_to: '', start_date: null, due_date: null, subtasks: [], attachments: []
   });
 
-  const { data: employees = [] } = useQuery({
-    queryKey: ['employees'],
-    queryFn: () => base44.entities.Employee.list(),
+  // Pulling from Contacts for Assignees
+  const { data: assignees = [] } = useQuery({
+    queryKey: ['contacts'],
+    queryFn: () => base44.entities.Contact.list(),
   });
 
   useEffect(() => {
     if (task && open) {
-      // Logic to handle both Array and String (SQLite) formats for JSON fields
       const parseJSON = (data) => {
         if (Array.isArray(data)) return data;
         try { return data ? JSON.parse(data) : []; } catch { return []; }
@@ -47,7 +47,7 @@ export default function TaskForm({ open, onClose, task }) {
         description: task.description || '',
         status: task.status || 'todo',
         priority: task.priority || 'medium',
-        assigned_to: task.assigned_to || '', // FIXED: Ensuring this maps to the state correctly
+        assigned_to: task.assigned_to || '', 
         start_date: task.start_date ? parseISO(task.start_date) : null,
         due_date: task.due_date ? parseISO(task.due_date) : null,
         subtasks: parseJSON(task.subtasks),
@@ -110,7 +110,10 @@ export default function TaskForm({ open, onClose, task }) {
             </Select>
             <Select value={form.assigned_to} onValueChange={(v) => setForm({...form, assigned_to: v})}>
               <SelectTrigger className="w-[180px] h-9 text-xs"><div className="flex items-center gap-2"><User className="w-3 h-3" /><SelectValue placeholder="Assignee" /></div></SelectTrigger>
-              <SelectContent className="z-[10001]">{employees.map(e => <SelectItem key={e.id} value={e.email}>{e.first_name} {e.last_name}</SelectItem>)}</SelectContent>
+              <SelectContent className="z-[10001]">
+                {/* FIXED: Now maps over 'assignees' and uses 'c.name' */}
+                {assignees.map(c => <SelectItem key={c.id} value={c.email}>{c.name || c.email}</SelectItem>)}
+              </SelectContent>
             </Select>
           </div>
 
@@ -138,7 +141,7 @@ export default function TaskForm({ open, onClose, task }) {
             <Input value={newSubtask} onChange={(e) => setNewSubtask(e.target.value)} placeholder="Type subtask and press Enter..." className="h-9 text-sm bg-white border-slate-200" onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), newSubtask.trim() && (setForm({...form, subtasks: [...form.subtasks, {id: Date.now(), title: newSubtask, completed: false}]}), setNewSubtask('')))} />
           </div>
 
-          {/* Attachments Section - NEW VISIBILITY FOCUS */}
+          {/* Attachments Section */}
           <div className="space-y-3 border-2 border-dashed border-slate-100 p-4 rounded-xl">
             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><Upload className="w-3 h-3" /> File Attachments</h4>
             <div className="flex flex-wrap gap-2">
