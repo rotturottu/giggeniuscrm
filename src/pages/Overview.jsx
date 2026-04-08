@@ -95,13 +95,14 @@ export default function Overview() {
           </div>
         ) : (
           <Tabs defaultValue="leads" className="space-y-6 mt-6">
-          <TabsList className="grid w-full grid-cols-6 max-w-4xl">
-            <TabsTrigger value="leads">Lead Growth</TabsTrigger>
-            <TabsTrigger value="conversion">Conversions</TabsTrigger>
-            <TabsTrigger value="scoring">Lead Scoring</TabsTrigger>
-            <TabsTrigger value="social">Social Media</TabsTrigger>
-            <TabsTrigger value="performance">Performance</TabsTrigger>
-            <TabsTrigger value="tickets">Support Tickets</TabsTrigger>
+          {/* Changed from a strict grid to a wrapping flexbox for mobile, but keeps the 6-col grid for large desktop screens (lg:) */}
+          <TabsList className="flex flex-wrap w-full h-auto max-w-4xl gap-2 justify-start lg:grid lg:grid-cols-6 bg-transparent sm:bg-muted p-1">
+            <TabsTrigger className="flex-1 sm:flex-none data-[state=active]:bg-background" value="leads">Lead Growth</TabsTrigger>
+            <TabsTrigger className="flex-1 sm:flex-none data-[state=active]:bg-background" value="conversion">Conversions</TabsTrigger>
+            <TabsTrigger className="flex-1 sm:flex-none data-[state=active]:bg-background" value="scoring">Lead Scoring</TabsTrigger>
+            <TabsTrigger className="flex-1 sm:flex-none data-[state=active]:bg-background" value="social">Social Media</TabsTrigger>
+            <TabsTrigger className="flex-1 sm:flex-none data-[state=active]:bg-background" value="performance">Performance</TabsTrigger>
+            <TabsTrigger className="flex-1 sm:flex-none data-[state=active]:bg-background" value="tickets">Support Tickets</TabsTrigger>
           </TabsList>
 
           <TabsContent value="leads">
