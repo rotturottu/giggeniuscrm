@@ -152,10 +152,11 @@ export default function TaskListView({ tasks, onEdit, isPaidUser }) {
           const subs = subtaskMap[task.id] || [];
           const expanded = expandedTasks[task.id];
           
-          // SAFETY PARSER for attachments
+          // STRICT SAFETY PARSER for attachments
           let safeAttachments = [];
           try {
-            safeAttachments = typeof task.attachments === 'string' ? JSON.parse(task.attachments) : (task.attachments || []);
+            const parsedAttachments = typeof task.attachments === 'string' ? JSON.parse(task.attachments) : task.attachments;
+            safeAttachments = Array.isArray(parsedAttachments) ? parsedAttachments : [];
           } catch (e) { safeAttachments = []; }
 
           return (

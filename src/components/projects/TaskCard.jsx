@@ -76,16 +76,18 @@ export default function TaskCard({ task, onEdit, onStatusChange, isPaidUser }) {
     });
   };
 
-  // --- SAFETY NET --- 
-  // Forces the SQLite string back into a JS Array to prevent the .filter crash
+  // --- STRICT SAFETY NET --- 
+  // Forces the SQLite string back into a JS Array and GUARANTEES it is an array.
   let safeSubtasks = [];
   try {
-    safeSubtasks = typeof task.subtasks === 'string' ? JSON.parse(task.subtasks) : (task.subtasks || []);
+    const parsedSubtasks = typeof task.subtasks === 'string' ? JSON.parse(task.subtasks) : task.subtasks;
+    safeSubtasks = Array.isArray(parsedSubtasks) ? parsedSubtasks : [];
   } catch (e) { safeSubtasks = []; }
 
   let safeAttachments = [];
   try {
-    safeAttachments = typeof task.attachments === 'string' ? JSON.parse(task.attachments) : (task.attachments || []);
+    const parsedAttachments = typeof task.attachments === 'string' ? JSON.parse(task.attachments) : task.attachments;
+    safeAttachments = Array.isArray(parsedAttachments) ? parsedAttachments : [];
   } catch (e) { safeAttachments = []; }
 
   return (
@@ -103,7 +105,6 @@ export default function TaskCard({ task, onEdit, onStatusChange, isPaidUser }) {
             <p className="text-xs text-gray-600 line-clamp-2">{task.description}</p>
           )}
 
-          {/* UPDATED: Using safeSubtasks instead of task.subtasks */}
           {safeSubtasks.length > 0 && (
             <div className="text-xs text-gray-500">
               ✓ {safeSubtasks.filter(s => s.completed).length}/{safeSubtasks.length} subtasks
@@ -124,7 +125,6 @@ export default function TaskCard({ task, onEdit, onStatusChange, isPaidUser }) {
                 {task.assigned_to.split('@')[0]}
               </div>
             )}
-            {/* UPDATED: Using safeAttachments instead of task.attachments */}
             {safeAttachments.length > 0 && (
               <div className="flex items-center gap-1">
                 <Paperclip className="w-3 h-3" />

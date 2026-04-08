@@ -74,7 +74,7 @@ export default function InvoicesList() {
               <Plus className="w-4 h-4 mr-2" /> {typeFilter === 'template' ? 'Add Custom Template' : `New ${typeFilter}`}
             </Button>
           </div>
-        </HeaderHeader>
+        </CardHeader>
         
         <CardContent className="pt-6">
           <Tabs value={typeFilter} onValueChange={setTypeFilter}>
