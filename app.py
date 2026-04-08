@@ -18,11 +18,10 @@ def init_db():
                   first_name TEXT, last_name TEXT, email TEXT UNIQUE,
                   password TEXT, profile_picture TEXT)''')
     
-    # Invoices Table (Added the custom document columns here)
+    # Invoices Table
     c.execute('''CREATE TABLE IF NOT EXISTS invoices
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   invoice_number TEXT UNIQUE, client_name TEXT, type TEXT,
-                  document_name TEXT, signing_date TEXT, details TEXT,
                   total REAL, currency TEXT DEFAULT 'PHP', status TEXT DEFAULT 'draft',
                   issue_date TEXT, notes TEXT, items TEXT, tax_rate REAL DEFAULT 0,
                   user_email TEXT, FOREIGN KEY(user_email) REFERENCES users(email))''')
@@ -84,6 +83,7 @@ def login():
 
 @app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
 def register():
+    # Handle the browser's security pre-flight check
     if request.method == 'OPTIONS': 
         return jsonify({"status": "ok"}), 200
         
@@ -99,25 +99,14 @@ def register():
         return jsonify({"message": "User created successfully!"}), 201
         
     except sqlite3.IntegrityError:
+        # If the email is already in the database
         return jsonify({"error": "An account with this email already exists."}), 400
     except Exception as e:
+        # If anything else crashes, return JSON instead of an HTML page
         return jsonify({"error": str(e)}), 500
     finally:
         if 'conn' in locals():
             conn.close()
-
-# THIS IS THE FIX FOR THE 405 ERRORS (Stops buttons from breaking)
-@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'OPTIONS'])
-def get_me():
-    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    user_email = get_valid_user_email(request.headers)
-    if not user_email: return jsonify({"error": "Unauthorized"}), 401
-    
-    conn = sqlite3.connect('giggenius.db')
-    conn.row_factory = sqlite3.Row
-    user = conn.execute("SELECT first_name, last_name, email FROM users WHERE email = ?", (user_email,)).fetchone()
-    conn.close()
-    return jsonify(dict(user)) if user else jsonify({"error": "Not found"}), 404
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_list_create(entity_name):
@@ -146,17 +135,8 @@ def handle_base44_list_create(entity_name):
 
     if request.method == 'GET':
         if not user_email: return jsonify([]), 200
-        # Included the URL parameter filtering so your Documents tab splits properly
-        query = f"SELECT * FROM {table_name} WHERE user_email = ?"
-        params = [user_email]
-        for key, value in request.args.items():
-            if key not in ['_sort', '_order', '_limit', '_page']:
-                query += f" AND {key} = ?"
-                params.append(value)
-        query += " ORDER BY id DESC"
-        data = conn.execute(query, tuple(params)).fetchall()
-        conn.close()
-        return jsonify([dict(row) for row in data]), 200
+        c.execute(f"SELECT * FROM {table_name} WHERE user_email = ? ORDER BY id DESC", (user_email,))
+        return jsonify([dict(row) for row in c.fetchall()]), 200
 
     if request.method == 'POST':
         item = request.json
