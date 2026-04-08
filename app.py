@@ -108,6 +108,19 @@ def register():
         if 'conn' in locals():
             conn.close()
 
+# --- FIX: Stop 405 Errors and allow buttons to be clicked ---
+@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'OPTIONS'])
+def get_me():
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    user_email = get_valid_user_email(request.headers)
+    if not user_email: return jsonify({"error": "Unauthorized"}), 401
+    
+    conn = sqlite3.connect('giggenius.db')
+    conn.row_factory = sqlite3.Row
+    user = conn.execute("SELECT first_name, last_name, email FROM users WHERE email = ?", (user_email,)).fetchone()
+    conn.close()
+    return jsonify(dict(user)) if user else jsonify({"error": "Not found"}), 404
+
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
 def handle_base44_list_create(entity_name):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
@@ -135,8 +148,33 @@ def handle_base44_list_create(entity_name):
 
     if request.method == 'GET':
         if not user_email: return jsonify([]), 200
-        c.execute(f"SELECT * FROM {table_name} WHERE user_email = ? ORDER BY id DESC", (user_email,))
-        return jsonify([dict(row) for row in c.fetchall()]), 200
+        
+        # Build query with optional filters
+        query = f"SELECT * FROM {table_name} WHERE user_email = ?"
+        params = [user_email]
+        for key, value in request.args.items():
+            if key not in ['_sort', '_order', '_limit', '_page']:
+                query += f" AND {key} = ?"
+                params.append(value)
+        query += " ORDER BY id DESC"
+        
+        data = conn.execute(query, tuple(params)).fetchall()
+        
+        # --- THE MAGIC BACKEND FIX ---
+        # Parse strings back into JSON arrays to prevent the React frontend from crashing
+        results = []
+        for row in data:
+            item = dict(row)
+            for field in ['subtasks', 'attachments', 'items']:
+                if field in item and isinstance(item[field], str):
+                    try:
+                        item[field] = json.loads(item[field])
+                    except:
+                        item[field] = []
+            results.append(item)
+            
+        conn.close()
+        return jsonify(results), 200
 
     if request.method == 'POST':
         item = request.json
@@ -149,6 +187,7 @@ def handle_base44_list_create(entity_name):
         c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned.values()))
         conn.commit()
         cleaned['id'] = c.lastrowid
+        conn.close()
         return jsonify(cleaned), 201
 
 @app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
@@ -182,11 +221,13 @@ def handle_base44_single_item_action(entity_name, entity_id):
         set_clause = ', '.join([f"{k} = ?" for k in cleaned.keys()])
         c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ? AND user_email = ?", list(cleaned.values()) + [entity_id, user_email])
         conn.commit()
+        conn.close()
         return jsonify({"success": True}), 200
 
     if request.method == 'DELETE':
         c.execute(f"DELETE FROM {table_name} WHERE id = ? AND user_email = ?", (entity_id, user_email))
         conn.commit()
+        conn.close()
         return jsonify({"success": True}), 200
 
 if __name__ == '__main__':
