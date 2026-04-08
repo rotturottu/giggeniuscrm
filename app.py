@@ -121,9 +121,15 @@ def handle_entities(entity):
     if not db_path: return jsonify({"error": "No Database"}), 401
     
     mapping = {
-        'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts', 
-        'ProjectTask': 'project_tasks', 'Task': 'project_tasks', 'Invoice': 'invoices', 
-        'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals'
+        'Department': 'departments', 
+        'Employee': 'employees',  # This populates the "Assignee" dropdown
+        'Contact': 'contacts',   # This populates the "Contacts" tab
+        'ProjectTask': 'project_tasks', 
+        'Task': 'project_tasks', 
+        'Invoice': 'invoices', 
+        'Campaign': 'campaigns', 
+        'Project': 'projects', 
+        'Deal': 'deals'
     }
     table = mapping.get(entity)
     if not table: return jsonify([]), 200
