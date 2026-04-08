@@ -1,180 +1,146 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS 
 import sqlite3
-import json
+import os
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
 
 app = Flask(__name__)
+# Enable CORS for your domain
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
-def init_db():
-    conn = sqlite3.connect('giggenius.db')
-    c = conn.cursor()
-    
-    # Users Table
-    c.execute('''CREATE TABLE IF NOT EXISTS users
+DB_FOLDER = 'user_databases'
+if not os.path.exists(DB_FOLDER):
+    os.makedirs(DB_FOLDER)
+
+MAIN_DB = 'users.db'
+
+def init_main_db():
+    conn = sqlite3.connect(MAIN_DB)
+    conn.execute('''CREATE TABLE IF NOT EXISTS users
                  (id INTEGER PRIMARY KEY AUTOINCREMENT,
                   first_name TEXT, last_name TEXT, email TEXT UNIQUE,
-                  password TEXT, profile_picture TEXT)''')
-    
-    # Invoices Table - ADDED: document_name, signing_date, details
+                  password TEXT, db_path TEXT)''')
+    conn.close()
+
+def init_user_db(db_path):
+    conn = sqlite3.connect(db_path)
+    c = conn.cursor()
+    # Comprehensive Schema to support all your tabs
     c.execute('''CREATE TABLE IF NOT EXISTS invoices
-                 (id INTEGER PRIMARY KEY AUTOINCREMENT,
-                  invoice_number TEXT UNIQUE, client_name TEXT, 
-                  document_name TEXT, signing_date TEXT, details TEXT,
-                  type TEXT, total REAL, currency TEXT DEFAULT 'PHP', 
-                  status TEXT DEFAULT 'draft', issue_date TEXT, notes TEXT, 
-                  items TEXT, tax_rate REAL DEFAULT 0,
-                  user_email TEXT, FOREIGN KEY(user_email) REFERENCES users(email))''')
+                 (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_number TEXT UNIQUE, 
+                  client_name TEXT, document_name TEXT, signing_date TEXT, details TEXT,
+                  type TEXT, total REAL, currency TEXT DEFAULT 'PHP', status TEXT DEFAULT 'draft', 
+                  issue_date TEXT, notes TEXT, items TEXT, tax_rate REAL DEFAULT 0)''')
 
-    # Entity Tables
-    tables = [
-        'departments', 'employees', 'contacts', 'project_tasks', 
-        'projects', 'campaigns', 'time_entries', 'deals'
-    ]
-    
-    for table in tables:
-        if table == 'departments': 
-            schema = "name TEXT, head_email TEXT, description TEXT, budget REAL, currency TEXT"
-        elif table == 'employees': 
-            schema = "first_name TEXT, last_name TEXT, email TEXT UNIQUE, department TEXT"
-        elif table == 'contacts': 
-            schema = "name TEXT, email TEXT, phone TEXT, company TEXT, status TEXT"
-        elif table == 'project_tasks': 
-            schema = "title TEXT, description TEXT, list_name TEXT, status TEXT, priority TEXT, assigned_to TEXT, start_date TEXT, due_date TEXT, subtasks TEXT, attachments TEXT, parent_task_id INTEGER"
-        elif table == 'projects': 
-            schema = "name TEXT, assigned_person TEXT, start_date TEXT, end_date TEXT, description TEXT, budget REAL, currency TEXT, signed_contract TEXT, status TEXT DEFAULT 'active'"
-        elif table == 'campaigns': 
-            schema = "name TEXT, status TEXT DEFAULT 'Draft', leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%'"
-        elif table == 'time_entries': 
-            schema = "employee_name TEXT, employee_email TEXT, type TEXT, date TEXT, clock_in TEXT, clock_out TEXT, duration_minutes INTEGER, status TEXT DEFAULT 'active'"
-        elif table == 'deals': 
-            schema = "name TEXT, value REAL, stage TEXT, owner_email TEXT, expected_close_date TEXT, description TEXT, contact_id INTEGER"
-            
-        c.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY AUTOINCREMENT, {schema}, user_email TEXT, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)")
-
+    tables = {
+        'departments': "name TEXT, head_email TEXT, description TEXT, budget REAL, currency TEXT",
+        'employees': "first_name TEXT, last_name TEXT, email TEXT UNIQUE, department TEXT",
+        'contacts': "name TEXT, email TEXT, phone TEXT, company TEXT, status TEXT",
+        'project_tasks': "title TEXT, description TEXT, list_name TEXT, status TEXT, priority TEXT, assigned_to TEXT, start_date TEXT, due_date TEXT, subtasks TEXT, attachments TEXT, parent_task_id INTEGER",
+        'projects': "name TEXT, assigned_person TEXT, start_date TEXT, end_date TEXT, description TEXT, budget REAL, currency TEXT, signed_contract TEXT, status TEXT DEFAULT 'active'",
+        'campaigns': "name TEXT, status TEXT DEFAULT 'Draft', leads INTEGER DEFAULT 0, conversion TEXT DEFAULT '0%'",
+        'deals': "name TEXT, value REAL, stage TEXT, owner_email TEXT, expected_close_date TEXT, description TEXT, contact_id INTEGER"
+    }
+    for table, schema in tables.items():
+        c.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY AUTOINCREMENT, {schema}, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)")
     conn.commit()
     conn.close()
 
-init_db()
+init_main_db()
 
-def get_valid_user_email(headers):
-    email = headers.get('User-Email')
-    if email in [None, '', 'null', 'undefined']:
-        try:
-            if request.is_json:
-                data = request.get_json(silent=True)
-                if data:
-                    email = data.get('user_email') or data.get('employee_email') or data.get('email')
-        except: pass
-    return email if email not in [None, '', 'null', 'undefined'] else None
-
-@app.route('/api/auth/login', methods=['POST'])
-def login():
-    data = request.json
-    conn = sqlite3.connect('giggenius.db')
-    c = conn.cursor()
-    c.execute("SELECT * FROM users WHERE email=?", (data['email'],))
-    user = c.fetchone()
+def get_user_db_path():
+    # Frontend sends email in 'User-Email' header
+    email = request.headers.get('User-Email')
+    if not email or email in ['null', 'undefined', '']:
+        return None
+    conn = sqlite3.connect(MAIN_DB)
+    res = conn.execute("SELECT db_path FROM users WHERE email = ?", (email,)).fetchone()
     conn.close()
-    if user and check_password_hash(user[4], data['password']):
-        return jsonify({"message": "Login successful!", "email": user[3]}), 200
-    return jsonify({"error": "Invalid email or password"}), 401
+    return res[0] if res else None
 
 @app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
 def register():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    data = request.json
+    email = data['email']
+    safe_name = email.replace('@', '_').replace('.', '_')
+    user_db_path = os.path.join(DB_FOLDER, f"{safe_name}.db")
+    hashed_pw = generate_password_hash(data['password'])
+    conn = sqlite3.connect(MAIN_DB)
     try:
-        data = request.json
-        hashed_pw = generate_password_hash(data['password'])
-        conn = sqlite3.connect('giggenius.db')
-        c = conn.cursor()
-        c.execute("INSERT INTO users (first_name, last_name, email, password) VALUES (?, ?, ?, ?)",
-                  (data['firstName'], data['lastName'], data['email'], hashed_pw))
+        conn.execute("INSERT INTO users (first_name, last_name, email, password, db_path) VALUES (?, ?, ?, ?, ?)",
+                     (data['firstName'], data['lastName'], email, hashed_pw, user_db_path))
         conn.commit()
-        return jsonify({"message": "User created successfully!"}), 201
-    except sqlite3.IntegrityError:
-        return jsonify({"error": "An account with this email already exists."}), 400
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-    finally:
-        if 'conn' in locals(): conn.close()
+        init_user_db(user_db_path)
+        return jsonify({"message": "Success", "email": email}), 201
+    except: return jsonify({"error": "User exists"}), 400
+    finally: conn.close()
 
-# NEW: Profile endpoint to stop 405 Method Not Allowed errors
+@app.route('/api/auth/login', methods=['POST'])
+def login():
+    data = request.json
+    conn = sqlite3.connect(MAIN_DB)
+    user = conn.execute("SELECT * FROM users WHERE email=?", (data['email'],)).fetchone()
+    conn.close()
+    if user and check_password_hash(user[4], data['password']):
+        return jsonify({"message": "OK", "email": user[3]}), 200
+    return jsonify({"error": "Invalid"}), 401
+
+# CRITICAL: This matches the /entities/User/me path in your screenshots
 @app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'OPTIONS'])
-def get_me_profile():
+def get_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    user_email = get_valid_user_email(request.headers)
-    if not user_email: return jsonify({"error": "Unauthorized"}), 401
-    conn = sqlite3.connect('giggenius.db')
+    email = request.headers.get('User-Email')
+    conn = sqlite3.connect(MAIN_DB)
     conn.row_factory = sqlite3.Row
-    user = conn.execute("SELECT first_name, last_name, email FROM users WHERE email = ?", (user_email,)).fetchone()
+    user = conn.execute("SELECT first_name, last_name, email FROM users WHERE email = ?", (email,)).fetchone()
     conn.close()
     return jsonify(dict(user)) if user else jsonify({"error": "Not found"}), 404
 
-@app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
-def handle_base44_list_create(entity_name):
+# CRITICAL: This handles the data for all tabs (Contacts, Tasks, Campaigns, etc.)
+@app.route('/api/apps/giggenius-crm/entities/<entity>', methods=['GET', 'POST', 'OPTIONS'])
+def handle_entities(entity):
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    table_map = {
+    db_path = get_user_db_path()
+    if not db_path: return jsonify({"error": "No Database"}), 401
+    
+    mapping = {
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts', 
-        'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 'Invoice': 'invoices', 
-        'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries',
-        'Deal': 'deals'
+        'ProjectTask': 'project_tasks', 'Task': 'project_tasks', 'Invoice': 'invoices', 
+        'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals'
     }
-    table_name = table_map.get(entity_name)
-    if not table_name: return jsonify([]), 200
-    user_email = get_valid_user_email(request.headers)
-    conn = sqlite3.connect('giggenius.db')
-    conn.row_factory = sqlite3.Row 
-    c = conn.cursor()
-    if request.method == 'GET':
-        if not user_email: return jsonify([]), 200
-        # MODIFIED: Logic to handle URL filters like ?type=contract for the tabs
-        query = f"SELECT * FROM {table_name} WHERE user_email = ?"
-        params = [user_email]
-        for key, value in request.args.items():
-            if key not in ['_sort', '_order', '_limit', '_page']:
-                query += f" AND {key} = ?"
-                params.append(value)
-        query += " ORDER BY id DESC"
-        c.execute(query, tuple(params))
-        return jsonify([dict(row) for row in c.fetchall()]), 200
-    if request.method == 'POST':
-        item = request.json
-        if not user_email: return jsonify({"error": "Unauthorized"}), 401
-        item['user_email'] = user_email
-        c.execute(f"PRAGMA table_info({table_name})")
-        db_cols = [col[1] for col in c.fetchall()]
-        cleaned = {k: v for k, v in item.items() if k in db_cols}
-        columns, placeholders = ', '.join(cleaned.keys()), ', '.join(['?'] * len(cleaned))
-        c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned.values()))
-        conn.commit()
-        cleaned['id'] = c.lastrowid
-        return jsonify(cleaned), 201
+    table = mapping.get(entity)
+    if not table: return jsonify([]), 200
 
-@app.route('/api/apps/giggenius-crm/entities/<entity_name>/<entity_id>', methods=['PUT', 'DELETE', 'OPTIONS'])
-def handle_base44_single_item_action(entity_name, entity_id):
-    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    user_email = get_valid_user_email(request.headers)
-    if not user_email: return jsonify({"error": "Unauthorized"}), 401
-    table_map = {'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts', 'Invoice': 'invoices', 'TimeEntry': 'time_entries', 'ProjectTask': 'project_tasks', 'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals'}
-    table_name = table_map.get(entity_name)
-    conn = sqlite3.connect('giggenius.db')
-    if request.method == 'PUT':
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+
+    if request.method == 'GET':
+        query = f"SELECT * FROM {table}"
+        params = []
+        # Support tab-specific filtering (like type=contract)
+        if request.args:
+            filters = [f"{k} = ?" for k in request.args.keys() if k not in ['_sort', '_order', '_limit', '_page']]
+            if filters:
+                query += " WHERE " + " AND ".join(filters)
+                params = [v for k, v in request.args.items() if k not in ['_sort', '_order', '_limit', '_page']]
+        
+        res = conn.execute(query + " ORDER BY id DESC", tuple(params)).fetchall()
+        conn.close()
+        return jsonify([dict(row) for row in res]), 200
+
+    if request.method == 'POST':
         data = request.json
-        c = conn.cursor()
-        c.execute(f"PRAGMA table_info({table_name})")
-        db_cols = [col[1] for col in c.fetchall()]
-        cleaned = {k: v for k, v in data.items() if k in db_cols and k != 'id'}
-        set_clause = ', '.join([f"{k} = ?" for k in cleaned.keys()])
-        c.execute(f"UPDATE {table_name} SET {set_clause} WHERE id = ? AND user_email = ?", list(cleaned.values()) + [entity_id, user_email])
+        cursor = conn.cursor()
+        cursor.execute(f"PRAGMA table_info({table})")
+        cols = [c[1] for c in cursor.fetchall()]
+        cleaned = {k: v for k, v in data.items() if k in cols}
+        q = f"INSERT INTO {table} ({','.join(cleaned.keys())}) VALUES ({','.join(['?']*len(cleaned))})"
+        cursor.execute(q, tuple(cleaned.values()))
         conn.commit()
-    if request.method == 'DELETE':
-        conn.execute(f"DELETE FROM {table_name} WHERE id = ? AND user_email = ?", (entity_id, user_email))
-        conn.commit()
-    conn.close()
-    return jsonify({"success": True}), 200
+        last_id = cursor.lastrowid
+        conn.close()
+        return jsonify({"id": last_id, **cleaned}), 201
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True, port=5000)
