@@ -56,9 +56,27 @@ init_master_db()
 
 # 2. HELPER: Finding the correct database
 def get_user_db_path():
+    """Universal lookup to find the user's private database."""
+    # 1. Try to get email from Headers (Best practice)
     email = request.headers.get('User-Email')
+    
+    # 2. If not in headers, check the URL (e.g., ?user_email=...)
+    if not email or email in ['null', 'undefined', '']:
+        email = request.args.get('user_email') or request.args.get('email')
+        
+    # 3. If still not found, peek inside the JSON body (for POST/PUT)
+    if not email or email in ['null', 'undefined', '']:
+        try:
+            if request.is_json:
+                data = request.get_json(silent=True)
+                if data:
+                    email = data.get('user_email') or data.get('email') or data.get('userEmail')
+        except: pass
+
+    # If we still have no email, we can't open a database
     if not email or email in ['null', 'undefined', '']:
         return None
+
     conn = sqlite3.connect(MAIN_DB)
     res = conn.execute("SELECT db_path FROM users WHERE email = ?", (email,)).fetchone()
     conn.close()
