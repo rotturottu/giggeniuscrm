@@ -7,12 +7,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 app = Flask(__name__)
 CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
 
-# 1. SETUP ISOLATION FOLDERS
 DB_FOLDER = 'user_databases'
 if not os.path.exists(DB_FOLDER):
     os.makedirs(DB_FOLDER)
 
-MAIN_DB = 'users_master.db' # Tracks who has what database
+MAIN_DB = 'users_master.db'
 
 def init_master_db():
     conn = sqlite3.connect(MAIN_DB)
@@ -23,18 +22,16 @@ def init_master_db():
     conn.close()
 
 def init_user_db(db_path):
-    """Initializes the CRM structure inside a user's private file."""
     conn = sqlite3.connect(db_path)
     c = conn.cursor()
-    
-    # User's Private Invoices
+    # Invoices/Documents
     c.execute('''CREATE TABLE IF NOT EXISTS invoices
                  (id INTEGER PRIMARY KEY AUTOINCREMENT, invoice_number TEXT UNIQUE, 
                   client_name TEXT, document_name TEXT, signing_date TEXT, details TEXT,
                   type TEXT, total REAL, currency TEXT DEFAULT 'PHP', status TEXT DEFAULT 'draft', 
                   issue_date TEXT, notes TEXT, items TEXT, tax_rate REAL DEFAULT 0)''')
 
-    # User's Private Entity Tables
+    # All Entity Tables
     tables = {
         'departments': "name TEXT, head_email TEXT, description TEXT, budget REAL, currency TEXT",
         'employees': "first_name TEXT, last_name TEXT, email TEXT UNIQUE, department TEXT",
@@ -45,44 +42,31 @@ def init_user_db(db_path):
         'time_entries': "employee_name TEXT, employee_email TEXT, type TEXT, date TEXT, clock_in TEXT, clock_out TEXT, duration_minutes INTEGER, status TEXT DEFAULT 'active'",
         'deals': "name TEXT, value REAL, stage TEXT, owner_email TEXT, expected_close_date TEXT, description TEXT, contact_id INTEGER"
     }
-    
     for table, schema in tables.items():
         c.execute(f"CREATE TABLE IF NOT EXISTS {table} (id INTEGER PRIMARY KEY AUTOINCREMENT, {schema}, created_date DATETIME DEFAULT CURRENT_TIMESTAMP)")
-    
     conn.commit()
     conn.close()
 
 init_master_db()
 
-# 2. HELPER: Finding the correct database
 def get_user_db_path():
-    """Universal lookup to find the user's private database."""
-    # 1. Try to get email from Headers (Best practice)
+    # UNIVERSAL LOOKUP: Check Headers, then URL, then JSON Body
     email = request.headers.get('User-Email')
-    
-    # 2. If not in headers, check the URL (e.g., ?user_email=...)
     if not email or email in ['null', 'undefined', '']:
         email = request.args.get('user_email') or request.args.get('email')
-        
-    # 3. If still not found, peek inside the JSON body (for POST/PUT)
     if not email or email in ['null', 'undefined', '']:
         try:
             if request.is_json:
                 data = request.get_json(silent=True)
-                if data:
-                    email = data.get('user_email') or data.get('email') or data.get('userEmail')
+                if data: email = data.get('user_email') or data.get('email')
         except: pass
 
-    # If we still have no email, we can't open a database
-    if not email or email in ['null', 'undefined', '']:
-        return None
-
+    if not email: return None
     conn = sqlite3.connect(MAIN_DB)
     res = conn.execute("SELECT db_path FROM users WHERE email = ?", (email,)).fetchone()
     conn.close()
     return res[0] if res else None
 
-# 3. AUTHENTICATION (The Gatekeeper)
 @app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
 def register():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
@@ -91,16 +75,14 @@ def register():
     safe_name = email.replace('@', '_').replace('.', '_')
     user_db_path = os.path.join(DB_FOLDER, f"{safe_name}.db")
     hashed_pw = generate_password_hash(data['password'])
-    
     conn = sqlite3.connect(MAIN_DB)
     try:
         conn.execute("INSERT INTO users (first_name, last_name, email, password, db_path) VALUES (?, ?, ?, ?, ?)",
                      (data['firstName'], data['lastName'], email, hashed_pw, user_db_path))
         conn.commit()
-        # Create their actual private file immediately
         init_user_db(user_db_path)
-        return jsonify({"message": "Registration success"}), 201
-    except: return jsonify({"error": "Email exists"}), 400
+        return jsonify({"message": "OK"}), 201
+    except: return jsonify({"error": "Exists"}), 400
     finally: conn.close()
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -111,48 +93,57 @@ def login():
     conn.close()
     if user and check_password_hash(user[4], data['password']):
         return jsonify({"message": "OK", "email": user[3]}), 200
-    return jsonify({"error": "Invalid credentials"}), 401
+    return jsonify({"error": "Invalid"}), 401
 
-# 4. DATA HANDLING (The Isolated Engine)
-@app.route('/api/apps/giggenius-crm/entities/<entity_name>', methods=['GET', 'POST', 'OPTIONS'])
-def handle_entities(entity_name):
+# FIX: Added User Profile route to stop 404s
+@app.route('/api/apps/giggenius-crm/entities/User/me', methods=['GET', 'OPTIONS'])
+def get_me():
     if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
-    
     db_path = get_user_db_path()
-    if not db_path: return jsonify({"error": "No isolation DB found"}), 401
+    if not db_path: return jsonify({"error": "Auth"}), 401
+    email = request.headers.get('User-Email') or request.args.get('email')
+    conn = sqlite3.connect(MAIN_DB)
+    conn.row_factory = sqlite3.Row
+    user = conn.execute("SELECT first_name, last_name, email FROM users WHERE email = ?", (email,)).fetchone()
+    conn.close()
+    return jsonify(dict(user)) if user else jsonify({"error": "Not found"}), 404
+
+@app.route('/api/apps/giggenius-crm/entities/<entity>', methods=['GET', 'POST', 'OPTIONS'])
+def handle_entities(entity):
+    if request.method == 'OPTIONS': return jsonify({"status": "ok"}), 200
+    db_path = get_user_db_path()
+    if not db_path: return jsonify({"error": "No DB"}), 401
     
-    table_map = {
+    mapping = {
         'Department': 'departments', 'Employee': 'employees', 'Contact': 'contacts', 
-        'Task': 'project_tasks', 'ProjectTask': 'project_tasks', 'Invoice': 'invoices', 
-        'Campaign': 'campaigns', 'Project': 'projects', 'TimeEntry': 'time_entries', 'Deal': 'deals'
+        'ProjectTask': 'project_tasks', 'Task': 'project_tasks', 'Invoice': 'invoices', 
+        'Campaign': 'campaigns', 'Project': 'projects', 'Deal': 'deals', 'TimeEntry': 'time_entries'
     }
-    table_name = table_map.get(entity_name)
-    if not table_name: return jsonify([]), 200
+    table = mapping.get(entity)
+    if not table: return jsonify([]), 200
 
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
-    c = conn.cursor()
-
     if request.method == 'GET':
-        query = f"SELECT * FROM {table_name}"
+        query = f"SELECT * FROM {table}"
         params = []
         if request.args:
-            filters = [f"{k} = ?" for k in request.args.keys() if k not in ['_limit', '_order', '_page', '_sort']]
+            filters = [f"{k} = ?" for k in request.args.keys() if k not in ['_sort', '_order', '_limit', '_page']]
             if filters:
                 query += " WHERE " + " AND ".join(filters)
-                params = [v for k, v in request.args.items() if k not in ['_limit', '_order', '_page', '_sort']]
-        
-        res = c.execute(query + " ORDER BY id DESC", tuple(params)).fetchall()
+                params = [v for k, v in request.args.items() if k not in ['_sort', '_order', '_limit', '_page']]
+        res = conn.execute(query + " ORDER BY id DESC", tuple(params)).fetchall()
         conn.close()
         return jsonify([dict(row) for row in res]), 200
 
     if request.method == 'POST':
-        item = request.json
-        c.execute(f"PRAGMA table_info({table_name})")
-        db_cols = [col[1] for col in c.fetchall()]
-        cleaned = {k: v for k, v in item.items() if k in db_cols}
-        columns, placeholders = ', '.join(cleaned.keys()), ', '.join(['?'] * len(cleaned))
-        c.execute(f"INSERT INTO {table_name} ({columns}) VALUES ({placeholders})", tuple(cleaned.values()))
+        data = request.json
+        c = conn.cursor()
+        c.execute(f"PRAGMA table_info({table})")
+        cols = [col[1] for col in c.fetchall()]
+        cleaned = {k: v for k, v in data.items() if k in cols}
+        cols_str, placeholders = ', '.join(cleaned.keys()), ', '.join(['?'] * len(cleaned))
+        c.execute(f"INSERT INTO {table} ({cols_str}) VALUES ({placeholders})", tuple(cleaned.values()))
         conn.commit()
         last_id = c.lastrowid
         conn.close()
