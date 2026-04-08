@@ -49,10 +49,26 @@ def init_user_db(db_path):
 init_main_db()
 
 def get_user_db_path():
-    # Frontend sends email in 'User-Email' header
+    """Aggressive lookup to find the user's private database."""
+    # 1. Check Headers (Preferred)
     email = request.headers.get('User-Email')
+    
+    # 2. Check URL params (e.g. ?user_email=...)
+    if not email or email in ['null', 'undefined', '']:
+        email = request.args.get('user_email') or request.args.get('email')
+        
+    # 3. Check JSON Body (for POST/PUT)
+    if not email or email in ['null', 'undefined', '']:
+        try:
+            if request.is_json:
+                data = request.get_json(silent=True)
+                if data:
+                    email = data.get('user_email') or data.get('email')
+        except: pass
+
     if not email or email in ['null', 'undefined', '']:
         return None
+
     conn = sqlite3.connect(MAIN_DB)
     res = conn.execute("SELECT db_path FROM users WHERE email = ?", (email,)).fetchone()
     conn.close()
